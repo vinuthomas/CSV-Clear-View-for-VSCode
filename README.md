@@ -28,5 +28,29 @@ A clear and powerful CSV viewer for VS Code with colored columns, sticky headers
 - **Spaces in Columns:** Use brackets, e.g., `[First Name]`
 - **Strings:** Use single quotes, e.g., `'Smith'`
 
+## Development
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) (includes npm)
+- [Visual Studio Code](https://code.visualstudio.com/)
+
+### Build and Install Locally
+To build the extension and install it in your local VS Code instance, run:
+
+```bash
+# Install dependencies
+npm install
+
+# Compile, package, and install locally into your VS Code
+npm run compile
+npx @vscode/vsce package --no-dependencies
+code --install-extension csv-clearview-0.0.1.vsix --force
+```
+
+### Debugging
+1. Open the project folder in VS Code.
+2. Press `F5` to open a new Extension Development Host window.
+3. Open any `.csv` file in the new window to test your changes.
+
 ## License
 MIT
