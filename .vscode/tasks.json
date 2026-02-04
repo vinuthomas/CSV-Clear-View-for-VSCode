@@ -1,0 +1,43 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "npm",
+            "script": "watch",
+            "problemMatcher": {
+                "owner": "typescript",
+                "fileLocation": "relative",
+                "pattern": {
+                    "regexp": "^([a-zA-Z0-9_/.-]+)\\s+(\\d+):(\\d+)-(\\d+)\\s+(Error|Warning):\\s+(.+)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 5,
+                    "message": 6
+                },
+                "isBackground": true,
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "webpack",
+                    "endsPattern": "compiled successfully"
+                }
+            },
+            "isBackground": true,
+            "presentation": {
+                "reveal": "never"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "label": "npm: watch"
+        },
+        {
+            "type": "npm",
+            "script": "compile",
+            "problemMatcher": "$ts-webpack",
+            "group": "build",
+            "label": "npm: compile"
+        }
+    ]
+}

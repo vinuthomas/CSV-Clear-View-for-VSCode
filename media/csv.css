@@ -1,0 +1,168 @@
+body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-editor-foreground);
+    background-color: var(--vscode-editor-background);
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.controls {
+    padding: 10px;
+    background-color: var(--vscode-editor-background);
+    border-bottom: 1px solid var(--vscode-editorGroup-border);
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.autocomplete-container {
+    position: relative;
+    display: inline-block;
+    flex-grow: 1;
+}
+
+#sql-query {
+    width: 100%;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    padding: 4px 8px;
+    font-family: var(--vscode-editor-font-family);
+    box-sizing: border-box; /* Ensure padding doesn't overflow width */
+}
+
+.autocomplete-items {
+    position: absolute;
+    border: 1px solid var(--vscode-input-border);
+    border-top: none;
+    z-index: 99;
+    /* Position the autocomplete items to be the same width as the container: */
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: var(--vscode-editor-background);
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.autocomplete-items div {
+    padding: 8px 10px;
+    cursor: pointer;
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-editor-foreground);
+    border-bottom: 1px solid var(--vscode-editorGroup-border);
+}
+
+.autocomplete-items div:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-items div:hover, 
+.autocomplete-items div.autocomplete-active {
+    /* Use VS Code list selection colors */
+    background-color: var(--vscode-list-activeSelectionBackground); 
+    color: var(--vscode-list-activeSelectionForeground); 
+}
+
+button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 4px 12px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.table-container {
+    flex-grow: 1;
+    overflow: auto;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: auto;
+}
+
+th, td {
+    padding: 4px 8px;
+    border: 1px solid var(--vscode-editorGroup-border);
+    white-space: pre-wrap; /* Preserve whitespace/newlines */
+    text-align: left;
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    outline: none;
+}
+
+td:focus {
+    background-color: var(--vscode-editor-selectionBackground) !important;
+    box-shadow: inset 0 0 0 2px var(--vscode-focusBorder);
+}
+
+/* Sticky Header */
+th {
+    background-color: var(--vscode-editor-background); /* Default background */
+    z-index: 10;
+    font-weight: bold;
+    border-bottom: 2px solid var(--vscode-focusBorder);
+}
+
+.sticky-header th {
+    position: sticky;
+    top: 0;
+    /* Ensure background is opaque so content doesn't show through */
+    background-color: var(--vscode-editor-background); 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* Alternating Rows */
+.alternating-rows tbody tr:nth-child(even) {
+    background-color: var(--vscode-list-hoverBackground); 
+    /* Use a subtle vscode theme color */
+}
+
+/* Colored Columns - distinct but readable pastels/muted tones */
+/* We target td and th to color the whole column. 
+   However, usually headers have their own style. 
+   Let's just color the data cells to keep headers distinct? 
+   User asked for "file should display with each value in the row in a different color".
+   It's safer to just color text or subtle background. 
+   Let's do text color for higher contrast or subtle background. 
+   Subtle background is often better for "columns".
+*/
+
+/* Cycle 1 */
+td:nth-child(10n+1) { color: #e57373; }
+td:nth-child(10n+2) { color: #f06292; }
+td:nth-child(10n+3) { color: #ba68c8; }
+td:nth-child(10n+4) { color: #9575cd; }
+td:nth-child(10n+5) { color: #7986cb; }
+td:nth-child(10n+6) { color: #64b5f6; }
+td:nth-child(10n+7) { color: #4fc3f7; }
+td:nth-child(10n+8) { color: #4dd0e1; }
+td:nth-child(10n+9) { color: #4db6ac; }
+td:nth-child(10n+10) { color: #81c784; }
+
+/* Dark mode adjustments might be needed, but hex codes often work okay if bright enough. */
+
+.error-container {
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    color: var(--vscode-foreground);
+    padding: 10px;
+    margin: 10px;
+    white-space: pre-wrap;
+}
+
+.hidden {
+    display: none;
+}

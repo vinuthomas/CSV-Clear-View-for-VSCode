@@ -1,0 +1,8 @@
+ID,Product,Price,Quantity
+1,Laptop,1200,5
+2,Mouse,25,10,ExtraColumn
+3,Keyboard,75
+4,Monitor,250,2
+5,Webcam,,8
+6,Headset,50,4,Invalid,Data
+7,Microphone,150,1

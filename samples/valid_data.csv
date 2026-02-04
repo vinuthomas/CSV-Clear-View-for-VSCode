@@ -1,0 +1,13 @@
+ID,First Name,Last Name,Email,Department,Join Date,Salary
+1,Alice,Smith,alice@example.com,Engineering,2022-01-15,95000
+2,Bob,Johnson,bob@example.com,Marketing,2021-06-20,82000
+3,Charlie,Davis,charlie@example.com,Sales,2023-03-01,75000
+4,Diana,Prince,diana@example.com,Design,2020-11-12,88000
+5,Edward,Norton,edward@example.com,Support,2022-09-30,68000
+6,Fiona,Apple,fiona@example.com,Engineering,2023-05-22,92000
+7,George,Clooney,george@example.com,Marketing,2019-02-14,105000
+8,Hannah,Montana,hannah@example.com,Sales,2024-01-10,72000
+9,Ian,McKellen,ian@example.com,Support,2021-12-05,74000
+10,Julia,Roberts,julia@example.com,Design,2022-04-18,91000
+"11","Kevin, The Bold",Bacon,kevin@example.com,"Special Ops",2020-05-05,120000
+12,Laura,Palmer,laura@example.com,,1989-04-08,0
