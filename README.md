@@ -1,6 +1,5 @@
-# CSV ClearView
-
-A clear and powerful CSV viewer for VS Code with colored columns, sticky headers, and SQL query capabilities.
+# CSV ClearView for VS Code or Compatible IDE
+A clear and powerful CSV viewer for VS Code with colored columns, sticky headers, and SQL query capabilities. This should work on other IDE which also load Visual Code style plugins. 
 
 ## Features
 
