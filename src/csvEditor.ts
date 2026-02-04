@@ -27,9 +27,13 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 
 		const updateWebview = () => {
 			const config = vscode.workspace.getConfiguration('csvClearView');
+			const text = document.getText();
+			const isLargeFile = text.length > 1024 * 1024; // 1MB threshold
+
 			webviewPanel.webview.postMessage({
 				type: 'update',
-				text: document.getText(),
+				text: text,
+				isLargeFile: isLargeFile,
 				config: {
 					stickyHeader: config.get('stickyHeader'),
 					alternatingRows: config.get('alternatingRows')
@@ -99,6 +103,10 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 				<title>CSV ClearView</title>
 			</head>
 			<body>
+				<div id="loader" class="loader-overlay hidden">
+					<div class="loader"></div>
+				</div>
+				<div id="warning-container" class="warning-container hidden"></div>
 				<div id="controls" class="controls">
 					<div class="autocomplete-container">
 						<input type="text" id="sql-query" placeholder="SELECT * FROM ? WHERE [Last Name] = 'Smith'" autocomplete="off" />

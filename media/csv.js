@@ -12,6 +12,8 @@ const queryInput = document.getElementById('sql-query');
 const runButton = document.getElementById('run-query');
 const resetButton = document.getElementById('reset-query');
 const errorContainer = document.getElementById('error-container');
+const loader = document.getElementById('loader');
+const warningContainer = document.getElementById('warning-container');
 
 // --- Constants ---
 const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'GROUP BY', 'LIMIT', 'JOIN', 'ON', 'AS', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'LIKE', 'IN', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'];
@@ -23,10 +25,32 @@ window.addEventListener('message', event => {
     const message = event.data;
     switch (message.type) {
         case 'update':
-            updateContent(message.text, message.config);
+            showLoader();
+
+            if (message.isLargeFile) {
+                warningContainer.textContent = "Warning: This file is large (>1MB) and may cause performance issues or high memory usage.";
+                warningContainer.classList.remove('hidden');
+            } else {
+                warningContainer.classList.add('hidden');
+            }
+            
+            // Use setTimeout to allow the browser to render the loader
+            setTimeout(() => {
+                updateContent(message.text, message.config);
+                hideLoader();
+            }, 50);
             break;
     }
 });
+
+function showLoader() {
+    if (loader) loader.classList.remove('hidden');
+}
+
+function hideLoader() {
+    if (loader) loader.classList.add('hidden');
+}
+
 
 // 2. Button Handlers
 runButton.addEventListener('click', runQuery);
