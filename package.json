@@ -11,11 +11,38 @@
     "vscode": "^1.75.0"
   },
   "categories": [
-    "Visualization"
+    "Visualization",
+    "Data Science"
   ],
-  "activationEvents": [],
+  "keywords": [
+    "csv",
+    "viewer",
+    "sql",
+    "editor",
+    "table",
+    "grid",
+    "spreadsheet"
+  ],
+  "activationEvents": [
+    "onLanguage:csv"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
+    "languages": [
+      {
+        "id": "csv",
+        "aliases": [
+          "CSV",
+          "csv"
+        ],
+        "extensions": [
+          ".csv"
+        ],
+        "mimetypes": [
+          "text/csv"
+        ]
+      }
+    ],
     "customEditors": [
       {
         "viewType": "csvClearView.edit",
@@ -40,6 +67,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable alternating row background colors."
+        },
+        "csvClearView.forceTextColumnColoring": {
+          "type": "boolean",
+          "default": false,
+          "description": "Force column coloring in Plain Text mode (performance may vary)."
         }
       }
     }

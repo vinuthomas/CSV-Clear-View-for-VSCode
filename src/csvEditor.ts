@@ -25,23 +25,44 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 
 		webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
 
-		let viewMode: 'full' | 'head' | 'tail' = 'full';
+		type ViewMode = 'full' | 'head' | 'tail' | 'text';
+		let viewMode: ViewMode = 'full';
 		const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
 
 		const stats = await vscode.workspace.fs.stat(document.uri);
 		if (stats.size > LARGE_FILE_THRESHOLD) {
-			const selection = await vscode.window.showWarningMessage(
-				`This file is large (${(stats.size / (1024 * 1024)).toFixed(2)} MB). How would you like to open it?`,
-				'Open Full File',
-				'Show Head (Top 1000 rows)',
-				'Show Tail (Bottom 1000 rows)'
-			);
+			const options: (vscode.QuickPickItem & { id: ViewMode })[] = [
+				{
+					id: 'full',
+					label: '$(file-binary) Open Full File',
+					description: 'Load all data into the grid (may be slow)',
+					detail: `Full file size: ${(stats.size / (1024 * 1024)).toFixed(2)} MB`
+				},
+				{
+					id: 'head',
+					label: '$(arrow-up) Show Head',
+					description: 'Preview the first 1,000 rows'
+				},
+				{
+					id: 'tail',
+					label: '$(arrow-down) Show Tail',
+					description: 'Preview the last 1,000 rows'
+				},
+				{
+					id: 'text',
+					label: '$(file-code) Open as Plain Text',
+					description: 'Fast raw text view without grid features'
+				}
+			];
 
-			if (selection === 'Show Head (Top 1000 rows)') {
-				viewMode = 'head';
-			} else if (selection === 'Show Tail (Bottom 1000 rows)') {
-				viewMode = 'tail';
-			} else if (!selection) {
+			const selection = await vscode.window.showQuickPick(options, {
+				placeHolder: `This file is large (${(stats.size / (1024 * 1024)).toFixed(2)} MB). How would you like to open it?`,
+				ignoreFocusOut: true
+			});
+
+			if (selection) {
+				viewMode = selection.id;
+			} else {
 				return; // User cancelled
 			}
 		}
@@ -50,7 +71,7 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 			const config = vscode.workspace.getConfiguration('csvClearView');
 			let text = '';
 			
-			if (viewMode === 'full') {
+			if (viewMode === 'full' || viewMode === 'text') {
 				text = document.getText();
 			} else if (viewMode === 'head') {
 				const lineCount = Math.min(document.lineCount, 1001); // 1000 rows + header
@@ -71,7 +92,8 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 				viewMode: viewMode,
 				config: {
 					stickyHeader: config.get('stickyHeader'),
-					alternatingRows: config.get('alternatingRows')
+					alternatingRows: config.get('alternatingRows'),
+					forceTextColumnColoring: config.get('forceTextColumnColoring')
 				}
 			});
 		};
@@ -157,6 +179,9 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 				<div id="error-container" class="error-container hidden"></div>
 				<div class="table-container">
 					<table id="csv-table"></table>
+				</div>
+				<div id="text-container" class="text-container hidden">
+					<pre id="raw-text"></pre>
 				</div>
 				<script nonce="${nonce}" src="${alasqlUri}"></script>
 				<script nonce="${nonce}" src="${scriptUri}"></script>

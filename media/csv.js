@@ -14,6 +14,10 @@ const resetButton = document.getElementById('reset-query');
 const errorContainer = document.getElementById('error-container');
 const loader = document.getElementById('loader');
 const warningContainer = document.getElementById('warning-container');
+const tableContainer = document.querySelector('.table-container');
+const textContainer = document.getElementById('text-container');
+const rawTextArea = document.getElementById('raw-text');
+const controls = document.getElementById('controls');
 
 // --- Constants ---
 const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'GROUP BY', 'LIMIT', 'JOIN', 'ON', 'AS', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'LIKE', 'IN', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'];
@@ -30,20 +34,46 @@ window.addEventListener('message', event => {
             if (message.viewMode === 'head') {
                 warningContainer.textContent = "Viewing Sample: Top 1000 rows. SQL queries will only run against this sample.";
                 warningContainer.classList.remove('hidden');
+                tableContainer.classList.remove('hidden');
+                textContainer.classList.add('hidden');
+                controls.classList.remove('hidden');
             } else if (message.viewMode === 'tail') {
                 warningContainer.textContent = "Viewing Sample: Bottom 1000 rows. SQL queries will only run against this sample.";
                 warningContainer.classList.remove('hidden');
+                tableContainer.classList.remove('hidden');
+                textContainer.classList.add('hidden');
+                controls.classList.remove('hidden');
+            } else if (message.viewMode === 'text') {
+                if (message.config.forceTextColumnColoring) {
+                    warningContainer.textContent = "Viewing as Plain Text: Row stripes & Column coloring enabled (Force Mode).";
+                    rawTextArea.innerHTML = colorizeCSV(message.text);
+                } else {
+                    warningContainer.textContent = "Viewing as Plain Text: Row stripes enabled. Column coloring is disabled to ensure instant performance.";
+                    rawTextArea.textContent = message.text;
+                }
+                warningContainer.classList.remove('hidden');
+                tableContainer.classList.add('hidden');
+                textContainer.classList.remove('hidden');
+                controls.classList.add('hidden');
             } else if (message.isLargeFile) {
                 warningContainer.textContent = "Warning: This file is large (>5MB) and may cause performance issues.";
                 warningContainer.classList.remove('hidden');
+                tableContainer.classList.remove('hidden');
+                textContainer.classList.add('hidden');
+                controls.classList.remove('hidden');
             } else {
                 warningContainer.classList.add('hidden');
+                tableContainer.classList.remove('hidden');
+                textContainer.classList.add('hidden');
+                controls.classList.remove('hidden');
             }
             
             // Use setTimeout to allow the browser to render the loader
             setTimeout(async () => {
                 try {
-                    await updateContent(message.text, message.config);
+                    if (message.viewMode !== 'text') {
+                        await updateContent(message.text, message.config);
+                    }
                 } catch (e) {
                     console.error("Error updating content:", e);
                     errorContainer.textContent = "Error loading CSV: " + e.message;
@@ -495,4 +525,69 @@ async function renderTable(data, errors) {
         // Yield to the main thread every chunk to keep UI responsive
         await new Promise(resolve => setTimeout(resolve, 0));
     }
+}
+
+function escapeHtml(text) {
+    if (!text) return text;
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function colorizeCSV(text) {
+    const lines = text.split(/\r?\n/);
+    let html = '';
+    
+    // Process only first 5000 lines max to prevent browser crash on huge files if force mode is on
+    const limit = Math.min(lines.length, 5000); 
+    
+    for (let i = 0; i < limit; i++) {
+        const line = lines[i];
+        let rowHtml = '';
+        let colIndex = 0;
+        let currentField = '';
+        let inQuotes = false;
+        
+        for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            
+            if (inQuotes) {
+                if (char === '"' && line[j+1] === '"') {
+                     currentField += '"';
+                     j++;
+                } else if (char === '"') {
+                    inQuotes = false;
+                    currentField += char;
+                } else {
+                    currentField += char;
+                }
+            } else {
+                if (char === '"') {
+                    inQuotes = true;
+                    currentField += char;
+                } else if (char === ',') {
+                    const colorClass = 'col-color-' + ((colIndex % 10) + 1);
+                    rowHtml += `<span class="${colorClass}">${escapeHtml(currentField)}</span>,`;
+                    currentField = '';
+                    colIndex++;
+                } else {
+                    currentField += char;
+                }
+            }
+        }
+        // Last field
+        const colorClass = 'col-color-' + ((colIndex % 10) + 1);
+        rowHtml += `<span class="${colorClass}">${escapeHtml(currentField)}</span>`;
+        
+        html += rowHtml + '\n';
+    }
+    
+    if (lines.length > limit) {
+        html += `\n... (Coloring limited to first ${limit} rows for performance)`;
+    }
+    
+    return html;
 }
