@@ -25,15 +25,50 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 
 		webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
 
+		let viewMode: 'full' | 'head' | 'tail' = 'full';
+		const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
+
+		const stats = await vscode.workspace.fs.stat(document.uri);
+		if (stats.size > LARGE_FILE_THRESHOLD) {
+			const selection = await vscode.window.showWarningMessage(
+				`This file is large (${(stats.size / (1024 * 1024)).toFixed(2)} MB). How would you like to open it?`,
+				'Open Full File',
+				'Show Head (Top 1000 rows)',
+				'Show Tail (Bottom 1000 rows)'
+			);
+
+			if (selection === 'Show Head (Top 1000 rows)') {
+				viewMode = 'head';
+			} else if (selection === 'Show Tail (Bottom 1000 rows)') {
+				viewMode = 'tail';
+			} else if (!selection) {
+				return; // User cancelled
+			}
+		}
+
 		const updateWebview = () => {
 			const config = vscode.workspace.getConfiguration('csvClearView');
-			const text = document.getText();
-			const isLargeFile = text.length > 1024 * 1024; // 1MB threshold
+			let text = '';
+			
+			if (viewMode === 'full') {
+				text = document.getText();
+			} else if (viewMode === 'head') {
+				const lineCount = Math.min(document.lineCount, 1001); // 1000 rows + header
+				text = document.getText(new vscode.Range(0, 0, lineCount, 0));
+			} else if (viewMode === 'tail') {
+				const startLine = Math.max(0, document.lineCount - 1000);
+				const header = document.getText(new vscode.Range(0, 0, 1, 0));
+				const body = document.getText(new vscode.Range(startLine, 0, document.lineCount, 0));
+				text = header + body;
+			}
+
+			const isLargeFile = stats.size > LARGE_FILE_THRESHOLD;
 
 			webviewPanel.webview.postMessage({
 				type: 'update',
 				text: text,
 				isLargeFile: isLargeFile,
+				viewMode: viewMode,
 				config: {
 					stickyHeader: config.get('stickyHeader'),
 					alternatingRows: config.get('alternatingRows')
@@ -104,7 +139,12 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 			</head>
 			<body>
 				<div id="loader" class="loader-overlay hidden">
-					<div class="loader"></div>
+					<div class="loader-container">
+						<div class="progress-container indeterminate">
+							<div class="progress-bar"></div>
+						</div>
+						<div class="loader-text">Loading CSV...</div>
+					</div>
 				</div>
 				<div id="warning-container" class="warning-container hidden"></div>
 				<div id="controls" class="controls">

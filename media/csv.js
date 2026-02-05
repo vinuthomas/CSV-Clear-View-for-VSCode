@@ -27,17 +27,30 @@ window.addEventListener('message', event => {
         case 'update':
             showLoader();
 
-            if (message.isLargeFile) {
-                warningContainer.textContent = "Warning: This file is large (>1MB) and may cause performance issues or high memory usage.";
+            if (message.viewMode === 'head') {
+                warningContainer.textContent = "Viewing Sample: Top 1000 rows. SQL queries will only run against this sample.";
+                warningContainer.classList.remove('hidden');
+            } else if (message.viewMode === 'tail') {
+                warningContainer.textContent = "Viewing Sample: Bottom 1000 rows. SQL queries will only run against this sample.";
+                warningContainer.classList.remove('hidden');
+            } else if (message.isLargeFile) {
+                warningContainer.textContent = "Warning: This file is large (>5MB) and may cause performance issues.";
                 warningContainer.classList.remove('hidden');
             } else {
                 warningContainer.classList.add('hidden');
             }
             
             // Use setTimeout to allow the browser to render the loader
-            setTimeout(() => {
-                updateContent(message.text, message.config);
-                hideLoader();
+            setTimeout(async () => {
+                try {
+                    await updateContent(message.text, message.config);
+                } catch (e) {
+                    console.error("Error updating content:", e);
+                    errorContainer.textContent = "Error loading CSV: " + e.message;
+                    errorContainer.classList.remove('hidden');
+                } finally {
+                    hideLoader();
+                }
             }, 50);
             break;
     }
@@ -185,12 +198,12 @@ document.addEventListener("click", function (e) {
 
 // --- Core Logic ---
 
-function updateContent(text, config) {
+async function updateContent(text, config) {
     currentConfig = config;
-    const { data, errors } = parseCSV(text);
+    const { data, errors } = await parseCSV(text);
     
     originalRawData = data;
-    originalDataObjects = dataToObjects(data);
+    originalDataObjects = await dataToObjects(data);
 
     // Update Autocomplete Options
     const columns = data.length > 0 ? data[0].map(c => {
@@ -199,7 +212,7 @@ function updateContent(text, config) {
     
     autocompleteOptions = [...sqlKeywords, ...columns];
 
-    renderTable(data, errors);
+    await renderTable(data, errors);
 }
 
 // --- Autocomplete Helpers ---
@@ -254,30 +267,43 @@ function runQuery() {
     const query = queryInput.value.trim();
     if (!query) return;
 
-    try {
-        const result = alasql(query, [originalDataObjects]);
-        
-        if (!result || result.length === 0) {
-            renderTable([], []);
-            return;
-        }
+    showLoader();
 
-        const newData = objectsToData(result);
-        renderTable(newData, []);
-        errorContainer.classList.add('hidden');
-    } catch (e) {
-        errorContainer.textContent = "Query Error: " + e.message;
-        errorContainer.classList.remove('hidden');
-    }
+    setTimeout(async () => {
+        try {
+            const result = alasql(query, [originalDataObjects]);
+            
+            if (!result || result.length === 0) {
+                await renderTable([], []);
+                return;
+            }
+
+            const newData = objectsToData(result);
+            await renderTable(newData, []);
+            errorContainer.classList.add('hidden');
+        } catch (e) {
+            errorContainer.textContent = "Query Error: " + e.message;
+            errorContainer.classList.remove('hidden');
+        } finally {
+            hideLoader();
+        }
+    }, 50);
 }
 
 function resetQuery() {
     queryInput.value = '';
-    renderTable(originalRawData, []);
-    errorContainer.classList.add('hidden');
+    showLoader();
+    setTimeout(async () => {
+        try {
+            await renderTable(originalRawData, []);
+            errorContainer.classList.add('hidden');
+        } finally {
+            hideLoader();
+        }
+    }, 50);
 }
 
-function dataToObjects(data) {
+async function dataToObjects(data) {
     if (data.length < 2) return [];
     const headers = data[0];
     const objects = [];
@@ -288,6 +314,10 @@ function dataToObjects(data) {
             obj[h] = row[index];
         });
         objects.push(obj);
+
+        if (i % 5000 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
     }
     return objects;
 }
@@ -303,7 +333,7 @@ function objectsToData(objects) {
     return data;
 }
 
-function parseCSV(text) {
+async function parseCSV(text) {
     const data = [];
     const errors = [];
     let currentRow = [];
@@ -316,6 +346,10 @@ function parseCSV(text) {
     for (let i = 0; i < text.length; i++) {
         const char = text[i];
         const nextChar = text[i + 1];
+
+        if (i % 50000 === 0 && i > 0) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
 
         if (inQuotes) {
             if (char === '"') {
@@ -363,7 +397,7 @@ function parseCSV(text) {
     return { data, errors };
 }
 
-function onCellChange() {
+async function onCellChange() {
     const table = document.getElementById('csv-table');
     const rows = Array.from(table.querySelectorAll('tr'));
     const newData = rows.map(tr => {
@@ -371,7 +405,7 @@ function onCellChange() {
     });
 
     originalRawData = newData;
-    originalDataObjects = dataToObjects(newData);
+    originalDataObjects = await dataToObjects(newData);
 
     const csvContent = dataToCSV(newData);
     vscode.postMessage({
@@ -392,7 +426,7 @@ function dataToCSV(data) {
     }).join('\n');
 }
 
-function renderTable(data, errors) {
+async function renderTable(data, errors) {
     const table = document.getElementById('csv-table');
     
     if (errors.length > 0) {
@@ -435,19 +469,30 @@ function renderTable(data, errors) {
     table.appendChild(thead);
 
     const tbody = document.createElement('tbody');
-    for (let i = 1; i < data.length; i++) {
-        const row = data[i];
-        const tr = document.createElement('tr');
-        row.forEach((cell, colIndex) => {
-            const td = document.createElement('td');
-            td.textContent = cell;
-            td.contentEditable = 'true';
-            const colName = headerRow[colIndex] || `Column ${colIndex}`;
-            td.title = `Row: ${i + 1}\nColumn: ${colName}`;
-            td.addEventListener('blur', onCellChange);
-            tr.appendChild(td);
-        });
-        tbody.appendChild(tr);
-    }
     table.appendChild(tbody);
+
+    const CHUNK_SIZE = 1000;
+    for (let i = 1; i < data.length; i += CHUNK_SIZE) {
+        const chunkEnd = Math.min(i + CHUNK_SIZE, data.length);
+        const fragment = document.createDocumentFragment();
+
+        for (let j = i; j < chunkEnd; j++) {
+            const row = data[j];
+            const tr = document.createElement('tr');
+            row.forEach((cell, colIndex) => {
+                const td = document.createElement('td');
+                td.textContent = cell;
+                td.contentEditable = 'true';
+                const colName = headerRow[colIndex] || `Column ${colIndex}`;
+                td.title = `Row: ${j}\nColumn: ${colName}`;
+                td.addEventListener('blur', onCellChange);
+                tr.appendChild(td);
+            });
+            fragment.appendChild(tr);
+        }
+        tbody.appendChild(fragment);
+
+        // Yield to the main thread every chunk to keep UI responsive
+        await new Promise(resolve => setTimeout(resolve, 0));
+    }
 }

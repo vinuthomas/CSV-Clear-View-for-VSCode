@@ -130,16 +130,6 @@ th {
     /* Use a subtle vscode theme color */
 }
 
-/* Colored Columns - distinct but readable pastels/muted tones */
-/* We target td and th to color the whole column. 
-   However, usually headers have their own style. 
-   Let's just color the data cells to keep headers distinct? 
-   User asked for "file should display with each value in the row in a different color".
-   It's safer to just color text or subtle background. 
-   Let's do text color for higher contrast or subtle background. 
-   Subtle background is often better for "columns".
-*/
-
 /* Cycle 1 */
 td:nth-child(10n+1) { color: #e57373; }
 td:nth-child(10n+2) { color: #f06292; }
@@ -152,8 +142,6 @@ td:nth-child(10n+8) { color: #4dd0e1; }
 td:nth-child(10n+9) { color: #4db6ac; }
 td:nth-child(10n+10) { color: #81c784; }
 
-/* Dark mode adjustments might be needed, but hex codes often work okay if bright enough. */
-
 .error-container {
     background-color: var(--vscode-inputValidation-errorBackground);
     border: 1px solid var(--vscode-inputValidation-errorBorder);
@@ -163,10 +151,6 @@ td:nth-child(10n+10) { color: #81c784; }
     white-space: pre-wrap;
 }
 
-.hidden {
-    display: none;
-}
-
 /* Loader */
 .loader-overlay {
     position: fixed;
@@ -174,25 +158,49 @@ td:nth-child(10n+10) { color: #81c784; }
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.2);
+    background-color: var(--vscode-editor-background);
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 1000;
 }
 
-.loader {
-    border: 6px solid var(--vscode-scrollbarSlider-background);
-    border-top: 6px solid var(--vscode-progressBar-background);
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: spin 1s linear infinite;
+.loader-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 200px;
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+.progress-container.indeterminate {
+    width: 100%;
+    height: 3px;
+    background-color: var(--vscode-scrollbarSlider-background);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-container.indeterminate .progress-bar {
+    width: 40%;
+    height: 100%;
+    background-color: var(--vscode-progressBar-background);
+    position: absolute;
+    left: -40%;
+    animation: indeterminate-progress 1.5s infinite linear;
+    box-shadow: 0 0 4px var(--vscode-progressBar-background);
+}
+
+@keyframes indeterminate-progress {
+    0% { left: -40%; }
+    100% { left: 100%; }
+}
+
+.loader-text {
+    color: var(--vscode-foreground);
+    font-size: 0.85em;
+    opacity: 0.8;
 }
 
 /* Warning Banner */
@@ -203,4 +211,9 @@ td:nth-child(10n+10) { color: #81c784; }
     padding: 10px;
     margin: 10px;
     white-space: pre-wrap;
+}
+
+/* Global utility */
+.hidden {
+    display: none !important;
 }
