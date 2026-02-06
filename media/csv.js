@@ -23,6 +23,26 @@ const errorRuler = document.getElementById('error-ruler');
 // --- Constants ---
 const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'GROUP BY', 'LIMIT', 'JOIN', 'ON', 'AS', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'LIKE', 'IN', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'];
 
+function positionErrorRuler() {
+    if (!errorRuler) return;
+    const activeContainer = tableContainer.classList.contains('hidden') ? textContainer : tableContainer;
+    const rect = activeContainer.getBoundingClientRect();
+    errorRuler.style.top = rect.top + 'px';
+    errorRuler.style.height = rect.height + 'px';
+    errorRuler.style.bottom = 'auto';
+}
+
+window.addEventListener('resize', positionErrorRuler);
+
+// Update ruler position when containers are shown/hidden
+const layoutObserver = new MutationObserver(() => {
+    positionErrorRuler();
+});
+if (errorContainer) layoutObserver.observe(errorContainer, { attributes: true, attributeFilter: ['class'] });
+if (warningContainer) layoutObserver.observe(warningContainer, { attributes: true, attributeFilter: ['class'] });
+if (tableContainer) layoutObserver.observe(tableContainer, { attributes: true, attributeFilter: ['class'] });
+if (textContainer) layoutObserver.observe(textContainer, { attributes: true, attributeFilter: ['class'] });
+
 // --- Event Listeners (Attached Once) ---
 
 // 1. Message Handler
@@ -608,8 +628,8 @@ function colorizeCSV(text) {
 }
 
 function updateErrorRuler(errors, totalLines) {
-    const errorRuler = document.getElementById('error-ruler');
     if (!errorRuler) return;
+    positionErrorRuler();
 
     errorRuler.innerHTML = '';
     if (errors.length === 0 || totalLines === 0) return;

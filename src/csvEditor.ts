@@ -18,45 +18,67 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 	private lintDocument(document: vscode.TextDocument): void {
 		const diagnostics: vscode.Diagnostic[] = [];
 		const text = document.getText();
-		
-		// Simple CSV parser for linting
-		const lines = text.split(/\r?\n/);
-		if (lines.length === 0) {
+		const totalLength = text.length;
+
+		if (totalLength === 0) {
 			this.diagnostics.set(document.uri, []);
 			return;
 		}
 
 		let headerColumnCount = -1;
-		
-		for (let i = 0; i < lines.length; i++) {
-			const line = lines[i];
-			if (line.trim() === '' && i === lines.length - 1) continue; // Skip empty last line
+		let currentColCount = 0;
+		let inQuotes = false;
+		let rowStartOffset = 0;
+		let rowNumber = 0; // Logical row number
 
-			let columns = 0;
-			let inQuotes = false;
-			for (let j = 0; j < line.length; j++) {
-				if (line[j] === '"') {
-					if (inQuotes && line[j + 1] === '"') {
-						j++; // Escaped quote
-					} else {
-						inQuotes = !inQuotes;
-					}
-				} else if (line[j] === ',' && !inQuotes) {
-					columns++;
+		for (let i = 0; i < totalLength; i++) {
+			const char = text[i];
+
+			if (char === '"') {
+				if (inQuotes && i + 1 < totalLength && text[i + 1] === '"') {
+					i++; // Skip escaped quote
+				} else {
+					inQuotes = !inQuotes;
 				}
-			}
-			columns++; // Last column
+			} else if (char === ',' && !inQuotes) {
+				currentColCount++;
+			} else if (!inQuotes && (char === '\n' || (char === '\r' && i + 1 < totalLength && text[i+1] === '\n'))) {
+				if (char === '\r') i++; // Handle CRLF
 
-			if (i === 0) {
-				headerColumnCount = columns;
-			} else if (columns !== headerColumnCount) {
-				const range = new vscode.Range(i, 0, i, line.length);
-				const diagnostic = new vscode.Diagnostic(
+				currentColCount++; // Account for the last column in the row
+
+				if (headerColumnCount === -1) {
+					headerColumnCount = currentColCount;
+				} else if (currentColCount !== headerColumnCount) {
+					const startPos = document.positionAt(rowStartOffset);
+					const endPos = document.positionAt(i); // i points to the newline char
+					// Create a range that covers the whole logical row
+					const range = new vscode.Range(startPos, endPos);
+					diagnostics.push(new vscode.Diagnostic(
+						range,
+						`Row ${rowNumber + 1}: Expected ${headerColumnCount} columns, found ${currentColCount}.`,
+						vscode.DiagnosticSeverity.Error
+					));
+				}
+
+				currentColCount = 0;
+				rowStartOffset = i + 1;
+				rowNumber++;
+			}
+		}
+
+		// Handle the last row if it doesn't end with a newline
+		if (rowStartOffset < totalLength) {
+			currentColCount++; // Account for the last column
+			if (headerColumnCount !== -1 && currentColCount !== headerColumnCount) {
+				const startPos = document.positionAt(rowStartOffset);
+				const endPos = document.positionAt(totalLength);
+				const range = new vscode.Range(startPos, endPos);
+				diagnostics.push(new vscode.Diagnostic(
 					range,
-					`Row ${i + 1}: Expected ${headerColumnCount} columns, found ${columns}.`,
+					`Row ${rowNumber + 1}: Expected ${headerColumnCount} columns, found ${currentColCount}.`,
 					vscode.DiagnosticSeverity.Error
-				);
-				diagnostics.push(diagnostic);
+				));
 			}
 		}
 
