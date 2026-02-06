@@ -9,10 +9,59 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 	}
 
 	private static readonly viewType = 'csvClearView.edit';
+	private readonly diagnostics = vscode.languages.createDiagnosticCollection('csv-clearview');
 
 	constructor(
 		private readonly context: vscode.ExtensionContext
 	) { }
+
+	private lintDocument(document: vscode.TextDocument): void {
+		const diagnostics: vscode.Diagnostic[] = [];
+		const text = document.getText();
+		
+		// Simple CSV parser for linting
+		const lines = text.split(/\r?\n/);
+		if (lines.length === 0) {
+			this.diagnostics.set(document.uri, []);
+			return;
+		}
+
+		let headerColumnCount = -1;
+		
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			if (line.trim() === '' && i === lines.length - 1) continue; // Skip empty last line
+
+			let columns = 0;
+			let inQuotes = false;
+			for (let j = 0; j < line.length; j++) {
+				if (line[j] === '"') {
+					if (inQuotes && line[j + 1] === '"') {
+						j++; // Escaped quote
+					} else {
+						inQuotes = !inQuotes;
+					}
+				} else if (line[j] === ',' && !inQuotes) {
+					columns++;
+				}
+			}
+			columns++; // Last column
+
+			if (i === 0) {
+				headerColumnCount = columns;
+			} else if (columns !== headerColumnCount) {
+				const range = new vscode.Range(i, 0, i, line.length);
+				const diagnostic = new vscode.Diagnostic(
+					range,
+					`Row ${i + 1}: Expected ${headerColumnCount} columns, found ${columns}.`,
+					vscode.DiagnosticSeverity.Error
+				);
+				diagnostics.push(diagnostic);
+			}
+		}
+
+		this.diagnostics.set(document.uri, diagnostics);
+	}
 
 	public async resolveCustomTextEditor(
 		document: vscode.TextDocument,
@@ -102,8 +151,13 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 			});
 		};
 
+		// Initial update
+		this.lintDocument(document);
+		updateWebview();
+
 		const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
 			if (e.document.uri.toString() === document.uri.toString()) {
+				this.lintDocument(document);
 				updateWebview();
 			}
 		});
@@ -128,9 +182,6 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 					return;
 			}
 		});
-
-		// Initial update
-		updateWebview();
 	}
 
 	private updateTextDocument(document: vscode.TextDocument, text: string) {
@@ -172,6 +223,7 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 						<div class="loader-text">Loading CSV...</div>
 					</div>
 				</div>
+				<div id="error-ruler" class="error-ruler"></div>
 				<div id="warning-container" class="warning-container hidden"></div>
 				<div id="controls" class="controls">
 					<div class="autocomplete-container">

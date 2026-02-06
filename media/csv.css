@@ -175,6 +175,33 @@ th {
     white-space: pre-wrap;
 }
 
+.error-ruler {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 14px;
+    background-color: transparent;
+    z-index: 50;
+    pointer-events: auto; /* Allow clicking markers to scroll */
+}
+
+.error-marker {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    height: 3px;
+    background-color: var(--vscode-editorOverviewRuler-errorForeground, #ff1212);
+    cursor: pointer;
+    border-radius: 1px;
+}
+
+.error-marker:hover {
+    filter: brightness(1.2);
+    height: 5px;
+    z-index: 51;
+}
+
 /* Loader */
 .loader-overlay {
     position: fixed;

@@ -18,6 +18,7 @@ const tableContainer = document.querySelector('.table-container');
 const textContainer = document.getElementById('text-container');
 const rawTextArea = document.getElementById('raw-text');
 const controls = document.getElementById('controls');
+const errorRuler = document.getElementById('error-ruler');
 
 // --- Constants ---
 const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'GROUP BY', 'LIMIT', 'JOIN', 'ON', 'AS', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'LIKE', 'IN', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'];
@@ -37,12 +38,14 @@ window.addEventListener('message', event => {
                 tableContainer.classList.remove('hidden');
                 textContainer.classList.add('hidden');
                 controls.classList.remove('hidden');
+                if (errorRuler) errorRuler.classList.remove('hidden');
             } else if (message.viewMode === 'tail') {
                 warningContainer.textContent = "Viewing Sample: Bottom 1000 rows. SQL queries will only run against this sample.";
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
                 textContainer.classList.add('hidden');
                 controls.classList.remove('hidden');
+                if (errorRuler) errorRuler.classList.remove('hidden');
             } else if (message.viewMode === 'text') {
                 if (message.config.forceTextColumnColoring) {
                     warningContainer.textContent = "Viewing as Plain Text: Row stripes & Column coloring enabled (Force Mode).";
@@ -55,6 +58,7 @@ window.addEventListener('message', event => {
                 tableContainer.classList.add('hidden');
                 textContainer.classList.remove('hidden');
                 controls.classList.add('hidden');
+                if (errorRuler) errorRuler.classList.add('hidden');
             } else if (message.isLargeFile) {
                 const threshold = message.config.safeModeThreshold || 5;
                 warningContainer.textContent = `Warning: This file is large (>${threshold}MB) and may cause performance issues.`;
@@ -62,11 +66,13 @@ window.addEventListener('message', event => {
                 tableContainer.classList.remove('hidden');
                 textContainer.classList.add('hidden');
                 controls.classList.remove('hidden');
+                if (errorRuler) errorRuler.classList.remove('hidden');
             } else {
                 warningContainer.classList.add('hidden');
                 tableContainer.classList.remove('hidden');
                 textContainer.classList.add('hidden');
                 controls.classList.remove('hidden');
+                if (errorRuler) errorRuler.classList.remove('hidden');
             }
             
             // Use setTimeout to allow the browser to render the loader
@@ -420,7 +426,10 @@ async function parseCSV(text) {
         const headerLength = data[0].length;
         data.forEach((row, index) => {
             if (row.length !== headerLength) {
-                errors.push(`Row ${index + 1}: Expected ${headerLength} columns, found ${row.length}.`);
+                errors.push({
+                    line: index + 1,
+                    message: `Row ${index + 1}: Expected ${headerLength} columns, found ${row.length}.`
+                });
             }
         });
     }
@@ -459,9 +468,11 @@ function dataToCSV(data) {
 
 async function renderTable(data, errors) {
     const table = document.getElementById('csv-table');
+    const errorRuler = document.getElementById('error-ruler');
     
     if (errors.length > 0) {
-        errorContainer.textContent = "CSV Parsing Errors:\n" + errors.slice(0, 10).join('\n') + (errors.length > 10 ? `\n...and ${errors.length - 10} more.` : '');
+        const errorMessages = errors.map(e => typeof e === 'string' ? e : e.message);
+        errorContainer.textContent = "CSV Parsing Errors:\n" + errorMessages.slice(0, 10).join('\n') + (errorMessages.length > 10 ? `\n...and ${errorMessages.length - 10} more.` : '');
         errorContainer.classList.remove('hidden');
     } else {
         if (errors.length === 0 && !errorContainer.textContent.startsWith("Query Error")) {
@@ -469,7 +480,10 @@ async function renderTable(data, errors) {
         }
     }
 
+    updateErrorRuler(errors, data.length);
+
     table.innerHTML = '';
+// ... (rest of renderTable)
 
     if (data.length === 0) return;
 
@@ -591,4 +605,40 @@ function colorizeCSV(text) {
     }
     
     return html;
+}
+
+function updateErrorRuler(errors, totalLines) {
+    const errorRuler = document.getElementById('error-ruler');
+    if (!errorRuler) return;
+
+    errorRuler.innerHTML = '';
+    if (errors.length === 0 || totalLines === 0) return;
+
+    // Filter to get unique lines to avoid stacking markers
+    const errorLines = [...new Set(errors.map(e => typeof e === 'string' ? -1 : e.line).filter(l => l !== -1))];
+    
+    errorLines.forEach(line => {
+        const marker = document.createElement('div');
+        marker.className = 'error-marker';
+        const percentage = (line / totalLines) * 100;
+        marker.style.top = percentage + '%';
+        marker.title = 'Error on line ' + line;
+        
+        marker.onclick = (e) => {
+            e.stopPropagation();
+            const tableContainer = document.querySelector('.table-container');
+            const rows = document.querySelectorAll('#csv-table tr');
+            if (rows[line-1]) {
+                rows[line-1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Highlight the row temporarily
+                const originalBg = rows[line-1].style.backgroundColor;
+                rows[line-1].style.backgroundColor = 'var(--vscode-inputValidation-errorBackground)';
+                setTimeout(() => {
+                    rows[line-1].style.backgroundColor = originalBg;
+                }, 2000);
+            }
+        };
+        
+        errorRuler.appendChild(marker);
+    });
 }
