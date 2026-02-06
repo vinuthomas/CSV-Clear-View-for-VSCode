@@ -72,6 +72,11 @@
           "type": "boolean",
           "default": false,
           "description": "Force column coloring in Plain Text mode (performance may vary)."
+        },
+        "csvClearView.safeModeThreshold": {
+          "type": "number",
+          "default": 5,
+          "description": "File size threshold (in MB) above which Safe Mode options are shown for large files."
         }
       }
     }

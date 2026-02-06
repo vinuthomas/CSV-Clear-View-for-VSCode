@@ -27,7 +27,10 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 
 		type ViewMode = 'full' | 'head' | 'tail' | 'text';
 		let viewMode: ViewMode = 'full';
-		const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
+		
+		const config = vscode.workspace.getConfiguration('csvClearView');
+		const safeModeThresholdMB = config.get<number>('safeModeThreshold') || 5;
+		const LARGE_FILE_THRESHOLD = safeModeThresholdMB * 1024 * 1024;
 
 		const stats = await vscode.workspace.fs.stat(document.uri);
 		if (stats.size > LARGE_FILE_THRESHOLD) {
@@ -93,7 +96,8 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 				config: {
 					stickyHeader: config.get('stickyHeader'),
 					alternatingRows: config.get('alternatingRows'),
-					forceTextColumnColoring: config.get('forceTextColumnColoring')
+					forceTextColumnColoring: config.get('forceTextColumnColoring'),
+					safeModeThreshold: safeModeThresholdMB
 				}
 			});
 		};

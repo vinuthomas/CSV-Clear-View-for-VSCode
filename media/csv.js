@@ -56,7 +56,8 @@ window.addEventListener('message', event => {
                 textContainer.classList.remove('hidden');
                 controls.classList.add('hidden');
             } else if (message.isLargeFile) {
-                warningContainer.textContent = "Warning: This file is large (>5MB) and may cause performance issues.";
+                const threshold = message.config.safeModeThreshold || 5;
+                warningContainer.textContent = `Warning: This file is large (>${threshold}MB) and may cause performance issues.`;
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
                 textContainer.classList.add('hidden');
