@@ -2,6 +2,12 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [0.1.1] - 2026-02-06
+
+### Fixed
+- **Error Ruler Position:** Fixed alignment of the error ruler when error banners are displayed.
+- **CSV Linting:** Improved parsing logic to correctly handle quoted fields containing newlines.
+
 ## [0.1.0] - 2026-02-04
 
 ### Added
