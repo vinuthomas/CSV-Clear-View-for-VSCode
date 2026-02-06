@@ -151,8 +151,8 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 				const lineCount = Math.min(document.lineCount, 1001); // 1000 rows + header
 				text = document.getText(new vscode.Range(0, 0, lineCount, 0));
 			} else if (viewMode === 'tail') {
-				const startLine = Math.max(0, document.lineCount - 1000);
 				const header = document.getText(new vscode.Range(0, 0, 1, 0));
+				const startLine = Math.max(1, document.lineCount - 1000);
 				const body = document.getText(new vscode.Range(startLine, 0, document.lineCount, 0));
 				text = header + body;
 			}

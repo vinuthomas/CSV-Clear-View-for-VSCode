@@ -162,14 +162,14 @@ queryInput.addEventListener("input", function(e) {
         // Strategy 1: Standard Prefix Match
         if (item.toUpperCase().startsWith(currentWord.toUpperCase())) {
             isMatch = true;
-            displayHtml = "<strong>" + item.substr(0, currentWord.length) + "</strong>" + item.substr(currentWord.length);
+            displayHtml = "<strong>" + escapeHtml(item.substr(0, currentWord.length)) + "</strong>" + escapeHtml(item.substr(currentWord.length));
         } 
         // Strategy 2: Bracket Match (User typed '[', item is 'Name') -> Match 'Name' against 'Name'
         else if (isBracketStart) {
             if (!item.startsWith('[') && item.toUpperCase().startsWith(searchWord.toUpperCase())) {
                 isMatch = true;
-                displayHtml = "<strong>[" + item.substr(0, searchWord.length) + "</strong>" + item.substr(searchWord.length) + "]";
-                insertVal = `[${item}]`;
+                displayHtml = "<strong>[" + escapeHtml(item.substr(0, searchWord.length)) + "</strong>" + escapeHtml(item.substr(searchWord.length)) + "]";
+                insertVal = /^[a-zA-Z0-9_]+$/.test(item) ? item : `[${item.replace(/\]/g, ']]')}]`;
             }
         }
 
@@ -177,7 +177,7 @@ queryInput.addEventListener("input", function(e) {
             matches.push(insertVal);
             b = document.createElement("DIV");
             b.innerHTML = displayHtml;
-            b.innerHTML += "<input type='hidden' value='" + insertVal + "'>";
+            b.innerHTML += "<input type='hidden' value='" + escapeHtml(insertVal) + "'>";
             b.addEventListener("click", function(e) {
                 insertValue(this.getElementsByTagName("input")[0].value);
                 closeAllLists();
@@ -264,7 +264,7 @@ async function updateContent(text, config) {
 
     // Update Autocomplete Options
     const columns = data.length > 0 ? data[0].map(c => {
-        return /^[a-zA-Z0-9_]+$/.test(c) ? c : `[${c}]`;
+        return /^[a-zA-Z0-9_]+$/.test(c) ? c : `[${c.replace(/\]/g, ']]')}]`;
     }) : [];
     
     autocompleteOptions = [...sqlKeywords, ...columns];
@@ -441,6 +441,13 @@ async function parseCSV(text) {
         data.push(currentRow);
     }
 
+    if (inQuotes) {
+        errors.push({
+            line: data.length + 1,
+            message: `Row ${data.length + 1}: Unclosed quote detected.`
+        });
+    }
+
     // Linting
     if (data.length > 0) {
         const headerLength = data[0].length;
@@ -457,21 +464,51 @@ async function parseCSV(text) {
     return { data, errors };
 }
 
-async function onCellChange() {
-    const table = document.getElementById('csv-table');
-    const rows = Array.from(table.querySelectorAll('tr'));
-    const newData = rows.map(tr => {
-        return Array.from(tr.querySelectorAll('th, td')).map(cell => cell.textContent);
-    });
+let saveTimeout;
+function debounceSave() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        const csvContent = dataToCSV(originalRawData);
+        vscode.postMessage({
+            type: 'edit',
+            text: csvContent
+        });
+    }, 300);
+}
 
-    originalRawData = newData;
-    originalDataObjects = await dataToObjects(newData);
+async function onCellChange(e) {
+    const cell = e.target;
+    const row = parseInt(cell.dataset.row);
+    const col = parseInt(cell.dataset.col);
+    const newValue = cell.textContent;
 
-    const csvContent = dataToCSV(newData);
-    vscode.postMessage({
-        type: 'edit',
-        text: csvContent
-    });
+    if (originalRawData[row] && originalRawData[row][col] === newValue) return;
+
+    if (!originalRawData[row]) {
+        // This shouldn't happen with correct data-row attributes
+        return;
+    }
+
+    originalRawData[row][col] = newValue;
+
+    // Update originalDataObjects if it's not the header
+    if (row > 0) {
+        const header = originalRawData[0];
+        const objIndex = row - 1;
+        if (originalDataObjects[objIndex]) {
+            originalDataObjects[objIndex][header[col]] = newValue;
+        }
+    } else {
+        // If header changed, we need to rebuild originalDataObjects because keys changed
+        originalDataObjects = await dataToObjects(originalRawData);
+        // Also update autocomplete options
+        const columns = originalRawData[0].map(c => {
+            return /^[a-zA-Z0-9_]+$/.test(c) ? c : `[${c.replace(/\]/g, ']]')}]`;
+        });
+        autocompleteOptions = [...sqlKeywords, ...columns];
+    }
+
+    debounceSave();
 }
 
 function dataToCSV(data) {
@@ -526,6 +563,8 @@ async function renderTable(data, errors) {
         const th = document.createElement('th');
         th.textContent = colName;
         th.contentEditable = 'true';
+        th.dataset.row = 0;
+        th.dataset.col = index;
         th.title = `Index: ${index}\nName: ${colName}`;
         th.addEventListener('blur', onCellChange);
         trHead.appendChild(th);
@@ -548,6 +587,8 @@ async function renderTable(data, errors) {
                 const td = document.createElement('td');
                 td.textContent = cell;
                 td.contentEditable = 'true';
+                td.dataset.row = j;
+                td.dataset.col = colIndex;
                 const colName = headerRow[colIndex] || `Column ${colIndex}`;
                 td.title = `Row: ${j}\nColumn: ${colName}`;
                 td.addEventListener('blur', onCellChange);
