@@ -21,6 +21,8 @@ A clear and powerful CSV viewer for VS Code with colored columns, sticky headers
 
 - `csvClearView.stickyHeader`: Enable/Disable sticky header (default: `true`).
 - `csvClearView.alternatingRows`: Enable/Disable alternating row colors (default: `true`).
+- `csvClearView.safeModeThreshold`: File size threshold (in MB) above which Safe Mode options are shown for large files (default: `5`).
+- `csvClearView.forceTextColumnColoring`: Force column coloring in Plain Text mode. Performance may vary on very large files (default: `false`).
 
 ## SQL Guide
 - **Table Name:** Always use `?`
@@ -42,8 +44,8 @@ npm install
 
 # Compile, package, and install locally into your VS Code
 npm run compile
-npx @vscode/vsce package --no-dependencies
-code --install-extension csv-clearview-0.0.1.vsix --force
+npx @vscode/vsce package
+code --install-extension csv-clearview-0.2.0.vsix --force
 ```
 
 ### Debugging
