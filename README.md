@@ -1,4 +1,7 @@
 # CSV ClearView for VS Code or Compatible IDE
+
+[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/VinuThomas.csv-clearview.svg)](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview)
+
 A clear and powerful CSV viewer for VS Code with colored columns, sticky headers, and SQL query capabilities. This should work on other IDE which also load Visual Code style plugins. 
 
 ## Features
@@ -44,8 +47,8 @@ npm install
 
 # Compile, package, and install locally into your VS Code
 npm run compile
-npx @vscode/vsce package
-code --install-extension csv-clearview-0.2.0.vsix --force
+npx @vscode/vsce package --no-dependencies
+code --install-extension csv-clearview-0.2.1.vsix --force
 ```
 
 ### Debugging
