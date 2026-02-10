@@ -154,17 +154,43 @@ th {
     /* Use a subtle vscode theme color */
 }
 
-/* Cycle 1 */
-.col-color-1, td:nth-child(10n+1) { color: #e57373; }
-.col-color-2, td:nth-child(10n+2) { color: #f06292; }
-.col-color-3, td:nth-child(10n+3) { color: #ba68c8; }
-.col-color-4, td:nth-child(10n+4) { color: #9575cd; }
-.col-color-5, td:nth-child(10n+5) { color: #7986cb; }
-.col-color-6, td:nth-child(10n+6) { color: #64b5f6; }
-.col-color-7, td:nth-child(10n+7) { color: #4fc3f7; }
-.col-color-8, td:nth-child(10n+8) { color: #4dd0e1; }
-.col-color-9, td:nth-child(10n+9) { color: #4db6ac; }
-.col-color-10, td:nth-child(10n+10) { color: #81c784; }
+/* Column Colors */
+:root {
+    --col-1: #e57373;
+    --col-2: #f06292;
+    --col-3: #ba68c8;
+    --col-4: #9575cd;
+    --col-5: #7986cb;
+    --col-6: #64b5f6;
+    --col-7: #4fc3f7;
+    --col-8: #4dd0e1;
+    --col-9: #4db6ac;
+    --col-10: #81c784;
+}
+
+body.vscode-light {
+    --col-1: #c62828;
+    --col-2: #ad1457;
+    --col-3: #6a1b9a;
+    --col-4: #4527a0;
+    --col-5: #283593;
+    --col-6: #1565c0;
+    --col-7: #0277bd;
+    --col-8: #00838f;
+    --col-9: #00695c;
+    --col-10: #2e7d32;
+}
+
+.col-color-1, td:nth-child(10n+1) { color: var(--col-1); }
+.col-color-2, td:nth-child(10n+2) { color: var(--col-2); }
+.col-color-3, td:nth-child(10n+3) { color: var(--col-3); }
+.col-color-4, td:nth-child(10n+4) { color: var(--col-4); }
+.col-color-5, td:nth-child(10n+5) { color: var(--col-5); }
+.col-color-6, td:nth-child(10n+6) { color: var(--col-6); }
+.col-color-7, td:nth-child(10n+7) { color: var(--col-7); }
+.col-color-8, td:nth-child(10n+8) { color: var(--col-8); }
+.col-color-9, td:nth-child(10n+9) { color: var(--col-9); }
+.col-color-10, td:nth-child(10n+10) { color: var(--col-10); }
 
 .error-container {
     background-color: var(--vscode-inputValidation-errorBackground);
