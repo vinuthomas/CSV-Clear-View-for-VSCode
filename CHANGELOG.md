@@ -2,6 +2,13 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [0.2.8] - 2026-02-10
+
+### Fixed
+- **Header Alignment:** Resolved a pixel-mismatch issue when scrolling all the way to the right by adding scrollbar compensation.
+- **Error Navigation:** Fixed the scroll offset when jumping to errors from the scrollbar markers.
+- **Edit Mode:** Improved the editing experience for extremely long text fields.
+
 ## [0.2.7] - 2026-02-10
 
 ### Added

@@ -785,6 +785,17 @@ async function renderTable(data, errors) {
     if (headerTable) headerTable.appendChild(createColGroup(columnWidths));
     table.appendChild(createColGroup(columnWidths));
 
+    // Ensure both tables have the exact same total width
+    const totalTableWidth = columnWidths.reduce((a, b) => a + b, 0);
+    if (headerTable) headerTable.style.width = totalTableWidth + 'px';
+    table.style.width = totalTableWidth + 'px';
+
+    // Compensate header for the body's vertical scrollbar width to ensure right-edge alignment
+    const scrollbarWidth = tableContainer.offsetWidth - tableContainer.clientWidth;
+    if (headerContainer) {
+        headerContainer.style.paddingRight = scrollbarWidth + 'px';
+    }
+
     // Build Header Table
     const thead = document.createElement('thead');
     const trHead = document.createElement('tr');
@@ -877,27 +888,33 @@ function updateErrorRuler(errors, totalLines) {
         const percentage = (line / totalLines) * 100;
         marker.style.top = percentage + '%';
         marker.title = 'Error on line ' + line;
-        marker.onclick = (e) => {
-            e.stopPropagation();
-            const targetScrollTop = (line - 1) * rowHeight;
-            tableContainer.scrollTop = targetScrollTop;
-            setTimeout(() => {
-                const scrollTop = tableContainer.scrollTop;
-                const startRow = Math.max(1, Math.floor(scrollTop / rowHeight));
-                const buffer = 10;
-                const renderStart = Math.max(1, startRow - buffer);
-                const relativeIndex = line - renderStart - 1; 
-                const rows = table.querySelector('tbody').rows;
-                if (rows[relativeIndex]) {
-                    const row = rows[relativeIndex];
-                    const originalBg = row.style.backgroundColor;
-                    row.style.backgroundColor = 'var(--vscode-inputValidation-errorBackground)';
+                marker.onclick = (e) => {
+                    e.stopPropagation();
+                    // Data starts at line 2 (line 1 is header). 
+                    // So line 2 should scroll to offset 0.
+                    const targetScrollTop = Math.max(0, (line - 2) * rowHeight);
+                    tableContainer.scrollTop = targetScrollTop;
+                    
                     setTimeout(() => {
-                        row.style.backgroundColor = originalBg;
-                    }, 2000);
-                }
-            }, 100);
-        };
+                        const scrollTop = tableContainer.scrollTop;
+                        const startRow = Math.max(1, Math.floor(scrollTop / rowHeight));
+                        const buffer = 10;
+                        const renderStart = Math.max(1, startRow - buffer);
+                        
+                        // Header is separate, so relative index is simple
+                        const relativeIndex = line - renderStart - 1; 
+                        const tbody = table.querySelector('tbody');
+                        if (tbody && tbody.rows[relativeIndex]) {
+                            const row = tbody.rows[relativeIndex];
+                            const originalBg = row.style.backgroundColor;
+                            row.style.backgroundColor = 'var(--vscode-inputValidation-errorBackground)';
+                            setTimeout(() => {
+                                row.style.backgroundColor = originalBg;
+                            }, 2000);
+                        }
+                    }, 100);
+                };
+        
         errorRuler.appendChild(marker);
     });
 }
