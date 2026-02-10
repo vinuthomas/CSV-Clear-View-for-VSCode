@@ -182,6 +182,31 @@ th, td {
     box-sizing: border-box;
 }
 
+/* Ensure full visibility during editing */
+td[contenteditable="true"], th[contenteditable="true"] {
+    text-overflow: clip !important;
+    overflow: auto !important; /* Allow scrolling inside the cell */
+    scrollbar-width: none; /* Hide scrollbar Firefox */
+    -ms-overflow-style: none;  /* Hide scrollbar IE/Edge */
+    white-space: pre !important; 
+    background-color: var(--vscode-editor-background) !important;
+    color: var(--vscode-editor-foreground) !important;
+    z-index: 1000 !important;
+    position: relative;
+    max-width: 600px !important; /* Cap width to prevent off-screen expansion */
+    width: max-content !important;
+    min-width: 100% !important;
+    /* Removed min-width: max-content to allow max-width to take effect */
+    box-shadow: 0 0 15px rgba(0,0,0,0.7);
+    outline: 2px solid var(--vscode-focusBorder) !important;
+    display: block; /* Required for overflow to work reliably on TDs in some browsers */
+}
+
+td[contenteditable="true"]::-webkit-scrollbar, 
+th[contenteditable="true"]::-webkit-scrollbar {
+    display: none; /* Hide scrollbar Chrome/Safari/Webkit */
+}
+
 td:focus {
     background-color: var(--vscode-editor-selectionBackground) !important;
     box-shadow: inset 0 0 0 2px var(--vscode-focusBorder);

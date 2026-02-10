@@ -224,9 +224,20 @@ window.addEventListener('message', event => {
             setTimeout(async () => {
                 if (isUpdating) return;
                 isUpdating = true;
+                
+                // Preserve scroll position
+                const savedScrollTop = tableContainer.scrollTop;
+                const savedScrollLeft = tableContainer.scrollLeft;
+
                 try {
                     if (message.viewMode !== 'text') {
                         await updateContent(message.text, message.config);
+                        
+                        // Restore scroll position
+                        tableContainer.scrollTop = savedScrollTop;
+                        tableContainer.scrollLeft = savedScrollLeft;
+                        // Trigger one manual virtual sync to ensure correct rows are shown
+                        updateVirtualTable();
                     }
                 } catch (e) {
                     console.error("Error updating content:", e);
@@ -262,6 +273,13 @@ if (tableContainer) {
         if ((cell.tagName === 'TD' || cell.tagName === 'TH') && cell.contentEditable !== 'true') {
             cell.contentEditable = 'true';
             cell.focus();
+            
+            // Select all text for easier editing of long strings
+            const range = document.createRange();
+            range.selectNodeContents(cell);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
         }
     });
 
@@ -269,6 +287,16 @@ if (tableContainer) {
         if (e.target.tagName === 'TD' || e.target.tagName === 'TH') {
             onCellChange(e);
             e.target.contentEditable = 'false';
+        }
+    }, true);
+
+    // Prevent arrow keys from bubbling up during edit mode to avoid defocusing/scrolling
+    tableContainer.addEventListener('keydown', (e) => {
+        const cell = e.target;
+        if ((cell.tagName === 'TD' || cell.tagName === 'TH') && cell.contentEditable === 'true') {
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                e.stopPropagation();
+            }
         }
     }, true);
 

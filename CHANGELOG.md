@@ -2,12 +2,21 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [0.2.7] - 2026-02-10
+
+### Added
+- **Scroll Preservation:** The extension now remembers and restores your exact scroll position (vertical and horizontal) when saving or refreshing the file.
+- **Improved Editing:** Cells now automatically select all text on double-click and expand to show full content without ellipses during editing.
+
+### Fixed
+- **Edit-Mode Navigation:** Fixed a bug where using arrow keys at the end of a cell would cause it to lose focus.
+- **Internal Overlays:** Hidden internal scrollbars in editing cells to prevent them from obscuring text content.
+
 ## [0.2.6] - 2026-02-10
 
 ### Changed
-- **Large File Threshold:** Increased the default threshold for safe mode from 5MB to 20MB, thanks to the new virtual scrolling performance improvements.
+- **Large File Threshold:** Increased the default threshold for safe mode from 5MB to 20MB.
 
-## [0.2.5] - 2026-02-10
 
 ### Added
 - **Virtual Scrolling:** Implemented a high-performance virtual rendering engine. Large CSV files (100MB+) now load and scroll instantly by only rendering visible rows.
