@@ -2,6 +2,21 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [0.2.3] - 2026-02-09
+
+### Added
+- **Theme-Aware Colors:** Column colors now automatically adjust for light themes to ensure high contrast and readability.
+
+## [0.2.2] - 2026-02-09
+
+### Added
+- **Extension Icon:** Added a official logo for the extension to the VS Marketplace.
+
+## [0.2.1] - 2026-02-09
+
+### Changed
+- **Marketplace Preparation:** Updated package manifest with publisher information, repository links, and bug tracker for official release.
+
 ## [0.2.0] - 2026-02-06
 
 ### Added
