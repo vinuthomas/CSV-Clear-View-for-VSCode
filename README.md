@@ -48,7 +48,7 @@ npm install
 # Compile, package, and install locally into your VS Code
 npm run compile
 npx @vscode/vsce package --no-dependencies
-code --install-extension csv-clearview-0.2.3.vsix --force
+code --install-extension csv-clearview-0.2.4.vsix --force
 ```
 
 ### Debugging

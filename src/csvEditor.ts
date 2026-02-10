@@ -25,6 +25,11 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 			return;
 		}
 
+		// Performance optimization: skip linting for extremely large files 
+		// or only lint the first N characters.
+		const MAX_LINT_SIZE = 1000000; // 1MB limit for linting
+		const scanLength = Math.min(totalLength, MAX_LINT_SIZE);
+
 		let headerColumnCount = -1;
 		let currentColCount = 0;
 		let inQuotes = false;
@@ -168,7 +173,8 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 					stickyHeader: config.get('stickyHeader'),
 					alternatingRows: config.get('alternatingRows'),
 					forceTextColumnColoring: config.get('forceTextColumnColoring'),
-					safeModeThreshold: safeModeThresholdMB
+					safeModeThreshold: safeModeThresholdMB,
+					showSlowLoadPrompt: config.get('showSlowLoadPrompt')
 				}
 			});
 		};
@@ -177,10 +183,16 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 		this.lintDocument(document);
 		updateWebview();
 
+		let debounceTimer: NodeJS.Timeout | undefined;
 		const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
 			if (e.document.uri.toString() === document.uri.toString()) {
-				this.lintDocument(document);
-				updateWebview();
+				if (debounceTimer) {
+					clearTimeout(debounceTimer);
+				}
+				debounceTimer = setTimeout(() => {
+					this.lintDocument(document);
+					updateWebview();
+				}, 500); // 500ms debounce
 			}
 		});
 
@@ -243,6 +255,17 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 							<div class="progress-bar"></div>
 						</div>
 						<div class="loader-text">Loading CSV...</div>
+					</div>
+				</div>
+
+				<div id="slow-load-modal" class="loader-overlay hidden">
+					<div class="loader-container" style="background: var(--vscode-editor-background); border: 1px solid var(--vscode-widget-border); padding: 20px; width: 300px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+						<div class="loader-text" style="opacity: 1; margin-bottom: 15px; font-weight: bold;">Rendering is taking a while...</div>
+						<div class="loader-text" style="opacity: 0.8; margin-bottom: 20px; text-align: center;">This file is very large. Would you like to switch to Plain Text mode for instant viewing?</div>
+						<div style="display: flex; gap: 10px; width: 100%;">
+							<button id="switch-to-text" style="flex: 1;">Plain Text</button>
+							<button id="continue-waiting" style="flex: 1; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);">Continue</button>
+						</div>
 					</div>
 				</div>
 				<div id="error-ruler" class="error-ruler"></div>

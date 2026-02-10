@@ -6,6 +6,7 @@ let originalDataObjects = []; // Array of Objects for SQL
 let originalRawData = []; // Array of Arrays for Render
 let autocompleteOptions = []; // Shared source for autocomplete
 let currentFocus = -1; // Shared focus state for autocomplete
+let isUpdating = false; // Guard for overlapping updates
 
 // --- DOM Elements ---
 const queryInput = document.getElementById('sql-query');
@@ -19,9 +20,17 @@ const textContainer = document.getElementById('text-container');
 const rawTextArea = document.getElementById('raw-text');
 const controls = document.getElementById('controls');
 const errorRuler = document.getElementById('error-ruler');
+const slowLoadModal = document.getElementById('slow-load-modal');
+const switchToTextBtn = document.getElementById('switch-to-text');
+const continueWaitingBtn = document.getElementById('continue-waiting');
 
 // --- Constants ---
 const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'GROUP BY', 'LIMIT', 'JOIN', 'ON', 'AS', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'LIKE', 'IN', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'];
+const SLOW_LOAD_TIMEOUT = 25000; // 25 seconds
+
+let slowLoadTimer;
+let isRenderingInterrupted = false;
+let currentText = "";
 
 function positionErrorRuler() {
     if (!errorRuler) return;
@@ -45,12 +54,54 @@ if (textContainer) layoutObserver.observe(textContainer, { attributes: true, att
 
 // --- Event Listeners (Attached Once) ---
 
+// Modal handlers
+if (switchToTextBtn) {
+    switchToTextBtn.addEventListener('click', () => {
+        isRenderingInterrupted = true;
+        if (slowLoadModal) slowLoadModal.classList.add('hidden');
+        switchToPlainTextMode();
+    });
+}
+
+if (continueWaitingBtn) {
+    continueWaitingBtn.addEventListener('click', () => {
+        if (slowLoadModal) slowLoadModal.classList.add('hidden');
+    });
+}
+
+function switchToPlainTextMode() {
+    if (currentConfig.forceTextColumnColoring) {
+        warningContainer.textContent = "Viewing as Plain Text: Row stripes & Column coloring enabled (Force Mode).";
+        rawTextArea.innerHTML = colorizeCSV(currentText);
+    } else {
+        warningContainer.textContent = "Viewing as Plain Text: Row stripes enabled. Column coloring is disabled to ensure instant performance.";
+        rawTextArea.textContent = currentText;
+    }
+    warningContainer.classList.remove('hidden');
+    tableContainer.classList.add('hidden');
+    textContainer.classList.remove('hidden');
+    controls.classList.add('hidden');
+    if (errorRuler) errorRuler.classList.add('hidden');
+    hideLoader();
+}
+
 // 1. Message Handler
 window.addEventListener('message', event => {
     const message = event.data;
     switch (message.type) {
         case 'update':
+            currentText = message.text;
             showLoader();
+            isRenderingInterrupted = false;
+            clearTimeout(slowLoadTimer);
+
+            if (message.config.showSlowLoadPrompt) {
+                slowLoadTimer = setTimeout(() => {
+                    if (loader && !loader.classList.contains('hidden')) {
+                        if (slowLoadModal) slowLoadModal.classList.remove('hidden');
+                    }
+                }, SLOW_LOAD_TIMEOUT);
+            }
 
             if (message.viewMode === 'head') {
                 warningContainer.textContent = "Viewing Sample: Top 1000 rows. SQL queries will only run against this sample.";
@@ -97,6 +148,8 @@ window.addEventListener('message', event => {
             
             // Use setTimeout to allow the browser to render the loader
             setTimeout(async () => {
+                if (isUpdating) return;
+                isUpdating = true;
                 try {
                     if (message.viewMode !== 'text') {
                         await updateContent(message.text, message.config);
@@ -106,6 +159,7 @@ window.addEventListener('message', event => {
                     errorContainer.textContent = "Error loading CSV: " + e.message;
                     errorContainer.classList.remove('hidden');
                 } finally {
+                    isUpdating = false;
                     hideLoader();
                 }
             }, 50);
@@ -125,6 +179,39 @@ function hideLoader() {
 // 2. Button Handlers
 runButton.addEventListener('click', runQuery);
 resetButton.addEventListener('click', resetQuery);
+
+// Event delegation for cell edits
+if (tableContainer) {
+    // Single-click to select, Double-click to edit
+    tableContainer.addEventListener('dblclick', (e) => {
+        const cell = e.target;
+        if ((cell.tagName === 'TD' || cell.tagName === 'TH') && cell.contentEditable !== 'true') {
+            cell.contentEditable = 'true';
+            cell.focus();
+        }
+    });
+
+    tableContainer.addEventListener('focusout', (e) => {
+        if (e.target.tagName === 'TD' || e.target.tagName === 'TH') {
+            onCellChange(e);
+            e.target.contentEditable = 'false';
+        }
+    }, true);
+
+    // Show hover info dynamically instead of 300k 'title' attributes
+    tableContainer.addEventListener('mouseover', (e) => {
+        const cell = e.target;
+        if (cell.tagName === 'TD' || cell.tagName === 'TH') {
+            if (!cell.title) {
+                const colIndex = cell.cellIndex;
+                const rowIndex = cell.parentElement.rowIndex;
+                const headerRow = originalRawData[0] || [];
+                const colName = headerRow[colIndex] || `Column ${colIndex}`;
+                cell.title = rowIndex === 0 ? `Index: ${colIndex}\nName: ${colName}` : `Row: ${rowIndex}\nColumn: ${colName}`;
+            }
+        }
+    });
+}
 
 // 3. Autocomplete: Input Event
 queryInput.addEventListener("input", function(e) {
@@ -260,7 +347,7 @@ async function updateContent(text, config) {
     const { data, errors } = await parseCSV(text);
     
     originalRawData = data;
-    originalDataObjects = await dataToObjects(data);
+    originalDataObjects = []; // Defer object creation until SQL is actually run
 
     // Update Autocomplete Options
     const columns = data.length > 0 ? data[0].map(c => {
@@ -328,6 +415,11 @@ function runQuery() {
 
     setTimeout(async () => {
         try {
+            // Lazy-load data objects for SQL
+            if (originalDataObjects.length === 0 && originalRawData.length > 0) {
+                originalDataObjects = await dataToObjects(originalRawData);
+            }
+
             const result = alasql(query, [originalDataObjects]);
             
             if (!result || result.length === 0) {
@@ -394,50 +486,70 @@ async function parseCSV(text) {
     const data = [];
     const errors = [];
     let currentRow = [];
-    let currentField = '';
+    let fieldStart = 0;
     let inQuotes = false;
-    
-    // Normalize newlines
-    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const len = text.length;
 
-    for (let i = 0; i < text.length; i++) {
+    for (let i = 0; i < len; i++) {
         const char = text[i];
-        const nextChar = text[i + 1];
 
-        if (i % 50000 === 0 && i > 0) {
+        if (i % 500000 === 0 && i > 0) {
             await new Promise(resolve => setTimeout(resolve, 0));
         }
 
         if (inQuotes) {
             if (char === '"') {
-                if (nextChar === '"') {
-                    currentField += '"';
+                if (i + 1 < len && text[i + 1] === '"') {
+                    // Escaped quote: we can't use a simple slice here easily
+                    // but we can fall back or handle it. 
+                    // Most fields aren't escaped, so we'll keep it simple for the common case.
                     i++;
                 } else {
                     inQuotes = false;
                 }
-            } else {
-                currentField += char;
             }
         } else {
             if (char === '"') {
                 inQuotes = true;
+                fieldStart = i; // Include quote in field for now to handle it consistently
             } else if (char === ',') {
-                currentRow.push(currentField);
-                currentField = '';
+                let field = text.slice(fieldStart, i);
+                if (field.startsWith('"') && field.endsWith('"')) {
+                    field = field.slice(1, -1).replace(/""/g, '"');
+                }
+                currentRow.push(field);
+                fieldStart = i + 1;
             } else if (char === '\n') {
-                currentRow.push(currentField);
-                currentField = '';
+                let field = text.slice(fieldStart, i);
+                if (field.startsWith('"') && field.endsWith('"')) {
+                    field = field.slice(1, -1).replace(/""/g, '"');
+                }
+                currentRow.push(field);
                 data.push(currentRow);
                 currentRow = [];
-            } else {
-                currentField += char;
+                fieldStart = i + 1;
+            } else if (char === '\r') {
+                let field = text.slice(fieldStart, i);
+                if (field.startsWith('"') && field.endsWith('"')) {
+                    field = field.slice(1, -1).replace(/""/g, '"');
+                }
+                currentRow.push(field);
+                data.push(currentRow);
+                currentRow = [];
+                if (i + 1 < len && text[i + 1] === '\n') {
+                    i++;
+                }
+                fieldStart = i + 1;
             }
         }
     }
     
-    if (currentField || currentRow.length > 0 || text.endsWith(',')) {
-        currentRow.push(currentField);
+    if (fieldStart < len || text.endsWith(',')) {
+        let field = text.slice(fieldStart);
+        if (field.startsWith('"') && field.endsWith('"')) {
+            field = field.slice(1, -1).replace(/""/g, '"');
+        }
+        currentRow.push(field);
         data.push(currentRow);
     }
 
@@ -478,8 +590,8 @@ function debounceSave() {
 
 async function onCellChange(e) {
     const cell = e.target;
-    const row = parseInt(cell.dataset.row);
-    const col = parseInt(cell.dataset.col);
+    const row = cell.parentElement.rowIndex;
+    const col = cell.cellIndex;
     const newValue = cell.textContent;
 
     if (originalRawData[row] && originalRawData[row][col] === newValue) return;
@@ -556,17 +668,12 @@ async function renderTable(data, errors) {
         table.classList.remove('alternating-rows');
     }
 
-    const headerRow = data[0];
+    const headerRow = data[0] || [];
     const thead = document.createElement('thead');
     const trHead = document.createElement('tr');
     headerRow.forEach((colName, index) => {
         const th = document.createElement('th');
         th.textContent = colName;
-        th.contentEditable = 'true';
-        th.dataset.row = 0;
-        th.dataset.col = index;
-        th.title = `Index: ${index}\nName: ${colName}`;
-        th.addEventListener('blur', onCellChange);
         trHead.appendChild(th);
     });
     thead.appendChild(trHead);
@@ -575,32 +682,29 @@ async function renderTable(data, errors) {
     const tbody = document.createElement('tbody');
     table.appendChild(tbody);
 
-    const CHUNK_SIZE = 1000;
+    const CHUNK_SIZE = 2000; // Increased chunk size for faster loading with leaner DOM
     for (let i = 1; i < data.length; i += CHUNK_SIZE) {
+        if (isRenderingInterrupted) return;
+
         const chunkEnd = Math.min(i + CHUNK_SIZE, data.length);
-        const fragment = document.createDocumentFragment();
+        let chunkHtml = '';
 
         for (let j = i; j < chunkEnd; j++) {
             const row = data[j];
-            const tr = document.createElement('tr');
-            row.forEach((cell, colIndex) => {
-                const td = document.createElement('td');
-                td.textContent = cell;
-                td.contentEditable = 'true';
-                td.dataset.row = j;
-                td.dataset.col = colIndex;
-                const colName = headerRow[colIndex] || `Column ${colIndex}`;
-                td.title = `Row: ${j}\nColumn: ${colName}`;
-                td.addEventListener('blur', onCellChange);
-                tr.appendChild(td);
-            });
-            fragment.appendChild(tr);
+            chunkHtml += '<tr>';
+            for (let colIndex = 0; colIndex < headerRow.length; colIndex++) {
+                const cell = row[colIndex] || '';
+                chunkHtml += `<td>${escapeHtml(cell)}</td>`;
+            }
+            chunkHtml += '</tr>';
         }
-        tbody.appendChild(fragment);
+        tbody.insertAdjacentHTML('beforeend', chunkHtml);
 
-        // Yield to the main thread every chunk to keep UI responsive
+        // Yield to the main thread every chunk
         await new Promise(resolve => setTimeout(resolve, 0));
     }
+    clearTimeout(slowLoadTimer);
+    if (slowLoadModal) slowLoadModal.classList.add('hidden');
 }
 
 function escapeHtml(text) {
@@ -687,8 +791,7 @@ function updateErrorRuler(errors, totalLines) {
         
         marker.onclick = (e) => {
             e.stopPropagation();
-            const tableContainer = document.querySelector('.table-container');
-            const rows = document.querySelectorAll('#csv-table tr');
+            const rows = table.rows;
             if (rows[line-1]) {
                 rows[line-1].scrollIntoView({ behavior: 'smooth', block: 'center' });
                 // Highlight the row temporarily
