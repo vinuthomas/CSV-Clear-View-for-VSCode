@@ -105,7 +105,7 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 		let viewMode: ViewMode = 'full';
 		
 		const config = vscode.workspace.getConfiguration('csvClearView');
-		const safeModeThresholdMB = config.get<number>('safeModeThreshold') || 5;
+		const safeModeThresholdMB = config.get<number>('safeModeThreshold') || 20;
 		const LARGE_FILE_THRESHOLD = safeModeThresholdMB * 1024 * 1024;
 
 		const stats = await vscode.workspace.fs.stat(document.uri);

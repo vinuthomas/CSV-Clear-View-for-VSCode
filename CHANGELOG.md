@@ -2,6 +2,11 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [0.2.6] - 2026-02-10
+
+### Changed
+- **Large File Threshold:** Increased the default threshold for safe mode from 5MB to 20MB, thanks to the new virtual scrolling performance improvements.
+
 ## [0.2.5] - 2026-02-10
 
 ### Added

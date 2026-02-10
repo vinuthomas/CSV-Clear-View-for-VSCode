@@ -3,7 +3,7 @@
   "displayName": "CSV ClearView",
   "description": "A clear and powerful CSV viewer with colored columns, sticky headers, and SQL query capabilities.",
   "publisher": "VinuThomas",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
@@ -82,7 +82,7 @@
         },
         "csvClearView.safeModeThreshold": {
           "type": "number",
-          "default": 5,
+          "default": 20,
           "description": "File size threshold (in MB) above which Safe Mode options are shown for large files."
         },
         "csvClearView.showSlowLoadPrompt": {
