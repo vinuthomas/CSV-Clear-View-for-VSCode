@@ -95,6 +95,8 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 		webviewPanel: vscode.WebviewPanel,
 		_token: vscode.CancellationToken
 	): Promise<void> {
+		let isLocalEdit = false;
+
 		webviewPanel.webview.options = {
 			enableScripts: true,
 		};
@@ -186,6 +188,12 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 		let debounceTimer: NodeJS.Timeout | undefined;
 		const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
 			if (e.document.uri.toString() === document.uri.toString()) {
+				if (isLocalEdit) {
+					isLocalEdit = false;
+					this.lintDocument(document);
+					return;
+				}
+
 				if (debounceTimer) {
 					clearTimeout(debounceTimer);
 				}
@@ -212,6 +220,7 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 		webviewPanel.webview.onDidReceiveMessage(e => {
 			switch (e.type) {
 				case 'edit':
+					isLocalEdit = true;
 					this.updateTextDocument(document, e.text);
 					return;
 			}

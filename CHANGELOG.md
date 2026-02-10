@@ -2,6 +2,11 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [0.2.9] - 2026-02-10
+
+### Optimized
+- **Editing Performance:** Eliminated the full webview refresh when editing cells. The extension now intelligently bypasses re-rendering for local changes while still maintaining full support for Undo/Redo and external file edits.
+
 ## [0.2.8] - 2026-02-10
 
 ### Fixed
