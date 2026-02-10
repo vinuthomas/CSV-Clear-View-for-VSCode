@@ -84,6 +84,15 @@ button:hover {
 .table-container {
     flex-grow: 1;
     overflow: auto;
+    position: relative;
+}
+
+.virtual-spacer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    visibility: hidden;
 }
 
 .text-container {
@@ -120,21 +129,57 @@ body.vscode-light #raw-text {
     );
 }
 
+.header-container {
+    flex-shrink: 0;
+    overflow: hidden; /* Hide scrollbar for header */
+    background-color: var(--vscode-editor-background);
+    border-bottom: 1px solid var(--vscode-editorGroup-border);
+    position: relative;
+    z-index: 10;
+}
+
+.table-container {
+    flex-grow: 1;
+    overflow: auto;
+    position: relative;
+}
+
+.virtual-spacer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    visibility: hidden;
+}
+
 table {
     border-collapse: collapse;
-    width: 100%;
-    table-layout: auto;
+    width: max-content;
+    min-width: 100%;
+    table-layout: fixed; 
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+#header-table {
+    position: relative;
+    table-layout: fixed;
 }
 
 th, td {
     padding: 4px 8px;
     border: 1px solid var(--vscode-editorGroup-border);
-    white-space: pre-wrap; /* Preserve whitespace/newlines */
+    white-space: nowrap; 
     text-align: left;
-    max-width: 400px;
+    min-width: 100px;
+    width: 150px; 
+    max-width: 800px;
     overflow: hidden;
     text-overflow: ellipsis;
     outline: none;
+    height: 30px; 
+    box-sizing: border-box;
 }
 
 td:focus {

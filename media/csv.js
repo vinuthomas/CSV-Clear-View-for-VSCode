@@ -4,9 +4,17 @@ const vscode = acquireVsCodeApi();
 let currentConfig = {};
 let originalDataObjects = []; // Array of Objects for SQL
 let originalRawData = []; // Array of Arrays for Render
+let currentDisplayData = []; // Data currently being shown (full or filtered)
 let autocompleteOptions = []; // Shared source for autocomplete
 let currentFocus = -1; // Shared focus state for autocomplete
 let isUpdating = false; // Guard for overlapping updates
+
+// --- Virtual Scrolling State ---
+let rowHeight = 30; // Matches CSS height
+let visibleRows = 40; 
+let totalRows = 0;
+let lastScrollTop = 0;
+let columnWidths = []; // Array of pixel widths for columns
 
 // --- DOM Elements ---
 const queryInput = document.getElementById('sql-query');
@@ -15,9 +23,13 @@ const resetButton = document.getElementById('reset-query');
 const errorContainer = document.getElementById('error-container');
 const loader = document.getElementById('loader');
 const warningContainer = document.getElementById('warning-container');
+const headerContainer = document.querySelector('.header-container');
+const headerTable = document.getElementById('header-table');
 const tableContainer = document.querySelector('.table-container');
+const virtualSpacer = document.getElementById('virtual-spacer');
 const textContainer = document.getElementById('text-container');
 const rawTextArea = document.getElementById('raw-text');
+const table = document.getElementById('csv-table'); // This is now the body table
 const controls = document.getElementById('controls');
 const errorRuler = document.getElementById('error-ruler');
 const slowLoadModal = document.getElementById('slow-load-modal');
@@ -31,6 +43,65 @@ const SLOW_LOAD_TIMEOUT = 25000; // 25 seconds
 let slowLoadTimer;
 let isRenderingInterrupted = false;
 let currentText = "";
+
+// --- Event Listeners (Attached Once) ---
+
+if (tableContainer) {
+    tableContainer.addEventListener('scroll', () => {
+        // Sync horizontal scroll
+        if (headerContainer) {
+            headerContainer.scrollLeft = tableContainer.scrollLeft;
+        }
+        
+        // Virtual vertical scroll
+        if (currentDisplayData.length > 50) { 
+            handleScroll();
+        }
+    });
+}
+
+function handleScroll() {
+    requestAnimationFrame(() => {
+        updateVirtualTable();
+    });
+}
+
+function updateVirtualTable() {
+    if (!currentDisplayData || currentDisplayData.length === 0) return;
+    
+    const scrollTop = tableContainer.scrollTop;
+    
+    // Calculate which rows are visible
+    let startRow = Math.floor(scrollTop / rowHeight);
+    // Data starts at index 1 (row 0 is header)
+    startRow = Math.max(1, startRow);
+    
+    const buffer = 10;
+    const renderStart = Math.max(1, startRow - buffer);
+    const renderEnd = Math.min(currentDisplayData.length, startRow + visibleRows + buffer);
+    
+    const slice = currentDisplayData.slice(renderStart, renderEnd);
+    
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    
+    let html = '';
+    for (let i = 0; i < slice.length; i++) {
+        const row = slice[i];
+        html += `<tr style="height: ${rowHeight}px">`;
+        for (let colIndex = 0; colIndex < columnWidths.length; colIndex++) {
+            const cell = row[colIndex] || '';
+            html += `<td>${escapeHtml(cell)}</td>`;
+        }
+        html += '</tr>';
+    }
+    
+    tbody.innerHTML = html;
+    
+    // Position the tbody at the correct scroll offset
+    const tbodyOffset = (renderStart - 1) * rowHeight;
+    tbody.style.transform = `translateY(${tbodyOffset}px)`;
+}
 
 function positionErrorRuler() {
     if (!errorRuler) return;
@@ -51,8 +122,6 @@ if (errorContainer) layoutObserver.observe(errorContainer, { attributes: true, a
 if (warningContainer) layoutObserver.observe(warningContainer, { attributes: true, attributeFilter: ['class'] });
 if (tableContainer) layoutObserver.observe(tableContainer, { attributes: true, attributeFilter: ['class'] });
 if (textContainer) layoutObserver.observe(textContainer, { attributes: true, attributeFilter: ['class'] });
-
-// --- Event Listeners (Attached Once) ---
 
 // Modal handlers
 if (switchToTextBtn) {
@@ -107,6 +176,7 @@ window.addEventListener('message', event => {
                 warningContainer.textContent = "Viewing Sample: Top 1000 rows. SQL queries will only run against this sample.";
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
+                headerContainer.classList.remove('hidden');
                 textContainer.classList.add('hidden');
                 controls.classList.remove('hidden');
                 if (errorRuler) errorRuler.classList.remove('hidden');
@@ -114,6 +184,7 @@ window.addEventListener('message', event => {
                 warningContainer.textContent = "Viewing Sample: Bottom 1000 rows. SQL queries will only run against this sample.";
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
+                headerContainer.classList.remove('hidden');
                 textContainer.classList.add('hidden');
                 controls.classList.remove('hidden');
                 if (errorRuler) errorRuler.classList.remove('hidden');
@@ -127,6 +198,7 @@ window.addEventListener('message', event => {
                 }
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.add('hidden');
+                headerContainer.classList.add('hidden');
                 textContainer.classList.remove('hidden');
                 controls.classList.add('hidden');
                 if (errorRuler) errorRuler.classList.add('hidden');
@@ -135,12 +207,14 @@ window.addEventListener('message', event => {
                 warningContainer.textContent = `Warning: This file is large (>${threshold}MB) and may cause performance issues.`;
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
+                headerContainer.classList.remove('hidden');
                 textContainer.classList.add('hidden');
                 controls.classList.remove('hidden');
                 if (errorRuler) errorRuler.classList.remove('hidden');
             } else {
                 warningContainer.classList.add('hidden');
                 tableContainer.classList.remove('hidden');
+                headerContainer.classList.remove('hidden');
                 textContainer.classList.add('hidden');
                 controls.classList.remove('hidden');
                 if (errorRuler) errorRuler.classList.remove('hidden');
@@ -198,16 +272,23 @@ if (tableContainer) {
         }
     }, true);
 
-    // Show hover info dynamically instead of 300k 'title' attributes
+    // Show hover info dynamically
     tableContainer.addEventListener('mouseover', (e) => {
         const cell = e.target;
         if (cell.tagName === 'TD' || cell.tagName === 'TH') {
             if (!cell.title) {
                 const colIndex = cell.cellIndex;
-                const rowIndex = cell.parentElement.rowIndex;
-                const headerRow = originalRawData[0] || [];
+                const headerRow = currentDisplayData[0] || [];
                 const colName = headerRow[colIndex] || `Column ${colIndex}`;
-                cell.title = rowIndex === 0 ? `Index: ${colIndex}\nName: ${colName}` : `Row: ${rowIndex}\nColumn: ${colName}`;
+                
+                const rowInTable = cell.parentElement.rowIndex;
+                const scrollTop = tableContainer.scrollTop;
+                const startRow = Math.max(1, Math.floor(scrollTop / rowHeight));
+                const buffer = 10;
+                const renderStart = Math.max(1, startRow - buffer);
+                
+                const absoluteRowIndex = renderStart + rowInTable; 
+                cell.title = `Row: ${absoluteRowIndex}\nColumn: ${colName}`;
             }
         }
     });
@@ -220,10 +301,8 @@ queryInput.addEventListener("input", function(e) {
     if (!val) { return false;}
     currentFocus = -1;
     
-    // Find word being typed at cursor
     const cursorMoved = this.selectionStart;
     const textBefore = val.substring(0, cursorMoved);
-    // Regex to find the last word boundary. Matches alphanumeric, underscores, and brackets.
     const match = textBefore.match(/([a-zA-Z0-9_[\]]+)$/); 
     
     if (!match) return false;
@@ -239,19 +318,16 @@ queryInput.addEventListener("input", function(e) {
     
     let matches = [];
 
-    // Use the global autocompleteOptions
     for (i = 0; i < autocompleteOptions.length; i++) {
         const item = autocompleteOptions[i];
         let isMatch = false;
         let displayHtml = "";
         let insertVal = item;
 
-        // Strategy 1: Standard Prefix Match
         if (item.toUpperCase().startsWith(currentWord.toUpperCase())) {
             isMatch = true;
             displayHtml = "<strong>" + escapeHtml(item.substr(0, currentWord.length)) + "</strong>" + escapeHtml(item.substr(currentWord.length));
         } 
-        // Strategy 2: Bracket Match (User typed '[', item is 'Name') -> Match 'Name' against 'Name'
         else if (isBracketStart) {
             if (!item.startsWith('[') && item.toUpperCase().startsWith(searchWord.toUpperCase())) {
                 isMatch = true;
@@ -286,14 +362,14 @@ queryInput.addEventListener("keydown", function(e) {
     if (e.key === "ArrowDown") {
         if (x) {
             currentFocus++;
-            if (currentFocus >= x.length) currentFocus = 0; // Cycle back to top
+            if (currentFocus >= x.length) currentFocus = 0; 
             addActive(x);
             e.preventDefault();
         }
     } else if (e.key === "ArrowUp") {
         if (x) {
             currentFocus--;
-            if (currentFocus < -1) currentFocus = x.length - 1; // Cycle to bottom, skipping 0 if coming from -1? No, from 0 to -1.
+            if (currentFocus < -1) currentFocus = x.length - 1; 
             addActive(x);
             e.preventDefault();
         }
@@ -307,7 +383,7 @@ queryInput.addEventListener("keydown", function(e) {
             if (x) {
                 closeAllLists();
             } else {
-                runQuery(); // Only run query if no list is open or user explicitly closed it
+                runQuery(); 
             }
         }
     } else if (e.key === "Tab") {
@@ -326,7 +402,6 @@ queryInput.addEventListener("keydown", function(e) {
                  const common = sharedStart(matches);
                  if (common.length > currentWord.length) {
                       insertValue(common);
-                      // Trigger input event to refresh list
                       var event = new Event('input', { bubbles: true });
                       this.dispatchEvent(event);
                  }
@@ -347,9 +422,9 @@ async function updateContent(text, config) {
     const { data, errors } = await parseCSV(text);
     
     originalRawData = data;
-    originalDataObjects = []; // Defer object creation until SQL is actually run
+    currentDisplayData = data;
+    originalDataObjects = []; 
 
-    // Update Autocomplete Options
     const columns = data.length > 0 ? data[0].map(c => {
         return /^[a-zA-Z0-9_]+$/.test(c) ? c : `[${c.replace(/\]/g, ']]')}]`;
     }) : [];
@@ -364,7 +439,7 @@ async function updateContent(text, config) {
 function addActive(x) {
     if (!x) return false;
     removeActive(x);
-    if (currentFocus < 0 || currentFocus >= x.length) return; // Allow -1 state (no selection)
+    if (currentFocus < 0 || currentFocus >= x.length) return; 
     x[currentFocus].classList.add("autocomplete-active");
     x[currentFocus].scrollIntoView({ block: 'nearest' });
 }
@@ -415,7 +490,6 @@ function runQuery() {
 
     setTimeout(async () => {
         try {
-            // Lazy-load data objects for SQL
             if (originalDataObjects.length === 0 && originalRawData.length > 0) {
                 originalDataObjects = await dataToObjects(originalRawData);
             }
@@ -423,11 +497,13 @@ function runQuery() {
             const result = alasql(query, [originalDataObjects]);
             
             if (!result || result.length === 0) {
+                currentDisplayData = [];
                 await renderTable([], []);
                 return;
             }
 
             const newData = objectsToData(result);
+            currentDisplayData = newData;
             await renderTable(newData, []);
             errorContainer.classList.add('hidden');
         } catch (e) {
@@ -444,6 +520,7 @@ function resetQuery() {
     showLoader();
     setTimeout(async () => {
         try {
+            currentDisplayData = originalRawData;
             await renderTable(originalRawData, []);
             errorContainer.classList.add('hidden');
         } finally {
@@ -500,9 +577,6 @@ async function parseCSV(text) {
         if (inQuotes) {
             if (char === '"') {
                 if (i + 1 < len && text[i + 1] === '"') {
-                    // Escaped quote: we can't use a simple slice here easily
-                    // but we can fall back or handle it. 
-                    // Most fields aren't escaped, so we'll keep it simple for the common case.
                     i++;
                 } else {
                     inQuotes = false;
@@ -511,7 +585,7 @@ async function parseCSV(text) {
         } else {
             if (char === '"') {
                 inQuotes = true;
-                fieldStart = i; // Include quote in field for now to handle it consistently
+                fieldStart = i;
             } else if (char === ',') {
                 let field = text.slice(fieldStart, i);
                 if (field.startsWith('"') && field.endsWith('"')) {
@@ -560,7 +634,6 @@ async function parseCSV(text) {
         });
     }
 
-    // Linting
     if (data.length > 0) {
         const headerLength = data[0].length;
         data.forEach((row, index) => {
@@ -590,34 +663,23 @@ function debounceSave() {
 
 async function onCellChange(e) {
     const cell = e.target;
-    const row = cell.parentElement.rowIndex;
+    const scrollTop = tableContainer.scrollTop;
+    const startRow = Math.max(1, Math.floor(scrollTop / rowHeight));
+    const buffer = 10;
+    const renderStart = Math.max(1, startRow - buffer);
+    
+    const rowInDisplay = renderStart + cell.parentElement.rowIndex;
     const col = cell.cellIndex;
     const newValue = cell.textContent;
 
-    if (originalRawData[row] && originalRawData[row][col] === newValue) return;
+    if (currentDisplayData[rowInDisplay] && currentDisplayData[rowInDisplay][col] === newValue) return;
 
-    if (!originalRawData[row]) {
-        // This shouldn't happen with correct data-row attributes
-        return;
-    }
+    if (!currentDisplayData[rowInDisplay]) return;
 
-    originalRawData[row][col] = newValue;
+    currentDisplayData[rowInDisplay][col] = newValue;
 
-    // Update originalDataObjects if it's not the header
-    if (row > 0) {
-        const header = originalRawData[0];
-        const objIndex = row - 1;
-        if (originalDataObjects[objIndex]) {
-            originalDataObjects[objIndex][header[col]] = newValue;
-        }
-    } else {
-        // If header changed, we need to rebuild originalDataObjects because keys changed
-        originalDataObjects = await dataToObjects(originalRawData);
-        // Also update autocomplete options
-        const columns = originalRawData[0].map(c => {
-            return /^[a-zA-Z0-9_]+$/.test(c) ? c : `[${c.replace(/\]/g, ']]')}]`;
-        });
-        autocompleteOptions = [...sqlKeywords, ...columns];
+    if (currentDisplayData === originalRawData) {
+        // Updated
     }
 
     debounceSave();
@@ -635,10 +697,19 @@ function dataToCSV(data) {
     }).join('\n');
 }
 
+function createColGroup(widths) {
+    const colgroup = document.createElement('colgroup');
+    widths.forEach(w => {
+        const col = document.createElement('col');
+        col.style.width = w + 'px';
+        colgroup.appendChild(col);
+    });
+    return colgroup;
+}
+
 async function renderTable(data, errors) {
-    const table = document.getElementById('csv-table');
-    const errorRuler = document.getElementById('error-ruler');
-    
+    if (!table || !virtualSpacer) return;
+
     if (errors.length > 0) {
         const errorMessages = errors.map(e => typeof e === 'string' ? e : e.message);
         errorContainer.textContent = "CSV Parsing Errors:\n" + errorMessages.slice(0, 10).join('\n') + (errorMessages.length > 10 ? `\n...and ${errorMessages.length - 10} more.` : '');
@@ -651,15 +722,12 @@ async function renderTable(data, errors) {
 
     updateErrorRuler(errors, data.length);
 
+    if (headerTable) headerTable.innerHTML = '';
     table.innerHTML = '';
-// ... (rest of renderTable)
-
-    if (data.length === 0) return;
-
-    if (currentConfig.stickyHeader) {
-        table.classList.add('sticky-header');
-    } else {
-        table.classList.remove('sticky-header');
+    
+    if (data.length === 0) {
+        virtualSpacer.style.height = '0px';
+        return;
     }
 
     if (currentConfig.alternatingRows) {
@@ -669,6 +737,27 @@ async function renderTable(data, errors) {
     }
 
     const headerRow = data[0] || [];
+    
+    // Calculate Column Widths based on header AND data content
+    // We sample the first 100 rows to get a better estimate
+    const sampleRows = data.slice(1, 101);
+    columnWidths = headerRow.map((h, colIndex) => {
+        let maxWidth = h.length;
+        sampleRows.forEach(row => {
+            const cellLength = row[colIndex] ? row[colIndex].length : 0;
+            if (cellLength > maxWidth) maxWidth = cellLength;
+        });
+        
+        const charWidth = 9; // Approximate average char width in pixels
+        const padding = 24;  // Padding + border
+        return Math.max(100, Math.min(600, (maxWidth * charWidth) + padding));
+    });
+
+    // Add colgroups to both tables for perfect alignment
+    if (headerTable) headerTable.appendChild(createColGroup(columnWidths));
+    table.appendChild(createColGroup(columnWidths));
+
+    // Build Header Table
     const thead = document.createElement('thead');
     const trHead = document.createElement('tr');
     headerRow.forEach((colName, index) => {
@@ -677,32 +766,17 @@ async function renderTable(data, errors) {
         trHead.appendChild(th);
     });
     thead.appendChild(trHead);
-    table.appendChild(thead);
+    if (headerTable) headerTable.appendChild(thead);
 
+    // Build Body Table Structure
     const tbody = document.createElement('tbody');
     table.appendChild(tbody);
 
-    const CHUNK_SIZE = 2000; // Increased chunk size for faster loading with leaner DOM
-    for (let i = 1; i < data.length; i += CHUNK_SIZE) {
-        if (isRenderingInterrupted) return;
+    const totalHeight = (data.length - 1) * rowHeight;
+    virtualSpacer.style.height = totalHeight + 'px';
 
-        const chunkEnd = Math.min(i + CHUNK_SIZE, data.length);
-        let chunkHtml = '';
+    updateVirtualTable();
 
-        for (let j = i; j < chunkEnd; j++) {
-            const row = data[j];
-            chunkHtml += '<tr>';
-            for (let colIndex = 0; colIndex < headerRow.length; colIndex++) {
-                const cell = row[colIndex] || '';
-                chunkHtml += `<td>${escapeHtml(cell)}</td>`;
-            }
-            chunkHtml += '</tr>';
-        }
-        tbody.insertAdjacentHTML('beforeend', chunkHtml);
-
-        // Yield to the main thread every chunk
-        await new Promise(resolve => setTimeout(resolve, 0));
-    }
     clearTimeout(slowLoadTimer);
     if (slowLoadModal) slowLoadModal.classList.add('hidden');
 }
@@ -720,20 +794,15 @@ function escapeHtml(text) {
 function colorizeCSV(text) {
     const lines = text.split(/\r?\n/);
     let html = '';
-    
-    // Process only first 5000 lines max to prevent browser crash on huge files if force mode is on
     const limit = Math.min(lines.length, 5000); 
-    
     for (let i = 0; i < limit; i++) {
         const line = lines[i];
         let rowHtml = '';
         let colIndex = 0;
         let currentField = '';
         let inQuotes = false;
-        
         for (let j = 0; j < line.length; j++) {
             const char = line[j];
-            
             if (inQuotes) {
                 if (char === '"' && line[j+1] === '"') {
                      currentField += '"';
@@ -758,51 +827,49 @@ function colorizeCSV(text) {
                 }
             }
         }
-        // Last field
         const colorClass = 'col-color-' + ((colIndex % 10) + 1);
         rowHtml += `<span class="${colorClass}">${escapeHtml(currentField)}</span>`;
-        
         html += rowHtml + '\n';
     }
-    
     if (lines.length > limit) {
         html += `\n... (Coloring limited to first ${limit} rows for performance)`;
     }
-    
     return html;
 }
 
 function updateErrorRuler(errors, totalLines) {
     if (!errorRuler) return;
     positionErrorRuler();
-
     errorRuler.innerHTML = '';
     if (errors.length === 0 || totalLines === 0) return;
-
-    // Filter to get unique lines to avoid stacking markers
     const errorLines = [...new Set(errors.map(e => typeof e === 'string' ? -1 : e.line).filter(l => l !== -1))];
-    
     errorLines.forEach(line => {
         const marker = document.createElement('div');
         marker.className = 'error-marker';
         const percentage = (line / totalLines) * 100;
         marker.style.top = percentage + '%';
         marker.title = 'Error on line ' + line;
-        
         marker.onclick = (e) => {
             e.stopPropagation();
-            const rows = table.rows;
-            if (rows[line-1]) {
-                rows[line-1].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // Highlight the row temporarily
-                const originalBg = rows[line-1].style.backgroundColor;
-                rows[line-1].style.backgroundColor = 'var(--vscode-inputValidation-errorBackground)';
-                setTimeout(() => {
-                    rows[line-1].style.backgroundColor = originalBg;
-                }, 2000);
-            }
+            const targetScrollTop = (line - 1) * rowHeight;
+            tableContainer.scrollTop = targetScrollTop;
+            setTimeout(() => {
+                const scrollTop = tableContainer.scrollTop;
+                const startRow = Math.max(1, Math.floor(scrollTop / rowHeight));
+                const buffer = 10;
+                const renderStart = Math.max(1, startRow - buffer);
+                const relativeIndex = line - renderStart - 1; 
+                const rows = table.querySelector('tbody').rows;
+                if (rows[relativeIndex]) {
+                    const row = rows[relativeIndex];
+                    const originalBg = row.style.backgroundColor;
+                    row.style.backgroundColor = 'var(--vscode-inputValidation-errorBackground)';
+                    setTimeout(() => {
+                        row.style.backgroundColor = originalBg;
+                    }, 2000);
+                }
+            }, 100);
         };
-        
         errorRuler.appendChild(marker);
     });
 }

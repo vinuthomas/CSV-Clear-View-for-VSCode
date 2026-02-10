@@ -137,7 +137,7 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 			const selection = await vscode.window.showQuickPick(options, {
 				placeHolder: `This file is large (${(stats.size / (1024 * 1024)).toFixed(2)} MB). How would you like to open it?`,
 				ignoreFocusOut: true
-			});
+			}, _token);
 
 			if (selection) {
 				viewMode = selection.id;
@@ -278,7 +278,11 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 					<button id="reset-query">Reset</button>
 				</div>
 				<div id="error-container" class="error-container hidden"></div>
+				<div class="header-container">
+					<table id="header-table"></table>
+				</div>
 				<div class="table-container">
+					<div id="virtual-spacer" class="virtual-spacer"></div>
 					<table id="csv-table"></table>
 				</div>
 				<div id="text-container" class="text-container hidden">

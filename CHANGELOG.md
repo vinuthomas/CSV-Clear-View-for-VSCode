@@ -2,6 +2,18 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [0.2.5] - 2026-02-10
+
+### Added
+- **Virtual Scrolling:** Implemented a high-performance virtual rendering engine. Large CSV files (100MB+) now load and scroll instantly by only rendering visible rows.
+- **Split-Table Architecture:** Rewrote the grid layout to separate headers from the body, ensuring perfectly stationary sticky headers even during virtual scrolling.
+- **Data-Aware Sizing:** Column widths are now intelligently calculated by sampling the actual data content, ensuring long text is readable.
+
+### Fixed
+- **Persistent Dialogs:** The large-file selection menu now correctly closes if you switch to another file or close the editor.
+- **SQL Virtualization:** Fixed a bug where SQL queries would incorrectly display the full file instead of filtered results when virtual scrolling was enabled.
+- **Column Alignment:** Guaranteed pixel-perfect alignment between headers and data using synchronized `<colgroup>` elements.
+
 ## [0.2.3] - 2026-02-09
 
 ### Added
