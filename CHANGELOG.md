@@ -2,6 +2,15 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [0.3.0] - 2026-02-11
+
+### Added
+- **Architectural Overhaul:** Migrated from `CustomTextEditorProvider` to `CustomEditorProvider`. This allows the extension to bypass VS Code's internal `TextDocument` memory limits for extremely large files.
+- **Improved Large File Support:** Successfully tested with files up to 500MB. Users can now instantly "Show Head" or "Show Tail" of massive files by reading only the necessary chunks from disk.
+
+### Fixed
+- **Assertion Failed Error:** Fixed a critical "Assertion Failed" error that occurred when attempting to open CSV files larger than 50-100MB.
+
 ## [0.2.9] - 2026-02-10
 
 ### Optimized

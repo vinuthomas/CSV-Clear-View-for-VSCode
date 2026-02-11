@@ -1,10 +1,28 @@
 import * as vscode from 'vscode';
 
-export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
+/**
+ * Define a custom document for CSV files.
+ * This allows us to handle large files without VS Code's TextDocument limitations.
+ */
+class CsvDocument implements vscode.CustomDocument {
+	constructor(
+		public readonly uri: vscode.Uri,
+		public readonly size: number
+	) { }
+
+	dispose(): void { }
+}
+
+export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocument> {
 
 	public static register(context: vscode.ExtensionContext): vscode.Disposable {
 		const provider = new CsvEditorProvider(context);
-		const providerRegistration = vscode.window.registerCustomEditorProvider(CsvEditorProvider.viewType, provider);
+		const providerRegistration = vscode.window.registerCustomEditorProvider(CsvEditorProvider.viewType, provider, {
+			webviewOptions: {
+				retainContextWhenHidden: true
+			},
+			supportsMultipleEditorsPerDocument: false
+		});
 		return providerRegistration;
 	}
 
@@ -15,88 +33,20 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 		private readonly context: vscode.ExtensionContext
 	) { }
 
-	private lintDocument(document: vscode.TextDocument): void {
-		const diagnostics: vscode.Diagnostic[] = [];
-		const text = document.getText();
-		const totalLength = text.length;
-
-		if (totalLength === 0) {
-			this.diagnostics.set(document.uri, []);
-			return;
-		}
-
-		// Performance optimization: skip linting for extremely large files 
-		// or only lint the first N characters.
-		const MAX_LINT_SIZE = 1000000; // 1MB limit for linting
-		const scanLength = Math.min(totalLength, MAX_LINT_SIZE);
-
-		let headerColumnCount = -1;
-		let currentColCount = 0;
-		let inQuotes = false;
-		let rowStartOffset = 0;
-		let rowNumber = 0; // Logical row number
-
-		for (let i = 0; i < totalLength; i++) {
-			const char = text[i];
-
-			if (char === '"') {
-				if (inQuotes && i + 1 < totalLength && text[i + 1] === '"') {
-					i++; // Skip escaped quote
-				} else {
-					inQuotes = !inQuotes;
-				}
-			} else if (char === ',' && !inQuotes) {
-				currentColCount++;
-			} else if (!inQuotes && (char === '\n' || (char === '\r' && i + 1 < totalLength && text[i+1] === '\n'))) {
-				if (char === '\r') i++; // Handle CRLF
-
-				currentColCount++; // Account for the last column in the row
-
-				if (headerColumnCount === -1) {
-					headerColumnCount = currentColCount;
-				} else if (currentColCount !== headerColumnCount) {
-					const startPos = document.positionAt(rowStartOffset);
-					const endPos = document.positionAt(i); // i points to the newline char
-					// Create a range that covers the whole logical row
-					const range = new vscode.Range(startPos, endPos);
-					diagnostics.push(new vscode.Diagnostic(
-						range,
-						`Row ${rowNumber + 1}: Expected ${headerColumnCount} columns, found ${currentColCount}.`,
-						vscode.DiagnosticSeverity.Error
-					));
-				}
-
-				currentColCount = 0;
-				rowStartOffset = i + 1;
-				rowNumber++;
-			}
-		}
-
-		// Handle the last row if it doesn't end with a newline
-		if (rowStartOffset < totalLength) {
-			currentColCount++; // Account for the last column
-			if (headerColumnCount !== -1 && currentColCount !== headerColumnCount) {
-				const startPos = document.positionAt(rowStartOffset);
-				const endPos = document.positionAt(totalLength);
-				const range = new vscode.Range(startPos, endPos);
-				diagnostics.push(new vscode.Diagnostic(
-					range,
-					`Row ${rowNumber + 1}: Expected ${headerColumnCount} columns, found ${currentColCount}.`,
-					vscode.DiagnosticSeverity.Error
-				));
-			}
-		}
-
-		this.diagnostics.set(document.uri, diagnostics);
+	async openCustomDocument(
+		uri: vscode.Uri,
+		_openContext: vscode.CustomDocumentOpenContext,
+		_token: vscode.CancellationToken
+	): Promise<CsvDocument> {
+		const stats = await vscode.workspace.fs.stat(uri);
+		return new CsvDocument(uri, stats.size);
 	}
 
-	public async resolveCustomTextEditor(
-		document: vscode.TextDocument,
+	public async resolveCustomEditor(
+		document: CsvDocument,
 		webviewPanel: vscode.WebviewPanel,
 		_token: vscode.CancellationToken
 	): Promise<void> {
-		let isLocalEdit = false;
-
 		webviewPanel.webview.options = {
 			enableScripts: true,
 		};
@@ -110,14 +60,13 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 		const safeModeThresholdMB = config.get<number>('safeModeThreshold') || 20;
 		const LARGE_FILE_THRESHOLD = safeModeThresholdMB * 1024 * 1024;
 
-		const stats = await vscode.workspace.fs.stat(document.uri);
-		if (stats.size > LARGE_FILE_THRESHOLD) {
+		if (document.size > LARGE_FILE_THRESHOLD) {
 			const options: (vscode.QuickPickItem & { id: ViewMode })[] = [
 				{
 					id: 'full',
 					label: '$(file-binary) Open Full File',
 					description: 'Load all data into the grid (may be slow)',
-					detail: `Full file size: ${(stats.size / (1024 * 1024)).toFixed(2)} MB`
+					detail: `Full file size: ${(document.size / (1024 * 1024)).toFixed(2)} MB`
 				},
 				{
 					id: 'head',
@@ -137,108 +86,138 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 			];
 
 			const selection = await vscode.window.showQuickPick(options, {
-				placeHolder: `This file is large (${(stats.size / (1024 * 1024)).toFixed(2)} MB). How would you like to open it?`,
+				placeHolder: `This file is large (${(document.size / (1024 * 1024)).toFixed(2)} MB). How would you like to open it?`,
 				ignoreFocusOut: true
 			}, _token);
 
 			if (selection) {
 				viewMode = selection.id;
 			} else {
-				return; // User cancelled
+				// User cancelled - we can't really "cancel" resolve, so fallback to head
+				viewMode = 'head';
 			}
 		}
 
-		const updateWebview = () => {
-			const config = vscode.workspace.getConfiguration('csvClearView');
-			let text = '';
-			
-			if (viewMode === 'full' || viewMode === 'text') {
-				text = document.getText();
-			} else if (viewMode === 'head') {
-				const lineCount = Math.min(document.lineCount, 1001); // 1000 rows + header
-				text = document.getText(new vscode.Range(0, 0, lineCount, 0));
-			} else if (viewMode === 'tail') {
-				const header = document.getText(new vscode.Range(0, 0, 1, 0));
-				const startLine = Math.max(1, document.lineCount - 1000);
-				const body = document.getText(new vscode.Range(startLine, 0, document.lineCount, 0));
-				text = header + body;
-			}
+		const updateWebview = async () => {
+			try {
+				const config = vscode.workspace.getConfiguration('csvClearView');
+				let text = '';
+				
+				if (viewMode === 'full' || viewMode === 'text') {
+					const uint8Array = await vscode.workspace.fs.readFile(document.uri);
+					text = Buffer.from(uint8Array).toString('utf8');
+				} else if (viewMode === 'head') {
+					// Read the first 256KB as a safe "head" buffer
+					const headSize = Math.min(document.size, 256 * 1024);
+					const uint8Array = await this.readRange(document.uri, 0, headSize);
+					text = Buffer.from(uint8Array).toString('utf8');
+					// Ensure we don't end with a partial line
+					const lastNewline = text.lastIndexOf('\n');
+					if (lastNewline !== -1) {
+						text = text.substring(0, lastNewline + 1);
+					}
+				} else if (viewMode === 'tail') {
+					// Read header (first 10KB)
+					const headerSize = Math.min(document.size, 10 * 1024);
+					const headerBytes = await this.readRange(document.uri, 0, headerSize);
+					let headerText = Buffer.from(headerBytes).toString('utf8');
+					const firstNewline = headerText.indexOf('\n');
+					if (firstNewline !== -1) {
+						headerText = headerText.substring(0, firstNewline + 1);
+					}
 
-			const isLargeFile = stats.size > LARGE_FILE_THRESHOLD;
-
-			webviewPanel.webview.postMessage({
-				type: 'update',
-				text: text,
-				isLargeFile: isLargeFile,
-				viewMode: viewMode,
-				config: {
-					stickyHeader: config.get('stickyHeader'),
-					alternatingRows: config.get('alternatingRows'),
-					forceTextColumnColoring: config.get('forceTextColumnColoring'),
-					safeModeThreshold: safeModeThresholdMB,
-					showSlowLoadPrompt: config.get('showSlowLoadPrompt')
+					// Read tail (last 256KB)
+					const tailSize = Math.min(document.size, 256 * 1024);
+					const tailBytes = await this.readRange(document.uri, document.size - tailSize, tailSize);
+					let tailText = Buffer.from(tailBytes).toString('utf8');
+					// Ensure we start with a full line
+					const firstNewlineInTail = tailText.indexOf('\n');
+					if (firstNewlineInTail !== -1) {
+						tailText = tailText.substring(firstNewlineInTail + 1);
+					}
+					text = headerText + tailText;
 				}
-			});
+
+				const isLargeFile = document.size > LARGE_FILE_THRESHOLD;
+
+				webviewPanel.webview.postMessage({
+					type: 'update',
+					text: text,
+					isLargeFile: isLargeFile,
+					viewMode: viewMode,
+					config: {
+						stickyHeader: config.get('stickyHeader'),
+						alternatingRows: config.get('alternatingRows'),
+						forceTextColumnColoring: config.get('forceTextColumnColoring'),
+						safeModeThreshold: safeModeThresholdMB,
+						showSlowLoadPrompt: config.get('showSlowLoadPrompt')
+					}
+				});
+			} catch (err) {
+				console.error('Error updating webview:', err);
+				vscode.window.showErrorMessage('Error loading CSV file contents.');
+			}
 		};
 
 		// Initial update
-		this.lintDocument(document);
 		updateWebview();
 
-		let debounceTimer: NodeJS.Timeout | undefined;
-		const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
-			if (e.document.uri.toString() === document.uri.toString()) {
-				if (isLocalEdit) {
-					isLocalEdit = false;
-					this.lintDocument(document);
-					return;
-				}
-
-				if (debounceTimer) {
-					clearTimeout(debounceTimer);
-				}
-				debounceTimer = setTimeout(() => {
-					this.lintDocument(document);
-					updateWebview();
-				}, 500); // 500ms debounce
-			}
-		});
-
-		// Refresh the webview when it regains focus/visibility
-		webviewPanel.onDidChangeViewState(e => {
-			if (e.webviewPanel.visible) {
-				updateWebview();
-			}
-		});
-
-		// Make sure we get rid of the listener when our editor is closed.
+		// Handle file changes
+		const watcher = vscode.workspace.createFileSystemWatcher(document.uri.fsPath);
+		watcher.onDidChange(() => updateWebview());
+		
 		webviewPanel.onDidDispose(() => {
-			changeDocumentSubscription.dispose();
+			watcher.dispose();
 		});
 
 		// Receive message from the webview.
 		webviewPanel.webview.onDidReceiveMessage(e => {
 			switch (e.type) {
 				case 'edit':
-					isLocalEdit = true;
-					this.updateTextDocument(document, e.text);
+					this.saveDocument(document, e.text);
 					return;
 			}
 		});
 	}
 
-	private updateTextDocument(document: vscode.TextDocument, text: string) {
-		const edit = new vscode.WorkspaceEdit();
+	private async readRange(uri: vscode.Uri, offset: number, length: number): Promise<Uint8Array> {
+		// vscode.workspace.fs.readFile doesn't support ranges, so we use Node's fs for large files if needed
+		// but for now, we'll try a slice if it's small enough or use a more robust method
+		const stats = await vscode.workspace.fs.stat(uri);
+		const actualLength = Math.min(length, stats.size - offset);
+		
+		if (actualLength <= 0) return new Uint8Array(0);
 
-		// Replace the entire document content
-		edit.replace(
-			document.uri,
-			new vscode.Range(0, 0, document.lineCount, 0),
-			text
-		);
-
-		return vscode.workspace.applyEdit(edit);
+		// Fallback to Node.js fs for range reading
+		const fs = require('fs');
+		const fd = fs.openSync(uri.fsPath, 'r');
+		const buffer = Buffer.alloc(actualLength);
+		fs.readSync(fd, buffer, 0, actualLength, offset);
+		fs.closeSync(fd);
+		return buffer;
 	}
+
+	private async saveDocument(document: CsvDocument, text: string) {
+		const uint8Array = Buffer.from(text, 'utf8');
+		await vscode.workspace.fs.writeFile(document.uri, uint8Array);
+	}
+
+	async saveCustomDocument(document: CsvDocument, _cancellation: vscode.CancellationToken): Promise<void> {
+		// Since we save on every edit for now, this is just to satisfy the interface.
+		// In a more complex app, we'd handle dirty states here.
+	}
+
+	async saveCustomDocumentAs(document: CsvDocument, destination: vscode.Uri, _cancellation: vscode.CancellationToken): Promise<void> {
+		const uint8Array = await vscode.workspace.fs.readFile(document.uri);
+		await vscode.workspace.fs.writeFile(destination, uint8Array);
+	}
+
+	// Unused for CustomEditorProvider but keeping for structure
+	readonly onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<CsvDocument>>().event;
+	async backupCustomDocument(_document: CsvDocument, _context: vscode.CustomDocumentBackupContext, _token: vscode.CancellationToken): Promise<vscode.CustomDocumentBackup> {
+		return { id: '', delete: () => {} };
+	}
+	async revertCustomDocument(_document: CsvDocument, _token: vscode.CancellationToken): Promise<void> {}
 
 	private getHtmlForWebview(webview: vscode.Webview): string {
 		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'csv.js'));
