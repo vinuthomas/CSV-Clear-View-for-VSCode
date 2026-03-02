@@ -261,7 +261,9 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				<div id="controls" class="controls">
 					<div class="autocomplete-container">
 						<input type="text" id="sql-query" placeholder="SELECT * FROM ? WHERE [Last Name] = 'Smith'" autocomplete="off" />
+						<div id="history-list" class="history-list hidden"></div>
 					</div>
+					<button id="history-btn" title="Query History (↑/↓ to navigate)">History</button>
 					<button id="run-query">Run Query</button>
 					<button id="reset-query">Reset</button>
 				</div>

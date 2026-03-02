@@ -9,6 +9,11 @@ let autocompleteOptions = []; // Shared source for autocomplete
 let currentFocus = -1; // Shared focus state for autocomplete
 let isUpdating = false; // Guard for overlapping updates
 
+// --- Query History State ---
+let queryHistory = [];  // Most-recent first; max 50 entries
+let historyIndex = -1;  // -1 = not navigating; 0 = most recent entry
+let historyDraft = '';  // Draft text saved before navigating history
+
 // --- Virtual Scrolling State ---
 let rowHeight = 30; // Matches CSS height
 let visibleRows = 40; 
@@ -20,6 +25,8 @@ let columnWidths = []; // Array of pixel widths for columns
 const queryInput = document.getElementById('sql-query');
 const runButton = document.getElementById('run-query');
 const resetButton = document.getElementById('reset-query');
+const historyBtn = document.getElementById('history-btn');
+const historyListEl = document.getElementById('history-list');
 const errorContainer = document.getElementById('error-container');
 const loader = document.getElementById('loader');
 const warningContainer = document.getElementById('warning-container');
@@ -265,7 +272,107 @@ function hideLoader() {
 runButton.addEventListener('click', runQuery);
 resetButton.addEventListener('click', resetQuery);
 
-// Event delegation for cell edits
+// History Button Handler
+if (historyBtn) {
+    historyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = historyListEl && !historyListEl.classList.contains('hidden');
+        if (isOpen) {
+            closeHistoryList();
+        } else {
+            openHistoryList();
+        }
+        queryInput.focus();
+    });
+}
+
+// Close history list when clicking outside
+document.addEventListener('click', (e) => {
+    if (historyListEl && e.target !== historyBtn && e.target !== queryInput && !historyListEl.contains(e.target)) {
+        closeHistoryList();
+    }
+});
+
+// --- History Helpers ---
+
+function openHistoryList() {
+    if (!historyListEl) return;
+    renderHistoryList();
+    historyListEl.classList.remove('hidden');
+    if (historyBtn) historyBtn.classList.add('history-open');
+}
+
+function closeHistoryList() {
+    if (!historyListEl) return;
+    historyListEl.classList.add('hidden');
+    if (historyBtn) historyBtn.classList.remove('history-open');
+}
+
+function renderHistoryList() {
+    if (!historyListEl) return;
+    historyListEl.innerHTML = '';
+
+    if (queryHistory.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'history-empty';
+        empty.textContent = 'No query history yet. Run a query to start.';
+        historyListEl.appendChild(empty);
+        return;
+    }
+
+    queryHistory.forEach((query, i) => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.dataset.query = query;
+        item.dataset.index = i;
+
+        const idxSpan = document.createElement('span');
+        idxSpan.className = 'history-item-index';
+        idxSpan.textContent = `#${i + 1}`;
+
+        const textSpan = document.createElement('span');
+        textSpan.className = 'history-item-text';
+        textSpan.textContent = query;
+        textSpan.title = query;
+
+        item.appendChild(idxSpan);
+        item.appendChild(textSpan);
+
+        item.addEventListener('click', () => {
+            queryInput.value = query;
+            closeHistoryList();
+            historyIndex = -1;
+            historyDraft = '';
+            queryInput.focus();
+            queryInput.selectionStart = queryInput.selectionEnd = queryInput.value.length;
+        });
+
+        historyListEl.appendChild(item);
+    });
+}
+
+/** Navigate the visual history panel up (-1) or down (+1) */
+function navigateHistoryPanel(direction) {
+    if (!historyListEl) return;
+    const items = Array.from(historyListEl.querySelectorAll('.history-item'));
+    if (items.length === 0) return;
+
+    const currentActiveIdx = items.findIndex(el => el.classList.contains('history-active'));
+    let nextIdx = currentActiveIdx + direction;
+    if (nextIdx < 0) nextIdx = 0;
+    if (nextIdx >= items.length) nextIdx = items.length - 1;
+
+    items.forEach(el => el.classList.remove('history-active'));
+    const nextItem = items[nextIdx];
+    nextItem.classList.add('history-active');
+    nextItem.scrollIntoView({ block: 'nearest' });
+
+    // Preview the query in the input
+    queryInput.value = nextItem.dataset.query;
+    queryInput.selectionStart = queryInput.selectionEnd = queryInput.value.length;
+}
+
+
 if (tableContainer) {
     // Single-click to select, Double-click to edit
     tableContainer.addEventListener('dblclick', (e) => {
@@ -387,28 +494,79 @@ queryInput.addEventListener("keydown", function(e) {
     var x = document.getElementById(this.id + "autocomplete-list");
     if (x) x = x.getElementsByTagName("div");
     
+    const autocompleteOpen = x && x.length > 0;
+    const historyOpen = historyListEl && !historyListEl.classList.contains('hidden');
+
     if (e.key === "ArrowDown") {
-        if (x) {
+        if (autocompleteOpen) {
             currentFocus++;
             if (currentFocus >= x.length) currentFocus = 0; 
             addActive(x);
             e.preventDefault();
+        } else if (historyOpen) {
+            // Navigate down through history panel
+            navigateHistoryPanel(1);
+            e.preventDefault();
+        } else {
+            // History navigation: go forward (newer entry)
+            if (historyIndex > -1) {
+                historyIndex--;
+                queryInput.value = historyIndex === -1 ? historyDraft : queryHistory[historyIndex];
+                queryInput.selectionStart = queryInput.selectionEnd = queryInput.value.length;
+                e.preventDefault();
+            }
         }
     } else if (e.key === "ArrowUp") {
-        if (x) {
+        if (autocompleteOpen) {
             currentFocus--;
             if (currentFocus < -1) currentFocus = x.length - 1; 
             addActive(x);
             e.preventDefault();
+        } else if (historyOpen) {
+            // Navigate up through history panel
+            navigateHistoryPanel(-1);
+            e.preventDefault();
+        } else {
+            // History navigation: go back (older entry)
+            if (queryHistory.length > 0) {
+                if (historyIndex === -1) {
+                    historyDraft = queryInput.value; // save current draft
+                }
+                if (historyIndex < queryHistory.length - 1) {
+                    historyIndex++;
+                    queryInput.value = queryHistory[historyIndex];
+                    queryInput.selectionStart = queryInput.selectionEnd = queryInput.value.length;
+                }
+                e.preventDefault();
+            }
+        }
+    } else if (e.key === "Escape") {
+        if (historyOpen) {
+            closeHistoryList();
+            e.preventDefault();
         }
     } else if (e.key === "Enter") {
+        if (historyOpen) {
+            // Select active history item
+            const activeItem = historyListEl.querySelector('.history-item.history-active');
+            if (activeItem) {
+                const query = activeItem.dataset.query;
+                queryInput.value = query;
+                closeHistoryList();
+                historyIndex = -1;
+                historyDraft = '';
+                queryInput.focus();
+                e.preventDefault();
+                return;
+            }
+        }
         if (currentFocus > -1) {
-            if (x) {
+            if (autocompleteOpen) {
                 e.preventDefault();
                 x[currentFocus].click();
             }
         } else {
-            if (x) {
+            if (autocompleteOpen) {
                 closeAllLists();
             } else {
                 runQuery(); 
@@ -514,6 +672,17 @@ function runQuery() {
     const query = queryInput.value.trim();
     if (!query) return;
 
+    // Add to history (skip if identical to the most recent entry)
+    if (queryHistory.length === 0 || queryHistory[0] !== query) {
+        queryHistory.unshift(query);
+        if (queryHistory.length > 50) queryHistory.pop();
+    }
+    // Reset history navigation pointer
+    historyIndex = -1;
+    historyDraft = '';
+    // Close history panel if open
+    closeHistoryList();
+
     showLoader();
 
     setTimeout(async () => {
@@ -545,6 +714,9 @@ function runQuery() {
 
 function resetQuery() {
     queryInput.value = '';
+    historyIndex = -1;
+    historyDraft = '';
+    closeHistoryList();
     showLoader();
     setTimeout(async () => {
         try {

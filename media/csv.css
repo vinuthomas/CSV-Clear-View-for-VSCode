@@ -69,6 +69,82 @@ body {
     color: var(--vscode-list-activeSelectionForeground); 
 }
 
+/* --- Query History Panel --- */
+.history-list {
+    position: absolute;
+    border: 1px solid var(--vscode-input-border);
+    border-top: none;
+    z-index: 100;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: var(--vscode-editor-background);
+    max-height: 240px;
+    overflow-y: auto;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+}
+
+.history-list .history-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    cursor: pointer;
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-editor-foreground);
+    border-bottom: 1px solid var(--vscode-editorGroup-border);
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+    gap: 8px;
+}
+
+.history-list .history-item:last-child {
+    border-bottom: none;
+}
+
+.history-list .history-item:hover,
+.history-list .history-item.history-active {
+    background-color: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.history-item-text {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-item-index {
+    font-size: 0.75em;
+    opacity: 0.5;
+    flex-shrink: 0;
+}
+
+.history-empty {
+    padding: 8px 10px;
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+#history-btn {
+    background-color: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+    border: 1px solid var(--vscode-input-border);
+    font-size: 0.85em;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+#history-btn:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+}
+
+#history-btn.history-open {
+    border-color: var(--vscode-focusBorder);
+    outline: 1px solid var(--vscode-focusBorder);
+}
+
 button {
     background-color: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
