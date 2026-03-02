@@ -2,6 +2,15 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [0.3.1] - 2026-03-02
+
+### Added
+- **SQL Query History:** Past queries are stored (up to 50 entries, most-recent first) and can be navigated directly from the query input.
+  - Press `↑` / `↓` in the query box to step through history bash-style; your current draft is preserved and restored when you navigate back.
+  - Click the new **History** button to open a visual dropdown panel listing all past queries.
+  - Use `↑` / `↓` inside the panel to highlight an entry (the input previews it live), then press `Enter` or click to select it for editing and re-running as a new query.
+  - Press `Escape` to dismiss the panel without changing the input.
+
 ## [0.3.0] - 2026-02-11
 
 ### Added
