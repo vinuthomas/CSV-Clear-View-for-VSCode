@@ -46,6 +46,7 @@ const continueWaitingBtn = document.getElementById('continue-waiting');
 // --- Constants ---
 const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'GROUP BY', 'LIMIT', 'JOIN', 'ON', 'AS', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'LIKE', 'IN', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'];
 const SLOW_LOAD_TIMEOUT = 25000; // 25 seconds
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 let slowLoadTimer;
 let isRenderingInterrupted = false;
@@ -163,6 +164,12 @@ function switchToPlainTextMode() {
 
 // 1. Message Handler
 window.addEventListener('message', event => {
+    // Only accept messages from the VS Code webview host
+    // VS Code webview messages have origin set to the vscode-webview scheme
+    if (event.origin && !event.origin.startsWith('vscode-webview://')) {
+        console.warn('Ignoring message from unexpected origin:', event.origin);
+        return;
+    }
     const message = event.data;
     switch (message.type) {
         case 'update':
@@ -474,8 +481,25 @@ queryInput.addEventListener("input", function(e) {
         if (isMatch) {
             matches.push(insertVal);
             b = document.createElement("DIV");
-            b.innerHTML = displayHtml;
-            b.innerHTML += "<input type='hidden' value='" + escapeHtml(insertVal) + "'>";
+
+            // Build autocomplete display using safe DOM methods instead of innerHTML
+            const strongEl = document.createElement("strong");
+            const trailingText = document.createTextNode("");
+            if (item.toUpperCase().startsWith(currentWord.toUpperCase())) {
+                strongEl.textContent = item.substr(0, currentWord.length);
+                trailingText.textContent = item.substr(currentWord.length);
+            } else if (isBracketStart) {
+                strongEl.textContent = "[" + item.substr(0, searchWord.length);
+                trailingText.textContent = item.substr(searchWord.length) + "]";
+            }
+            b.appendChild(strongEl);
+            b.appendChild(trailingText);
+
+            const hiddenInput = document.createElement("input");
+            hiddenInput.type = "hidden";
+            hiddenInput.value = insertVal;
+            b.appendChild(hiddenInput);
+
             b.addEventListener("click", function(e) {
                 insertValue(this.getElementsByTagName("input")[0].value);
                 closeAllLists();
@@ -672,6 +696,21 @@ function runQuery() {
     const query = queryInput.value.trim();
     if (!query) return;
 
+    // Security: Only allow SELECT queries to prevent data manipulation/code execution
+    const normalizedQuery = query.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+    if (!/^SELECT\s/i.test(normalizedQuery)) {
+        errorContainer.textContent = "Query Error: Only SELECT queries are allowed.";
+        errorContainer.classList.remove('hidden');
+        return;
+    }
+    // Block dangerous keywords even within SELECT (e.g. subqueries with side effects)
+    const blockedPattern = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP)\b/i;
+    if (blockedPattern.test(normalizedQuery)) {
+        errorContainer.textContent = "Query Error: Data modification statements are not allowed.";
+        errorContainer.classList.remove('hidden');
+        return;
+    }
+
     // Add to history (skip if identical to the most recent entry)
     if (queryHistory.length === 0 || queryHistory[0] !== query) {
         queryHistory.unshift(query);
@@ -732,11 +771,13 @@ function resetQuery() {
 async function dataToObjects(data) {
     if (data.length < 2) return [];
     const headers = data[0];
+    // Sanitize headers: rename any that could cause prototype pollution
+    const safeHeaders = headers.map(h => DANGEROUS_KEYS.has(h) ? `_${h}` : h);
     const objects = [];
     for (let i = 1; i < data.length; i++) {
         const row = data[i];
-        const obj = {};
-        headers.forEach((h, index) => {
+        const obj = Object.create(null);
+        safeHeaders.forEach((h, index) => {
             obj[h] = row[index];
         });
         objects.push(obj);

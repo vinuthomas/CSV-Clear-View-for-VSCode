@@ -10,3 +10,4 @@ package-lock.json
 vsc-extension-quickstart.md
 **/*.map
 node_modules/**
+*.vsix

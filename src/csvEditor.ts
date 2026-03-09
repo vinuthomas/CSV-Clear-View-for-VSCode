@@ -27,7 +27,6 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 	}
 
 	private static readonly viewType = 'csvClearView.edit';
-	private readonly diagnostics = vscode.languages.createDiagnosticCollection('csv-clearview');
 
 	constructor(
 		private readonly context: vscode.ExtensionContext
@@ -49,6 +48,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 	): Promise<void> {
 		webviewPanel.webview.options = {
 			enableScripts: true,
+			localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')]
 		};
 
 		webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
@@ -174,6 +174,15 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		webviewPanel.webview.onDidReceiveMessage(e => {
 			switch (e.type) {
 				case 'edit':
+					if (typeof e.text !== 'string') {
+						console.error('Invalid edit message: text must be a string');
+						return;
+					}
+					// Guard against implausibly large payloads (100MB)
+					if (e.text.length > 100 * 1024 * 1024) {
+						console.error('Edit payload too large, ignoring');
+						return;
+					}
 					this.saveDocument(document, e.text);
 					return;
 			}
@@ -181,20 +190,20 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 	}
 
 	private async readRange(uri: vscode.Uri, offset: number, length: number): Promise<Uint8Array> {
-		// vscode.workspace.fs.readFile doesn't support ranges, so we use Node's fs for large files if needed
-		// but for now, we'll try a slice if it's small enough or use a more robust method
 		const stats = await vscode.workspace.fs.stat(uri);
 		const actualLength = Math.min(length, stats.size - offset);
-		
-		if (actualLength <= 0) return new Uint8Array(0);
 
-		// Fallback to Node.js fs for range reading
+		if (actualLength <= 0) { return new Uint8Array(0); }
+
 		const fs = require('fs');
 		const fd = fs.openSync(uri.fsPath, 'r');
-		const buffer = Buffer.alloc(actualLength);
-		fs.readSync(fd, buffer, 0, actualLength, offset);
-		fs.closeSync(fd);
-		return buffer;
+		try {
+			const buffer = Buffer.alloc(actualLength);
+			fs.readSync(fd, buffer, 0, actualLength, offset);
+			return buffer;
+		} finally {
+			fs.closeSync(fd);
+		}
 	}
 
 	private async saveDocument(document: CsvDocument, text: string) {
@@ -285,11 +294,6 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 	}
 }
 
-function getNonce() {
-	let text = '';
-	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	for (let i = 0; i < 32; i++) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
-	}
-	return text;
+function getNonce(): string {
+	return require('crypto').randomBytes(16).toString('hex');
 }

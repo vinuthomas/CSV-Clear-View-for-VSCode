@@ -2,6 +2,24 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [0.3.2] - 2026-03-09
+
+### Security
+- **Prototype Pollution Protection:** CSV headers like `__proto__`, `constructor`, and `prototype` are now safely renamed, and data objects use null prototypes to prevent pollution attacks.
+- **SQL Query Restriction:** Only `SELECT` queries are now allowed. Dangerous statements (`DROP`, `DELETE`, `INSERT`, `UPDATE`, `CREATE`, `ALTER`, `TRUNCATE`, `EXEC`) are blocked.
+- **Webview Message Validation:** Added origin validation on incoming webview messages and type/size validation on edit payloads before writing to disk.
+- **Cryptographic Nonce:** Replaced `Math.random()` with `crypto.randomBytes()` for CSP nonce generation.
+- **Restricted Resource Access:** Added `localResourceRoots` to limit webview file access to the `media/` folder only.
+- **Safe DOM Construction:** Replaced `innerHTML`-based autocomplete rendering with `createElement`/`textContent` to eliminate DOM injection risks.
+- **File Descriptor Safety:** Fixed a potential file descriptor leak in the range-read function using `try/finally`.
+- **Dependency Updates:** Resolved all known npm audit vulnerabilities (ajv, minimatch, serialize-javascript).
+
+### Fixed
+- **Scrollbar Dragging:** Fixed a bug where the vertical scrollbar could not be dragged because the error ruler overlay was intercepting pointer events.
+
+### Removed
+- Cleaned up unused diagnostics collection that was allocated but never populated.
+
 ## [0.3.1] - 2026-03-02
 
 ### Added

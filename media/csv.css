@@ -368,7 +368,7 @@ body.vscode-light {
     width: 14px;
     background-color: transparent;
     z-index: 50;
-    pointer-events: auto; /* Allow clicking markers to scroll */
+    pointer-events: none; /* Let scrollbar clicks pass through */
 }
 
 .error-marker {
@@ -379,6 +379,7 @@ body.vscode-light {
     background-color: var(--vscode-editorOverviewRuler-errorForeground, #ff1212);
     cursor: pointer;
     border-radius: 1px;
+    pointer-events: auto; /* Only markers themselves are clickable */
 }
 
 .error-marker:hover {
