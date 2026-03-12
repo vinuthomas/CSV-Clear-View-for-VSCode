@@ -3,3 +3,4 @@ dist
 .vscode-test
 *.vsix
 samples/stress_test_*.csv
+samples/huge_10gb.csv

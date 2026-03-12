@@ -454,3 +454,15 @@ body.vscode-light {
 .hidden {
     display: none !important;
 }
+
+/* Placeholder cells shown while a chunked page is loading */
+.chunked-loading-cell {
+    background: repeating-linear-gradient(
+        90deg,
+        var(--vscode-editor-background) 0px,
+        var(--vscode-editor-background) 40px,
+        var(--vscode-editorGroup-border) 40px,
+        var(--vscode-editorGroup-border) 41px
+    );
+    opacity: 0.35;
+}

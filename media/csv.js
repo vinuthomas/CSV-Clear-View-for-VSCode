@@ -16,10 +16,55 @@ let historyDraft = '';  // Draft text saved before navigating history
 
 // --- Virtual Scrolling State ---
 let rowHeight = 30; // Matches CSS height
-let visibleRows = 40; 
 let totalRows = 0;
 let lastScrollTop = 0;
 let columnWidths = []; // Array of pixel widths for columns
+
+// Browsers clamp scrollTop at ~16–33 million px depending on engine.
+// We cap the virtual spacer at 10M px and scale logical row positions into
+// that range so files with billions of rows remain fully scrollable.
+const MAX_SPACER_PX = 10_000_000;
+
+// Convert a logical row index (0-based data rows, i.e. excluding header) to
+// a scrollTop pixel value within the capped spacer.
+function rowToScrollTop(rowIndex, dataRowCount) {
+    const totalPx = dataRowCount * rowHeight;
+    if (totalPx <= MAX_SPACER_PX) {
+        return rowIndex * rowHeight; // no scaling needed
+    }
+    return (rowIndex / dataRowCount) * MAX_SPACER_PX;
+}
+
+// Convert a scrollTop pixel value back to a logical 0-based data row index.
+function scrollTopToRow(scrollTop, dataRowCount) {
+    const totalPx = dataRowCount * rowHeight;
+    let row;
+    if (totalPx <= MAX_SPACER_PX) {
+        row = Math.floor(scrollTop / rowHeight); // no scaling needed
+    } else {
+        row = Math.floor((scrollTop / MAX_SPACER_PX) * dataRowCount);
+    }
+    // Clamp to valid range so the last page is always reachable when scrolled
+    // to the very bottom (scrollTop === spacerHeight may map to dataRowCount).
+    return Math.min(row, Math.max(0, dataRowCount - 1));
+}
+
+// Return the spacer height to use (capped).
+function spacerHeight(dataRowCount) {
+    return Math.min(dataRowCount * rowHeight, MAX_SPACER_PX);
+}
+
+// --- Chunked Paging State ---
+// Active only when viewMode === 'chunked' (files >500MB)
+let isChunkedMode = false;
+let chunkedTotalRows = 0;       // Total data rows (excludes header) reported by extension
+let chunkSize = 500;            // Rows per page (mirrors CHUNK_ROWS in extension)
+let chunkedHeader = [];         // Header row (array of strings)
+let chunkedCache = new Map();   // page index -> array of row arrays
+let chunkedPending = new Set(); // pages currently in-flight
+let chunkedLoadedPage = -1;     // The page currently rendered in the virtual table
+let chunkedLoadedPageHasData = false; // true if the current render shows real data (not placeholders)
+let chunkedScrollRaf = null;    // rAF handle — cancelled on each new scroll event
 
 // --- DOM Elements ---
 const queryInput = document.getElementById('sql-query');
@@ -60,9 +105,11 @@ if (tableContainer) {
         if (headerContainer) {
             headerContainer.scrollLeft = tableContainer.scrollLeft;
         }
-        
-        // Virtual vertical scroll
-        if (currentDisplayData.length > 50) { 
+
+        if (isChunkedMode) {
+            handleChunkedScroll();
+        } else if (currentDisplayData.length > 50) {
+            // Virtual vertical scroll
             handleScroll();
         }
     });
@@ -74,19 +121,106 @@ function handleScroll() {
     });
 }
 
+// ---- Chunked paging scroll handler ----
+// Cancels any pending rAF from a prior scroll event so only the final
+// scroll position of a drag gesture triggers a page change.
+function handleChunkedScroll() {
+    if (chunkedScrollRaf !== null) {
+        cancelAnimationFrame(chunkedScrollRaf);
+    }
+    chunkedScrollRaf = requestAnimationFrame(() => {
+        chunkedScrollRaf = null;
+        const scrollTop = tableContainer.scrollTop;
+        const firstVisibleRow = scrollTopToRow(scrollTop, chunkedTotalRows); // 0-based data row
+        const currentPage = Math.floor(firstVisibleRow / chunkSize);
+        // Always render the current page — show placeholder rows if not cached yet
+        renderChunkedPage(currentPage);
+
+        // Fetch current page, one page ahead, and one page behind if not cached or in-flight.
+        // Including currentPage-1 ensures backward scrolls don't flash placeholders.
+        const maxPage = chunkedTotalRows > 0 ? Math.ceil(chunkedTotalRows / chunkSize) - 1 : 0;
+        [currentPage - 1, currentPage, currentPage + 1].forEach(page => {
+            if (page >= 0 && page <= maxPage && !chunkedCache.has(page) && !chunkedPending.has(page)) {
+                fetchChunkedPage(page);
+            }
+        });
+    });
+}
+
+function fetchChunkedPage(page) {
+    chunkedPending.add(page);
+    const startRow = page * chunkSize;
+    vscode.postMessage({
+        type: 'requestPage',
+        startRow,
+        rowCount: chunkSize
+    });
+}
+
+// Render a cached page (or placeholder rows) into the virtual table body.
+function renderChunkedPage(page) {
+    const rows = chunkedCache.get(page) || null;
+    const hasData = rows !== null;
+
+    // Skip re-render only if we already rendered this page with real data.
+    // If we previously rendered placeholders and data has now arrived, fall
+    // through so the real rows replace the loading skeletons.
+    if (chunkedLoadedPage === page && chunkedLoadedPageHasData) { return; }
+    // Also skip if same page and still no data (nothing would change).
+    if (chunkedLoadedPage === page && !hasData) { return; }
+
+    chunkedLoadedPage = page;
+    chunkedLoadedPageHasData = hasData;
+
+    const pageStartDataRow = page * chunkSize; // 0-based in data space
+
+    const tbody = table.querySelector('tbody');
+    if (!tbody) { return; }
+
+    // Move the tbody to the correct position BEFORE writing rows,
+    // so the browser never briefly shows it at the wrong offset.
+    tbody.style.transform = `translateY(${rowToScrollTop(pageStartDataRow, chunkedTotalRows)}px)`;
+
+    const rowCount = hasData
+        ? rows.length
+        : Math.max(0, Math.min(chunkSize, chunkedTotalRows - pageStartDataRow));
+
+    let html = '';
+    for (let i = 0; i < rowCount; i++) {
+        html += `<tr style="height: ${rowHeight}px">`;
+        if (hasData) {
+            const row = rows[i];
+            for (let c = 0; c < columnWidths.length; c++) {
+                html += `<td>${escapeHtml(row[c] || '')}</td>`;
+            }
+        } else {
+            // Placeholder: empty cells while the page loads
+            for (let c = 0; c < columnWidths.length; c++) {
+                html += `<td class="chunked-loading-cell"></td>`;
+            }
+        }
+        html += '</tr>';
+    }
+    tbody.innerHTML = html;
+}
+
 function updateVirtualTable() {
+    if (isChunkedMode) { return; } // chunked mode manages its own rendering
     if (!currentDisplayData || currentDisplayData.length === 0) return;
     
     const scrollTop = tableContainer.scrollTop;
-    
-    // Calculate which rows are visible
-    let startRow = Math.floor(scrollTop / rowHeight);
+    const containerHeight = tableContainer.clientHeight;
+    const visibleRowCount = Math.ceil(containerHeight / rowHeight);
+    const dataRowCount = currentDisplayData.length - 1; // exclude header
+
+    // Map scrollTop → logical data row index (accounts for spacer scaling)
+    let startRow = scrollTopToRow(scrollTop, dataRowCount);
     // Data starts at index 1 (row 0 is header)
     startRow = Math.max(1, startRow);
     
     const buffer = 10;
     const renderStart = Math.max(1, startRow - buffer);
-    const renderEnd = Math.min(currentDisplayData.length, startRow + visibleRows + buffer);
+    const renderEnd = Math.min(currentDisplayData.length, startRow + visibleRowCount + buffer);
     
     const slice = currentDisplayData.slice(renderStart, renderEnd);
     
@@ -106,8 +240,9 @@ function updateVirtualTable() {
     
     tbody.innerHTML = html;
     
-    // Position the tbody at the correct scroll offset
-    const tbodyOffset = (renderStart - 1) * rowHeight;
+    // Position the tbody using the scaled pixel offset for renderStart
+    // (renderStart is 1-based; subtract 1 to get 0-based data row index)
+    const tbodyOffset = rowToScrollTop(renderStart - 1, dataRowCount);
     tbody.style.transform = `translateY(${tbodyOffset}px)`;
 }
 
@@ -174,11 +309,13 @@ window.addEventListener('message', event => {
     switch (message.type) {
         case 'update':
             currentText = message.text;
+            // Reset guard — a fresh 'update' message always supersedes any prior render in progress
+            isUpdating = false;
             showLoader();
             isRenderingInterrupted = false;
             clearTimeout(slowLoadTimer);
 
-            if (message.config.showSlowLoadPrompt) {
+            if (message.config.showSlowLoadPrompt && message.viewMode !== 'chunked') {
                 slowLoadTimer = setTimeout(() => {
                     if (loader && !loader.classList.contains('hidden')) {
                         if (slowLoadModal) slowLoadModal.classList.remove('hidden');
@@ -186,7 +323,44 @@ window.addEventListener('message', event => {
                 }, SLOW_LOAD_TIMEOUT);
             }
 
-            if (message.viewMode === 'head') {
+            if (message.viewMode === 'chunked') {
+                // ---- Chunked paging mode (files >500MB) ----
+                isChunkedMode = true;
+                chunkedTotalRows = message.totalRows || 0;
+                chunkSize = message.chunkSize || 500;
+                chunkedCache.clear();
+                chunkedPending.clear();
+                chunkedLoadedPage = -1;
+                chunkedLoadedPageHasData = false;
+                if (chunkedScrollRaf !== null) { cancelAnimationFrame(chunkedScrollRaf); chunkedScrollRaf = null; }
+                chunkedPagePending = false;
+
+                warningContainer.textContent =
+                    chunkedTotalRows > 0
+                        ? `Paged View: ${chunkedTotalRows.toLocaleString()} rows total. ` +
+                          `Showing ${chunkSize} rows at a time. SQL queries and editing are disabled in this mode.`
+                        : `Paged View: Indexing file\u2026 SQL queries and editing are disabled in this mode.`;
+                warningContainer.classList.remove('hidden');
+                tableContainer.classList.remove('hidden');
+                headerContainer.classList.remove('hidden');
+                textContainer.classList.add('hidden');
+                controls.classList.add('hidden'); // SQL bar hidden
+                if (errorRuler) errorRuler.classList.add('hidden');
+
+                setTimeout(async () => {
+                    try {
+                        await initChunkedView(message.text, message.config);
+                    } catch (e) {
+                        console.error('Error initialising chunked view:', e);
+                        errorContainer.textContent = 'Error loading CSV: ' + e.message;
+                        errorContainer.classList.remove('hidden');
+                    } finally {
+                        hideLoader();
+                    }
+                }, 50);
+
+            } else if (message.viewMode === 'head') {
+                isChunkedMode = false;
                 warningContainer.textContent = "Viewing Sample: Top 1000 rows. SQL queries will only run against this sample.";
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
@@ -195,6 +369,7 @@ window.addEventListener('message', event => {
                 controls.classList.remove('hidden');
                 if (errorRuler) errorRuler.classList.remove('hidden');
             } else if (message.viewMode === 'tail') {
+                isChunkedMode = false;
                 warningContainer.textContent = "Viewing Sample: Bottom 1000 rows. SQL queries will only run against this sample.";
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
@@ -203,6 +378,7 @@ window.addEventListener('message', event => {
                 controls.classList.remove('hidden');
                 if (errorRuler) errorRuler.classList.remove('hidden');
             } else if (message.viewMode === 'text') {
+                isChunkedMode = false;
                 if (message.config.forceTextColumnColoring) {
                     warningContainer.textContent = "Viewing as Plain Text: Row stripes & Column coloring enabled (Force Mode).";
                     rawTextArea.innerHTML = colorizeCSV(message.text);
@@ -217,6 +393,7 @@ window.addEventListener('message', event => {
                 controls.classList.add('hidden');
                 if (errorRuler) errorRuler.classList.add('hidden');
             } else if (message.isLargeFile) {
+                isChunkedMode = false;
                 const threshold = message.config.safeModeThreshold || 5;
                 warningContainer.textContent = `Warning: This file is large (>${threshold}MB) and may cause performance issues.`;
                 warningContainer.classList.remove('hidden');
@@ -226,6 +403,7 @@ window.addEventListener('message', event => {
                 controls.classList.remove('hidden');
                 if (errorRuler) errorRuler.classList.remove('hidden');
             } else {
+                isChunkedMode = false;
                 warningContainer.classList.add('hidden');
                 tableContainer.classList.remove('hidden');
                 headerContainer.classList.remove('hidden');
@@ -233,38 +411,193 @@ window.addEventListener('message', event => {
                 controls.classList.remove('hidden');
                 if (errorRuler) errorRuler.classList.remove('hidden');
             }
-            
-            // Use setTimeout to allow the browser to render the loader
-            setTimeout(async () => {
-                if (isUpdating) return;
-                isUpdating = true;
-                
-                // Preserve scroll position
-                const savedScrollTop = tableContainer.scrollTop;
-                const savedScrollLeft = tableContainer.scrollLeft;
 
-                try {
-                    if (message.viewMode !== 'text') {
-                        await updateContent(message.text, message.config);
-                        
-                        // Restore scroll position
-                        tableContainer.scrollTop = savedScrollTop;
-                        tableContainer.scrollLeft = savedScrollLeft;
-                        // Trigger one manual virtual sync to ensure correct rows are shown
-                        updateVirtualTable();
+            // Use setTimeout to allow the browser to render the loader
+            // (skip for chunked — it handles its own async path above)
+            if (message.viewMode !== 'chunked') {
+                setTimeout(async () => {
+                    if (isUpdating) return;
+                    isUpdating = true;
+
+                    // Preserve scroll position
+                    const savedScrollTop = tableContainer.scrollTop;
+                    const savedScrollLeft = tableContainer.scrollLeft;
+
+                    try {
+                        if (message.viewMode !== 'text') {
+                            await updateContent(message.text, message.config);
+
+                            // Restore scroll position
+                            tableContainer.scrollTop = savedScrollTop;
+                            tableContainer.scrollLeft = savedScrollLeft;
+                            // Trigger one manual virtual sync to ensure correct rows are shown
+                            updateVirtualTable();
+                        }
+                    } catch (e) {
+                        console.error("Error updating content:", e);
+                        errorContainer.textContent = "Error loading CSV: " + e.message;
+                        errorContainer.classList.remove('hidden');
+                    } finally {
+                        isUpdating = false;
+                        hideLoader();
                     }
-                } catch (e) {
-                    console.error("Error updating content:", e);
-                    errorContainer.textContent = "Error loading CSV: " + e.message;
-                    errorContainer.classList.remove('hidden');
-                } finally {
-                    isUpdating = false;
-                    hideLoader();
-                }
-            }, 50);
+                }, 50);
+            }
+            break;
+
+        case 'pageData':
+            // Response to a 'requestPage' message — parse and cache, then render.
+            handlePageData(message);
+            break;
+
+        case 'indexReady':
+            // The extension has finished building the row index.
+            // Update the total row count and resize the virtual spacer.
+            chunkedTotalRows = message.totalRows;
+            if (virtualSpacer) {
+                virtualSpacer.style.height = spacerHeight(chunkedTotalRows) + 'px';
+            }
+            // Update the warning banner with the real row count.
+            if (warningContainer && isChunkedMode) {
+                warningContainer.textContent =
+                    `Paged View: ${chunkedTotalRows.toLocaleString()} rows total. ` +
+                    `Showing ${chunkSize} rows at a time. SQL queries and editing are disabled in this mode.`;
+            }
+            // Re-evaluate the current scroll position now that we know the true row
+            // count. This matters when the user jumped (e.g. CMD+Down) before the
+            // index was ready — at that point chunkedTotalRows was 0, so every scroll
+            // mapped to row 0. Now that we have the real count, re-trigger the scroll
+            // handler so the correct page is fetched and rendered.
+            if (isChunkedMode) {
+                chunkedLoadedPage = -1; // invalidate so renderChunkedPage isn't skipped
+                chunkedLoadedPageHasData = false;
+                handleChunkedScroll();
+            }
             break;
     }
 });
+
+// ---- Chunked mode initialisation ----
+// Called with the first chunk (header + first N rows) sent by the extension.
+async function initChunkedView(text, config) {
+    currentConfig = config;
+    const { data } = await parseCSV(text);
+    if (data.length === 0) { return; }
+
+    chunkedHeader = data[0]; // first row is the header
+
+    // Cache page 0 (data rows from the first chunk, excluding the header row)
+    const page0Rows = data.slice(1); // rows 1..N
+    chunkedCache.set(0, page0Rows);
+    chunkedLoadedPage = -1; // force re-render
+    chunkedLoadedPageHasData = false;
+
+    // Build the table skeleton (header + empty body + correct spacer height)
+    await renderChunkedTable();
+
+    // Render page 0 immediately
+    renderChunkedPage(0);
+}
+
+// Render table structure for chunked mode.
+// Sets up the header, colgroup, empty tbody, and the virtual spacer height.
+async function renderChunkedTable() {
+    if (!table || !virtualSpacer) { return; }
+
+    if (currentConfig.alternatingRows) {
+        table.classList.add('alternating-rows');
+    } else {
+        table.classList.remove('alternating-rows');
+    }
+
+    // Calculate column widths from the header (no data sample available yet)
+    columnWidths = chunkedHeader.map(h => {
+        const charWidth = 9;
+        const padding = 24;
+        return Math.max(100, Math.min(600, (h.length * charWidth) + padding));
+    });
+
+    // Widen columns once page 0 rows arrive
+    const page0 = chunkedCache.get(0) || [];
+    const sample = page0.slice(0, 50);
+    columnWidths = chunkedHeader.map((h, colIndex) => {
+        let maxLen = h.length;
+        sample.forEach(row => {
+            const len = row[colIndex] ? row[colIndex].length : 0;
+            if (len > maxLen) { maxLen = len; }
+        });
+        const charWidth = 9;
+        const padding = 24;
+        return Math.max(100, Math.min(600, (maxLen * charWidth) + padding));
+    });
+
+    const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+
+    // Header table
+    if (headerTable) {
+        headerTable.innerHTML = '';
+        headerTable.appendChild(createColGroup(columnWidths));
+        headerTable.style.width = totalWidth + 'px';
+        const thead = document.createElement('thead');
+        const trHead = document.createElement('tr');
+        chunkedHeader.forEach(colName => {
+            const th = document.createElement('th');
+            th.textContent = colName;
+            trHead.appendChild(th);
+        });
+        thead.appendChild(trHead);
+        headerTable.appendChild(thead);
+    }
+
+    // Body table
+    table.innerHTML = '';
+    table.appendChild(createColGroup(columnWidths));
+    table.style.width = totalWidth + 'px';
+    const tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+
+    // Scrollbar compensation
+    const scrollbarWidth = tableContainer.offsetWidth - tableContainer.clientWidth;
+    if (headerContainer) {
+        headerContainer.style.paddingRight = scrollbarWidth + 'px';
+    }
+
+    // Virtual spacer: capped height covering all data rows
+    virtualSpacer.style.height = spacerHeight(chunkedTotalRows) + 'px';
+}
+
+// Handle a 'pageData' message from the extension host.
+function handlePageData(message) {
+    const startRow = message.startRow || 0; // 0-based data row
+    const page = Math.floor(startRow / chunkSize);
+    // Keep page in chunkedPending until parseCSV finishes so scroll handler
+    // doesn't re-request it during the async parse gap.
+    // Parse the raw CSV text (no header in this chunk)
+    parseCSV(message.text).then(({ data }) => {
+        chunkedPending.delete(page); // now safe to remove — cache is about to be set
+        chunkedCache.set(page, data);
+
+        // Evict pages that are far from the current view (keep a window of ±15 pages).
+        // Use distance-based eviction, NOT count-based, so the current page is never
+        // immediately evicted after being inserted.
+        const currentViewPage = chunkedLoadedPage >= 0 ? chunkedLoadedPage : page;
+        for (const key of [...chunkedCache.keys()]) {
+            if (Math.abs(key - currentViewPage) > 15) {
+                chunkedCache.delete(key);
+            }
+        }
+
+        // If this page is currently displayed (possibly as placeholders), upgrade it.
+        // renderChunkedPage() now detects the placeholder→data transition itself, so
+        // we just need to clear the "has data" guard and call render.
+        if (page === chunkedLoadedPage) {
+            chunkedLoadedPageHasData = false; // allow re-render with real data
+            renderChunkedPage(page);
+        }
+    });
+}
+
+
 
 function showLoader() {
     if (loader) loader.classList.remove('hidden');
@@ -383,6 +716,7 @@ function navigateHistoryPanel(direction) {
 if (tableContainer) {
     // Single-click to select, Double-click to edit
     tableContainer.addEventListener('dblclick', (e) => {
+        if (isChunkedMode) { return; } // editing disabled for large paged files
         const cell = e.target;
         if ((cell.tagName === 'TD' || cell.tagName === 'TH') && cell.contentEditable !== 'true') {
             cell.contentEditable = 'true';
@@ -1024,8 +1358,8 @@ async function renderTable(data, errors) {
     const tbody = document.createElement('tbody');
     table.appendChild(tbody);
 
-    const totalHeight = (data.length - 1) * rowHeight;
-    virtualSpacer.style.height = totalHeight + 'px';
+    const dataRowCount = data.length - 1; // exclude header
+    virtualSpacer.style.height = spacerHeight(dataRowCount) + 'px';
 
     updateVirtualTable();
 
