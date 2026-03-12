@@ -2,6 +2,14 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [0.3.6] - 2026-03-12
+
+### Fixed
+- **Paged View — last page never loaded:** Scrolling to the very bottom of a large file (including CMD+Down) failed to show the final rows. `scrollTopToRow` could return a row index one past the end, making the computed page exceed `maxPage` and blocking the fetch entirely. The result is now clamped to `[0, dataRowCount - 1]`.
+- **Paged View — jump-to-end before index ready:** Pressing CMD+Down immediately after opening a large file (before the row index finished building) caused all scroll positions to map to page 0. When `indexReady` fired the spacer was resized but the viewport was never re-evaluated, leaving the wrong page on screen. The `indexReady` handler now invalidates the current page and re-runs the scroll logic so the correct page is fetched.
+- **Paged View — placeholders never replaced by real data:** Once a page was rendered as loading skeletons, the dedup guard `chunkedLoadedPage === page` prevented it from being re-rendered when the actual data arrived. A new `chunkedLoadedPageHasData` flag allows placeholder renders to be upgraded to real rows as soon as the data is ready.
+- **Paged View — no backward prefetch:** Scrolling upward always showed placeholder rows briefly because only the next page was prefetched. The scroll handler now prefetches `currentPage - 1` as well, making both forward and backward scrolling smooth.
+
 ## [0.3.2] - 2026-03-09
 
 ### Security
