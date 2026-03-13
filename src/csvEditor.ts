@@ -176,21 +176,23 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					if (lastNl !== -1) { firstText = firstText.substring(0, lastNl + 1); }
 
 					// Send with totalRows = -1 to signal "index still building"
-					webviewPanel.webview.postMessage({
-						type: 'update',
-						text: firstText,
-						isLargeFile: true,
-						viewMode: 'chunked',
-						totalRows: -1,        // placeholder — updated once index is ready
-						chunkSize: CHUNK_ROWS,
-						config: {
-							stickyHeader: cfg.get('stickyHeader'),
-							alternatingRows: cfg.get('alternatingRows'),
-							forceTextColumnColoring: cfg.get('forceTextColumnColoring'),
-							safeModeThreshold: safeModeThresholdMB,
-							showSlowLoadPrompt: cfg.get('showSlowLoadPrompt')
-						}
-					});
+				webviewPanel.webview.postMessage({
+					type: 'update',
+					text: firstText,
+					isLargeFile: true,
+					viewMode: 'chunked',
+					totalRows: -1,        // placeholder — updated once index is ready
+					chunkSize: CHUNK_ROWS,
+					fileExtension: document.uri.fsPath.split('.').pop()?.toLowerCase() || 'csv',
+					config: {
+						stickyHeader: cfg.get('stickyHeader'),
+						alternatingRows: cfg.get('alternatingRows'),
+						forceTextColumnColoring: cfg.get('forceTextColumnColoring'),
+						safeModeThreshold: safeModeThresholdMB,
+						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt'),
+						delimiter: cfg.get('delimiter') || 'auto'
+					}
+				});
 
 				// Build the index in the background; when done, update the webview
 				// with the real total row count.
@@ -251,12 +253,14 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					text: text,
 					isLargeFile: isLargeFile,
 					viewMode: viewMode,
+					fileExtension: document.uri.fsPath.split('.').pop()?.toLowerCase() || 'csv',
 					config: {
 						stickyHeader: cfg.get('stickyHeader'),
 						alternatingRows: cfg.get('alternatingRows'),
 						forceTextColumnColoring: cfg.get('forceTextColumnColoring'),
 						safeModeThreshold: safeModeThresholdMB,
-						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt')
+						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt'),
+						delimiter: cfg.get('delimiter') || 'auto'
 					}
 				});
 			} catch (err) {
@@ -576,15 +580,27 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					<button id="history-btn" title="Query History (↑/↓ to navigate)">History</button>
 					<button id="run-query">Run Query</button>
 					<button id="reset-query">Reset</button>
+					<button id="profile-btn" title="Toggle column profile panel">Profile</button>
+					<div id="delimiter-display" class="delimiter-badge hidden" title="Click to change delimiter">Delim: ,</div>
 				</div>
 				<div id="error-container" class="error-container hidden"></div>
-				<div class="header-container">
-					<table id="header-table"></table>
+				<div class="table-area">
+					<div class="header-container">
+						<table id="header-table"></table>
+					</div>
+					<div class="table-container">
+						<div id="virtual-spacer" class="virtual-spacer"></div>
+						<table id="csv-table"></table>
+					</div>
 				</div>
-				<div class="table-container">
-					<div id="virtual-spacer" class="virtual-spacer"></div>
-					<table id="csv-table"></table>
+				<div id="schema-panel" class="schema-panel hidden">
+					<div class="schema-panel-header">
+						<span class="schema-panel-title">Column Profile</span>
+						<button id="schema-close-btn" class="schema-close-btn" title="Close panel">✕</button>
+					</div>
+					<div id="schema-panel-body" class="schema-panel-body"></div>
 				</div>
+				<div id="stats-popover" class="stats-popover hidden"></div>
 				<div id="text-container" class="text-container hidden">
 					<pre id="raw-text"></pre>
 				</div>

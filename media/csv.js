@@ -25,6 +25,13 @@ let columnWidths = []; // Array of pixel widths for columns
 // that range so files with billions of rows remain fully scrollable.
 const MAX_SPACER_PX = 10_000_000;
 
+// --- New Feature State ---
+let detectedDelimiter = ',';    // auto-detected or user-overridden delimiter
+let columnTypes = [];           // 'integer' | 'float' | 'date' | 'boolean' | 'string' per column
+let sortState = { col: -1, dir: 'none' }; // col: index, dir: 'asc'|'desc'|'none'
+let frozenCols = new Set();     // set of frozen column indices
+let activePopoverCol = -1;      // which column's stats popover is open (-1 = none)
+
 // Convert a logical row index (0-based data rows, i.e. excluding header) to
 // a scrollTop pixel value within the capped spacer.
 function rowToScrollTop(rowIndex, dataRowCount) {
@@ -75,6 +82,7 @@ const historyListEl = document.getElementById('history-list');
 const errorContainer = document.getElementById('error-container');
 const loader = document.getElementById('loader');
 const warningContainer = document.getElementById('warning-container');
+const tableArea = document.querySelector('.table-area');
 const headerContainer = document.querySelector('.header-container');
 const headerTable = document.getElementById('header-table');
 const tableContainer = document.querySelector('.table-container');
@@ -87,23 +95,643 @@ const errorRuler = document.getElementById('error-ruler');
 const slowLoadModal = document.getElementById('slow-load-modal');
 const switchToTextBtn = document.getElementById('switch-to-text');
 const continueWaitingBtn = document.getElementById('continue-waiting');
+const profileBtn = document.getElementById('profile-btn');
+const schemaPanel = document.getElementById('schema-panel');
+const schemaPanelBody = document.getElementById('schema-panel-body');
+const schemaCloseBtn = document.getElementById('schema-close-btn');
+const statsPopover = document.getElementById('stats-popover');
+const delimiterDisplay = document.getElementById('delimiter-display');
 
 // --- Constants ---
 const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'GROUP BY', 'LIMIT', 'JOIN', 'ON', 'AS', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'LIKE', 'IN', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'];
 const SLOW_LOAD_TIMEOUT = 25000; // 25 seconds
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
+const DELIMITER_LABELS = { ',': ',  CSV', '\t': '⇥  TSV', '|': '|  PSV', ';': ';  semicolon' };
+const TYPE_BADGES = { integer: '#', float: '1.0', date: 'date', boolean: 'T/F', string: 'abc' };
+const TYPE_TITLES = { integer: 'Integer', float: 'Float/Decimal', date: 'Date/Time', boolean: 'Boolean', string: 'String/Text' };
+
 let slowLoadTimer;
 let isRenderingInterrupted = false;
 let currentText = "";
 
-// --- Event Listeners (Attached Once) ---
+// =============================================================================
+// DELIMITER AUTO-DETECTION
+// =============================================================================
+
+/**
+ * Detect the delimiter by sampling up to the first 8 KB of text.
+ * Counts occurrences of each candidate per line and picks the one
+ * with the most consistent (lowest CV) non-zero per-line count.
+ * Returns one of: ',' | '\t' | '|' | ';'
+ */
+function detectDelimiter(text, hintExtension) {
+    // Hard-wired extension hints
+    if (hintExtension === 'tsv' || hintExtension === 'tab') { return '\t'; }
+    if (hintExtension === 'psv') { return '|'; }
+
+    const sample = text.slice(0, 8192);
+    const lines = sample.split(/\r?\n/).filter(l => l.length > 0).slice(0, 20);
+    if (lines.length === 0) { return ','; }
+
+    const candidates = [',', '\t', '|', ';'];
+    let bestDelim = ',';
+    let bestScore = -1;
+
+    for (const d of candidates) {
+        const counts = lines.map(l => {
+            let n = 0;
+            let inQ = false;
+            for (let i = 0; i < l.length; i++) {
+                if (l[i] === '"') { inQ = !inQ; }
+                else if (!inQ && l[i] === d) { n++; }
+            }
+            return n;
+        });
+
+        const nonZero = counts.filter(c => c > 0);
+        if (nonZero.length === 0) { continue; }
+
+        const mean = nonZero.reduce((a, b) => a + b, 0) / nonZero.length;
+        if (mean < 1) { continue; }
+
+        const variance = nonZero.reduce((acc, c) => acc + (c - mean) ** 2, 0) / nonZero.length;
+        const cv = Math.sqrt(variance) / mean; // coefficient of variation — lower is more consistent
+
+        // Score: high mean (many columns), low cv (consistent), and most lines have it
+        const score = mean * (nonZero.length / lines.length) * (1 / (1 + cv));
+        if (score > bestScore) {
+            bestScore = score;
+            bestDelim = d;
+        }
+    }
+
+    return bestDelim;
+}
+
+function updateDelimiterBadge(delim) {
+    if (!delimiterDisplay) { return; }
+    const label = DELIMITER_LABELS[delim] || delim;
+    delimiterDisplay.textContent = 'Delim: ' + label;
+    delimiterDisplay.classList.remove('hidden');
+    delimiterDisplay.title = 'Detected delimiter: ' + (label) + '\nClick to override';
+}
+
+// Delimiter override dropdown
+if (delimiterDisplay) {
+    delimiterDisplay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showDelimiterPicker();
+    });
+}
+
+function showDelimiterPicker() {
+    // Remove any existing picker
+    document.querySelectorAll('.delimiter-picker').forEach(el => el.remove());
+
+    const picker = document.createElement('div');
+    picker.className = 'delimiter-picker';
+
+    const options = [
+        { label: 'Auto-detect', value: 'auto' },
+        { label: ', CSV', value: ',' },
+        { label: '⇥ Tab (TSV)', value: '\t' },
+        { label: '| Pipe (PSV)', value: '|' },
+        { label: '; Semicolon', value: ';' },
+    ];
+
+    options.forEach(opt => {
+        const item = document.createElement('div');
+        item.className = 'delimiter-picker-item';
+        if ((opt.value === detectedDelimiter) || (opt.value === 'auto' && detectedDelimiter === 'auto')) {
+            item.classList.add('delimiter-picker-active');
+        }
+        item.textContent = opt.label;
+        item.addEventListener('click', () => {
+            picker.remove();
+            let newDelim;
+            if (opt.value === 'auto') {
+                newDelim = detectDelimiter(currentText, '');
+            } else {
+                newDelim = opt.value;
+            }
+            detectedDelimiter = newDelim;
+            updateDelimiterBadge(newDelim);
+            // Re-parse with new delimiter
+            showLoader();
+            setTimeout(async () => {
+                try {
+                    await updateContent(currentText, currentConfig);
+                } finally {
+                    hideLoader();
+                }
+            }, 50);
+        });
+        picker.appendChild(item);
+    });
+
+    const rect = delimiterDisplay.getBoundingClientRect();
+    picker.style.top = (rect.bottom + 4) + 'px';
+    picker.style.left = rect.left + 'px';
+    document.body.appendChild(picker);
+
+    // Close on outside click
+    setTimeout(() => {
+        document.addEventListener('click', function closePicker() {
+            picker.remove();
+            document.removeEventListener('click', closePicker);
+        });
+    }, 0);
+}
+
+// =============================================================================
+// DATA TYPE INFERENCE
+// =============================================================================
+
+/**
+ * Infer the data type of each column by scanning up to 1000 data rows.
+ * Returns an array of type strings parallel to the header array.
+ */
+function inferColumnTypes(data) {
+    if (data.length < 2) { return []; }
+    const headers = data[0];
+    const sampleRows = data.slice(1, Math.min(1001, data.length));
+    const numCols = headers.length;
+    const types = [];
+
+    for (let c = 0; c < numCols; c++) {
+        let isInt = true;
+        let isFloat = true;
+        let isDate = true;
+        let isBool = true;
+        let nonEmptyCount = 0;
+
+        for (const row of sampleRows) {
+            const raw = (row[c] || '').trim();
+            if (raw === '' || raw === null || raw === undefined) { continue; }
+            nonEmptyCount++;
+
+            // Integer: optional sign, only digits
+            if (isInt && !/^-?\d+$/.test(raw)) { isInt = false; }
+            // Float: optional sign, digits, at most one dot
+            if (isFloat && !/^-?\d*\.?\d+([eE][+-]?\d+)?$/.test(raw)) { isFloat = false; }
+            // Boolean
+            if (isBool && !/^(true|false|yes|no|1|0|y|n)$/i.test(raw)) { isBool = false; }
+            // Date: try native parse + sanity check year in [1900..2100]
+            if (isDate) {
+                const d = new Date(raw);
+                if (isNaN(d.getTime()) || d.getFullYear() < 1900 || d.getFullYear() > 2100) {
+                    isDate = false;
+                }
+            }
+        }
+
+        if (nonEmptyCount === 0) {
+            types.push('string');
+        } else if (isBool && nonEmptyCount > 0) {
+            types.push('boolean');
+        } else if (isInt) {
+            types.push('integer');
+        } else if (isFloat) {
+            types.push('float');
+        } else if (isDate) {
+            types.push('date');
+        } else {
+            types.push('string');
+        }
+    }
+
+    return types;
+}
+
+// =============================================================================
+// COLUMN STATISTICS
+// =============================================================================
+
+/**
+ * Compute detailed statistics for a single column (0-based colIndex in data).
+ * data[0] is header row; data[1..] are data rows.
+ */
+function computeColStats(data, colIndex) {
+    if (data.length < 2) { return null; }
+    const type = columnTypes[colIndex] || 'string';
+    const values = [];
+    const freqMap = Object.create(null);
+    let nullCount = 0;
+
+    for (let i = 1; i < data.length; i++) {
+        const raw = (data[i][colIndex] || '').trim();
+        if (raw === '') {
+            nullCount++;
+        } else {
+            values.push(raw);
+            freqMap[raw] = (freqMap[raw] || 0) + 1;
+        }
+    }
+
+    const total = data.length - 1;
+    const nonNull = values.length;
+    const distinct = Object.keys(freqMap).length;
+
+    // Top-5 most frequent values
+    const topValues = Object.entries(freqMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([val, cnt]) => ({ val, cnt }));
+
+    const stats = { type, total, nonNull, nullCount, distinct, topValues };
+
+    if (type === 'integer' || type === 'float') {
+        const nums = values.map(v => parseFloat(v)).filter(n => !isNaN(n));
+        if (nums.length > 0) {
+            nums.sort((a, b) => a - b);
+            stats.min = nums[0];
+            stats.max = nums[nums.length - 1];
+            stats.mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+            stats.median = median(nums);
+            stats.p25 = percentile(nums, 0.25);
+            stats.p75 = percentile(nums, 0.75);
+            const variance = nums.reduce((acc, n) => acc + (n - stats.mean) ** 2, 0) / nums.length;
+            stats.stddev = Math.sqrt(variance);
+        }
+    } else if (type === 'date') {
+        const dates = values.map(v => new Date(v)).filter(d => !isNaN(d.getTime()));
+        if (dates.length > 0) {
+            dates.sort((a, b) => a - b);
+            stats.minDate = dates[0].toLocaleDateString();
+            stats.maxDate = dates[dates.length - 1].toLocaleDateString();
+        }
+    } else if (type === 'string') {
+        const lens = values.map(v => v.length);
+        if (lens.length > 0) {
+            stats.minLen = Math.min(...lens);
+            stats.maxLen = Math.max(...lens);
+            stats.avgLen = (lens.reduce((a, b) => a + b, 0) / lens.length).toFixed(1);
+        }
+    }
+
+    return stats;
+}
+
+function median(sorted) {
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function percentile(sorted, p) {
+    const idx = p * (sorted.length - 1);
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+function fmtNum(n, decimals = 2) {
+    if (n === undefined || n === null) { return '—'; }
+    if (Number.isInteger(n)) { return n.toLocaleString(); }
+    return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals });
+}
+
+// =============================================================================
+// STATS POPOVER
+// =============================================================================
+
+function showStatsPopover(colIndex, thElement) {
+    if (!statsPopover) { return; }
+
+    if (activePopoverCol === colIndex) {
+        hideStatsPopover();
+        return;
+    }
+
+    activePopoverCol = colIndex;
+    const stats = computeColStats(currentDisplayData, colIndex);
+    if (!stats) { return; }
+
+    const colName = currentDisplayData[0] ? currentDisplayData[0][colIndex] : `Col ${colIndex}`;
+    const type = columnTypes[colIndex] || 'string';
+    const badge = TYPE_BADGES[type] || 'abc';
+    const typeLabel = TYPE_TITLES[type] || 'String';
+
+    let html = `
+        <div class="sp-header">
+            <span class="sp-colname">${escapeHtml(colName)}</span>
+            <span class="sp-type-badge sp-type-${escapeHtml(type)}">${escapeHtml(badge)}</span>
+            <span class="sp-close" id="sp-close-btn">✕</span>
+        </div>
+        <div class="sp-type-label">${escapeHtml(typeLabel)}</div>
+        <table class="sp-table">
+            <tr><td class="sp-label">Total rows</td><td class="sp-val">${stats.total.toLocaleString()}</td></tr>
+            <tr><td class="sp-label">Non-empty</td><td class="sp-val">${stats.nonNull.toLocaleString()}</td></tr>
+            <tr><td class="sp-label">Empty / null</td><td class="sp-val">${stats.nullCount.toLocaleString()} <span class="sp-pct">(${stats.total > 0 ? ((stats.nullCount / stats.total) * 100).toFixed(1) : 0}%)</span></td></tr>
+            <tr><td class="sp-label">Distinct</td><td class="sp-val">${stats.distinct.toLocaleString()}</td></tr>
+    `;
+
+    if (type === 'integer' || type === 'float') {
+        html += `
+            <tr><td class="sp-label">Min</td><td class="sp-val">${fmtNum(stats.min)}</td></tr>
+            <tr><td class="sp-label">Max</td><td class="sp-val">${fmtNum(stats.max)}</td></tr>
+            <tr><td class="sp-label">Mean</td><td class="sp-val">${fmtNum(stats.mean)}</td></tr>
+            <tr><td class="sp-label">Median</td><td class="sp-val">${fmtNum(stats.median)}</td></tr>
+            <tr><td class="sp-label">Std Dev</td><td class="sp-val">${fmtNum(stats.stddev)}</td></tr>
+            <tr><td class="sp-label">P25 / P75</td><td class="sp-val">${fmtNum(stats.p25)} / ${fmtNum(stats.p75)}</td></tr>
+        `;
+    } else if (type === 'date') {
+        html += `
+            <tr><td class="sp-label">Earliest</td><td class="sp-val">${escapeHtml(stats.minDate || '—')}</td></tr>
+            <tr><td class="sp-label">Latest</td><td class="sp-val">${escapeHtml(stats.maxDate || '—')}</td></tr>
+        `;
+    } else if (type === 'string') {
+        html += `
+            <tr><td class="sp-label">Min length</td><td class="sp-val">${stats.minLen !== undefined ? stats.minLen : '—'}</td></tr>
+            <tr><td class="sp-label">Max length</td><td class="sp-val">${stats.maxLen !== undefined ? stats.maxLen : '—'}</td></tr>
+            <tr><td class="sp-label">Avg length</td><td class="sp-val">${stats.avgLen !== undefined ? stats.avgLen : '—'}</td></tr>
+        `;
+    }
+
+    html += `</table>`;
+
+    if (stats.topValues && stats.topValues.length > 0) {
+        html += `<div class="sp-section-title">Top Values</div>`;
+        const maxCnt = stats.topValues[0].cnt;
+        stats.topValues.forEach(({ val, cnt }) => {
+            const barPct = maxCnt > 0 ? (cnt / maxCnt) * 100 : 0;
+            html += `
+                <div class="sp-top-row">
+                    <span class="sp-top-val" title="${escapeHtml(val)}">${escapeHtml(val.length > 20 ? val.slice(0, 20) + '…' : val)}</span>
+                    <div class="sp-bar-wrap"><div class="sp-bar" style="width:${barPct.toFixed(1)}%"></div></div>
+                    <span class="sp-top-cnt">${cnt}</span>
+                </div>
+            `;
+        });
+    }
+
+    statsPopover.innerHTML = html;
+    statsPopover.classList.remove('hidden');
+
+    // Position: below the th element, clamped to viewport
+    const thRect = thElement.getBoundingClientRect();
+    const popWidth = 280;
+    let left = thRect.left;
+    if (left + popWidth > window.innerWidth - 10) {
+        left = window.innerWidth - popWidth - 10;
+    }
+    statsPopover.style.left = left + 'px';
+    statsPopover.style.top = (thRect.bottom + 4) + 'px';
+
+    document.getElementById('sp-close-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        hideStatsPopover();
+    });
+}
+
+function hideStatsPopover() {
+    if (statsPopover) { statsPopover.classList.add('hidden'); }
+    activePopoverCol = -1;
+}
+
+// Close popover on outside click
+document.addEventListener('click', (e) => {
+    if (statsPopover && !statsPopover.classList.contains('hidden')) {
+        if (!statsPopover.contains(e.target) && !e.target.closest('.col-stats-trigger')) {
+            hideStatsPopover();
+        }
+    }
+});
+
+// =============================================================================
+// SCHEMA SUMMARY PANEL
+// =============================================================================
+
+if (profileBtn) {
+    profileBtn.addEventListener('click', () => {
+        if (!schemaPanel) { return; }
+        if (schemaPanel.classList.contains('hidden')) {
+            buildSchemaPanel();
+            schemaPanel.classList.remove('hidden');
+            profileBtn.classList.add('profile-btn-active');
+        } else {
+            schemaPanel.classList.add('hidden');
+            profileBtn.classList.remove('profile-btn-active');
+        }
+    });
+}
+
+if (schemaCloseBtn) {
+    schemaCloseBtn.addEventListener('click', () => {
+        if (schemaPanel) { schemaPanel.classList.add('hidden'); }
+        if (profileBtn) { profileBtn.classList.remove('profile-btn-active'); }
+    });
+}
+
+function buildSchemaPanel() {
+    if (!schemaPanelBody || !currentDisplayData || currentDisplayData.length < 2) { return; }
+    const headers = currentDisplayData[0];
+    const numRows = currentDisplayData.length - 1;
+
+    let html = `
+        <table class="schema-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Non-empty</th>
+                    <th>Null %</th>
+                    <th>Distinct</th>
+                    <th>Min / Max</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    headers.forEach((colName, colIndex) => {
+        const type = columnTypes[colIndex] || 'string';
+        const badge = TYPE_BADGES[type] || 'abc';
+        const stats = computeColStats(currentDisplayData, colIndex);
+        const nullPct = stats && numRows > 0 ? ((stats.nullCount / numRows) * 100).toFixed(1) : '0.0';
+        const nullBarWidth = stats ? Math.min(100, parseFloat(nullPct)) : 0;
+        let minMax = '—';
+        if (stats) {
+            if (type === 'integer' || type === 'float') {
+                minMax = `${fmtNum(stats.min)} / ${fmtNum(stats.max)}`;
+            } else if (type === 'date') {
+                minMax = `${stats.minDate || '—'} / ${stats.maxDate || '—'}`;
+            } else if (type === 'string' && stats.minLen !== undefined) {
+                minMax = `len ${stats.minLen}–${stats.maxLen}`;
+            }
+        }
+
+        html += `
+            <tr class="schema-row" data-col="${colIndex}" title="Click to view column stats">
+                <td class="schema-idx">${colIndex + 1}</td>
+                <td class="schema-name">${escapeHtml(colName)}</td>
+                <td class="schema-type"><span class="type-badge type-${escapeHtml(type)}">${escapeHtml(badge)}</span></td>
+                <td class="schema-nonnull">${stats ? stats.nonNull.toLocaleString() : '—'}</td>
+                <td class="schema-null-pct">
+                    <div class="null-bar-wrap">
+                        <div class="null-bar" style="width:${nullBarWidth}%"></div>
+                    </div>
+                    <span class="null-pct-label">${nullPct}%</span>
+                </td>
+                <td class="schema-distinct">${stats ? stats.distinct.toLocaleString() : '—'}</td>
+                <td class="schema-minmax">${escapeHtml(minMax)}</td>
+            </tr>
+        `;
+    });
+
+    html += `</tbody></table>`;
+    schemaPanelBody.innerHTML = html;
+
+    // Click on a schema row to show full stats popover anchored to the header column
+    schemaPanelBody.querySelectorAll('.schema-row').forEach(row => {
+        row.addEventListener('click', () => {
+            const colIndex = parseInt(row.dataset.col, 10);
+            // Find the th element in headerTable for this column
+            const ths = headerTable ? headerTable.querySelectorAll('th') : [];
+            const th = ths[colIndex];
+            if (th) {
+                showStatsPopover(colIndex, th);
+            }
+        });
+    });
+}
+
+// =============================================================================
+// COLUMN SORTING
+// =============================================================================
+
+function applySortToData(data, colIndex, dir) {
+    if (data.length < 2 || dir === 'none') { return data; }
+    const header = data[0];
+    const rows = data.slice(1);
+    const type = columnTypes[colIndex] || 'string';
+
+    rows.sort((a, b) => {
+        const av = (a[colIndex] || '').trim();
+        const bv = (b[colIndex] || '').trim();
+
+        // Empty values always sort last
+        if (av === '' && bv === '') { return 0; }
+        if (av === '') { return 1; }
+        if (bv === '') { return -1; }
+
+        let cmp = 0;
+        if (type === 'integer' || type === 'float') {
+            cmp = parseFloat(av) - parseFloat(bv);
+        } else if (type === 'date') {
+            cmp = new Date(av) - new Date(bv);
+        } else {
+            cmp = av.localeCompare(bv, undefined, { sensitivity: 'base' });
+        }
+
+        return dir === 'asc' ? cmp : -cmp;
+    });
+
+    return [header, ...rows];
+}
+
+function cycleSortDir(colIndex) {
+    if (sortState.col !== colIndex) {
+        sortState.col = colIndex;
+        sortState.dir = 'asc';
+    } else {
+        if (sortState.dir === 'asc') { sortState.dir = 'desc'; }
+        else if (sortState.dir === 'desc') { sortState.dir = 'none'; sortState.col = -1; }
+        else { sortState.dir = 'asc'; sortState.col = colIndex; }
+    }
+}
+
+function updateSortIndicators() {
+    if (!headerTable) { return; }
+    const ths = headerTable.querySelectorAll('th');
+    ths.forEach((th, i) => {
+        const indicator = th.querySelector('.sort-indicator');
+        if (indicator) {
+            if (i === sortState.col) {
+                indicator.textContent = sortState.dir === 'asc' ? ' ▲' : ' ▼';
+            } else {
+                indicator.textContent = '';
+            }
+        }
+    });
+}
+
+// =============================================================================
+// COLUMN FREEZE/PIN
+// =============================================================================
+
+// Context menu for freeze
+let contextMenu = null;
+
+function showFreezeContextMenu(colIndex, e) {
+    if (contextMenu) { contextMenu.remove(); contextMenu = null; }
+
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+
+    // "Freeze pane here" means freeze all columns 0..colIndex as a contiguous pane.
+    // The pane is already frozen at this column if frozenCols covers exactly 0..colIndex.
+    const currentFreezeAt = frozenCols.size > 0 ? Math.max(...frozenCols) : -1;
+    const isPaneFrozenHere = currentFreezeAt === colIndex;
+
+    const item1 = document.createElement('div');
+    item1.className = 'context-menu-item';
+    item1.textContent = isPaneFrozenHere ? 'Unfreeze pane' : 'Freeze pane here';
+    item1.addEventListener('click', () => {
+        frozenCols.clear();
+        if (!isPaneFrozenHere) {
+            // Freeze all columns from 0 up to and including colIndex
+            for (let i = 0; i <= colIndex; i++) {
+                frozenCols.add(i);
+            }
+        }
+        menu.remove();
+        contextMenu = null;
+        renderTable(currentDisplayData, []);
+    });
+
+    const item2 = document.createElement('div');
+    item2.className = 'context-menu-item context-menu-item-danger';
+    item2.textContent = 'Unfreeze all';
+    item2.addEventListener('click', () => {
+        frozenCols.clear();
+        menu.remove();
+        contextMenu = null;
+        renderTable(currentDisplayData, []);
+    });
+
+    menu.appendChild(item1);
+    if (frozenCols.size > 0) { menu.appendChild(item2); }
+
+    // Position near cursor
+    menu.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
+    menu.style.top = Math.min(e.clientY, window.innerHeight - 100) + 'px';
+    document.body.appendChild(menu);
+    contextMenu = menu;
+
+    // Close on outside click
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu() {
+            if (contextMenu) { contextMenu.remove(); contextMenu = null; }
+            document.removeEventListener('click', closeMenu);
+        });
+    }, 0);
+}
+
+// =============================================================================
+// EVENT LISTENERS (Attached Once)
+// =============================================================================
 
 if (tableContainer) {
     tableContainer.addEventListener('scroll', () => {
         // Sync horizontal scroll
         if (headerContainer) {
             headerContainer.scrollLeft = tableContainer.scrollLeft;
+        }
+        // Sync frozen table vertical scroll
+        const frozenBody = document.getElementById('frozen-body-table');
+        if (frozenBody) {
+            frozenBody.style.transform = `translateY(-${tableContainer.scrollTop}px)`;
         }
 
         if (isChunkedMode) {
@@ -163,8 +791,6 @@ function renderChunkedPage(page) {
     const hasData = rows !== null;
 
     // Skip re-render only if we already rendered this page with real data.
-    // If we previously rendered placeholders and data has now arrived, fall
-    // through so the real rows replace the loading skeletons.
     if (chunkedLoadedPage === page && chunkedLoadedPageHasData) { return; }
     // Also skip if same page and still no data (nothing would change).
     if (chunkedLoadedPage === page && !hasData) { return; }
@@ -178,7 +804,6 @@ function renderChunkedPage(page) {
     if (!tbody) { return; }
 
     // Move the tbody to the correct position BEFORE writing rows,
-    // so the browser never briefly shows it at the wrong offset.
     tbody.style.transform = `translateY(${rowToScrollTop(pageStartDataRow, chunkedTotalRows)}px)`;
 
     const rowCount = hasData
@@ -186,16 +811,24 @@ function renderChunkedPage(page) {
         : Math.max(0, Math.min(chunkSize, chunkedTotalRows - pageStartDataRow));
 
     let html = '';
+    const chunkFrozenSpacerWidth = frozenCols.size > 0
+        ? [...frozenCols].reduce((sum, i) => sum + (columnWidths[i] || 0), 0)
+        : 0;
     for (let i = 0; i < rowCount; i++) {
         html += `<tr style="height: ${rowHeight}px">`;
+        if (chunkFrozenSpacerWidth > 0) {
+            html += `<td style="width:${chunkFrozenSpacerWidth}px;min-width:${chunkFrozenSpacerWidth}px;padding:0;border:none;" aria-hidden="true"></td>`;
+        }
         if (hasData) {
             const row = rows[i];
             for (let c = 0; c < columnWidths.length; c++) {
+                if (frozenCols.has(c)) { continue; }
                 html += `<td>${escapeHtml(row[c] || '')}</td>`;
             }
         } else {
             // Placeholder: empty cells while the page loads
             for (let c = 0; c < columnWidths.length; c++) {
+                if (frozenCols.has(c)) { continue; }
                 html += `<td class="chunked-loading-cell"></td>`;
             }
         }
@@ -228,10 +861,19 @@ function updateVirtualTable() {
     if (!tbody) return;
     
     let html = '';
+    // Compute frozen spacer width once for the body rows
+    const frozenSpacerWidth = frozenCols.size > 0
+        ? [...frozenCols].reduce((sum, i) => sum + (columnWidths[i] || 0), 0)
+        : 0;
     for (let i = 0; i < slice.length; i++) {
         const row = slice[i];
         html += `<tr style="height: ${rowHeight}px">`;
+        // Spacer td that sits under the frozen overlay
+        if (frozenCols.size > 0) {
+            html += `<td style="width:${frozenSpacerWidth}px;min-width:${frozenSpacerWidth}px;padding:0;border:none;" aria-hidden="true"></td>`;
+        }
         for (let colIndex = 0; colIndex < columnWidths.length; colIndex++) {
+            if (frozenCols.has(colIndex)) { continue; } // rendered in frozen overlay
             const cell = row[colIndex] || '';
             html += `<td>${escapeHtml(cell)}</td>`;
         }
@@ -241,9 +883,32 @@ function updateVirtualTable() {
     tbody.innerHTML = html;
     
     // Position the tbody using the scaled pixel offset for renderStart
-    // (renderStart is 1-based; subtract 1 to get 0-based data row index)
     const tbodyOffset = rowToScrollTop(renderStart - 1, dataRowCount);
     tbody.style.transform = `translateY(${tbodyOffset}px)`;
+
+    // Update frozen columns
+    updateFrozenBody(renderStart, renderEnd, tbodyOffset);
+}
+
+function updateFrozenBody(renderStart, renderEnd, tbodyOffset) {
+    const frozenBodyTable = document.getElementById('frozen-body-table');
+    if (!frozenBodyTable || frozenCols.size === 0) { return; }
+
+    const slice = currentDisplayData.slice(renderStart, renderEnd);
+    const frozenArr = [...frozenCols].sort((a, b) => a - b);
+
+    let html = '';
+    for (let i = 0; i < slice.length; i++) {
+        const row = slice[i];
+        html += `<tr style="height: ${rowHeight}px">`;
+        for (const c of frozenArr) {
+            const cell = row[c] || '';
+            html += `<td>${escapeHtml(cell)}</td>`;
+        }
+        html += '</tr>';
+    }
+    frozenBodyTable.querySelector('tbody').innerHTML = html;
+    frozenBodyTable.querySelector('tbody').style.transform = `translateY(${tbodyOffset}px)`;
 }
 
 function positionErrorRuler() {
@@ -297,10 +962,12 @@ function switchToPlainTextMode() {
     hideLoader();
 }
 
-// 1. Message Handler
+// =============================================================================
+// MESSAGE HANDLER
+// =============================================================================
+
 window.addEventListener('message', event => {
     // Only accept messages from the VS Code webview host
-    // VS Code webview messages have origin set to the vscode-webview scheme
     if (event.origin && !event.origin.startsWith('vscode-webview://')) {
         console.warn('Ignoring message from unexpected origin:', event.origin);
         return;
@@ -314,6 +981,14 @@ window.addEventListener('message', event => {
             showLoader();
             isRenderingInterrupted = false;
             clearTimeout(slowLoadTimer);
+
+            // Determine delimiter
+            if (message.config && message.config.delimiter && message.config.delimiter !== 'auto') {
+                detectedDelimiter = message.config.delimiter;
+            } else {
+                detectedDelimiter = detectDelimiter(message.text, message.fileExtension || '');
+            }
+            updateDelimiterBadge(detectedDelimiter);
 
             if (message.config.showSlowLoadPrompt && message.viewMode !== 'chunked') {
                 slowLoadTimer = setTimeout(() => {
@@ -333,7 +1008,6 @@ window.addEventListener('message', event => {
                 chunkedLoadedPage = -1;
                 chunkedLoadedPageHasData = false;
                 if (chunkedScrollRaf !== null) { cancelAnimationFrame(chunkedScrollRaf); chunkedScrollRaf = null; }
-                chunkedPagePending = false;
 
                 warningContainer.textContent =
                     chunkedTotalRows > 0
@@ -452,7 +1126,6 @@ window.addEventListener('message', event => {
 
         case 'indexReady':
             // The extension has finished building the row index.
-            // Update the total row count and resize the virtual spacer.
             chunkedTotalRows = message.totalRows;
             if (virtualSpacer) {
                 virtualSpacer.style.height = spacerHeight(chunkedTotalRows) + 'px';
@@ -463,13 +1136,8 @@ window.addEventListener('message', event => {
                     `Paged View: ${chunkedTotalRows.toLocaleString()} rows total. ` +
                     `Showing ${chunkSize} rows at a time. SQL queries and editing are disabled in this mode.`;
             }
-            // Re-evaluate the current scroll position now that we know the true row
-            // count. This matters when the user jumped (e.g. CMD+Down) before the
-            // index was ready — at that point chunkedTotalRows was 0, so every scroll
-            // mapped to row 0. Now that we have the real count, re-trigger the scroll
-            // handler so the correct page is fetched and rendered.
             if (isChunkedMode) {
-                chunkedLoadedPage = -1; // invalidate so renderChunkedPage isn't skipped
+                chunkedLoadedPage = -1;
                 chunkedLoadedPageHasData = false;
                 handleChunkedScroll();
             }
@@ -477,11 +1145,13 @@ window.addEventListener('message', event => {
     }
 });
 
-// ---- Chunked mode initialisation ----
-// Called with the first chunk (header + first N rows) sent by the extension.
+// =============================================================================
+// CHUNKED MODE INIT
+// =============================================================================
+
 async function initChunkedView(text, config) {
     currentConfig = config;
-    const { data } = await parseCSV(text);
+    const { data } = await parseCSV(text, detectedDelimiter);
     if (data.length === 0) { return; }
 
     chunkedHeader = data[0]; // first row is the header
@@ -499,8 +1169,6 @@ async function initChunkedView(text, config) {
     renderChunkedPage(0);
 }
 
-// Render table structure for chunked mode.
-// Sets up the header, colgroup, empty tbody, and the virtual spacer height.
 async function renderChunkedTable() {
     if (!table || !virtualSpacer) { return; }
 
@@ -570,16 +1238,11 @@ async function renderChunkedTable() {
 function handlePageData(message) {
     const startRow = message.startRow || 0; // 0-based data row
     const page = Math.floor(startRow / chunkSize);
-    // Keep page in chunkedPending until parseCSV finishes so scroll handler
-    // doesn't re-request it during the async parse gap.
-    // Parse the raw CSV text (no header in this chunk)
-    parseCSV(message.text).then(({ data }) => {
-        chunkedPending.delete(page); // now safe to remove — cache is about to be set
+    parseCSV(message.text, detectedDelimiter).then(({ data }) => {
+        chunkedPending.delete(page);
         chunkedCache.set(page, data);
 
-        // Evict pages that are far from the current view (keep a window of ±15 pages).
-        // Use distance-based eviction, NOT count-based, so the current page is never
-        // immediately evicted after being inserted.
+        // Evict pages far from the current view (keep a window of ±15 pages).
         const currentViewPage = chunkedLoadedPage >= 0 ? chunkedLoadedPage : page;
         for (const key of [...chunkedCache.keys()]) {
             if (Math.abs(key - currentViewPage) > 15) {
@@ -587,17 +1250,12 @@ function handlePageData(message) {
             }
         }
 
-        // If this page is currently displayed (possibly as placeholders), upgrade it.
-        // renderChunkedPage() now detects the placeholder→data transition itself, so
-        // we just need to clear the "has data" guard and call render.
         if (page === chunkedLoadedPage) {
-            chunkedLoadedPageHasData = false; // allow re-render with real data
+            chunkedLoadedPageHasData = false;
             renderChunkedPage(page);
         }
     });
 }
-
-
 
 function showLoader() {
     if (loader) loader.classList.remove('hidden');
@@ -607,8 +1265,10 @@ function hideLoader() {
     if (loader) loader.classList.add('hidden');
 }
 
+// =============================================================================
+// BUTTON HANDLERS
+// =============================================================================
 
-// 2. Button Handlers
 runButton.addEventListener('click', runQuery);
 resetButton.addEventListener('click', resetQuery);
 
@@ -691,7 +1351,6 @@ function renderHistoryList() {
     });
 }
 
-/** Navigate the visual history panel up (-1) or down (+1) */
 function navigateHistoryPanel(direction) {
     if (!historyListEl) return;
     const items = Array.from(historyListEl.querySelectorAll('.history-item'));
@@ -707,22 +1366,19 @@ function navigateHistoryPanel(direction) {
     nextItem.classList.add('history-active');
     nextItem.scrollIntoView({ block: 'nearest' });
 
-    // Preview the query in the input
     queryInput.value = nextItem.dataset.query;
     queryInput.selectionStart = queryInput.selectionEnd = queryInput.value.length;
 }
 
-
 if (tableContainer) {
-    // Single-click to select, Double-click to edit
+    // Double-click to edit
     tableContainer.addEventListener('dblclick', (e) => {
-        if (isChunkedMode) { return; } // editing disabled for large paged files
+        if (isChunkedMode) { return; }
         const cell = e.target;
         if ((cell.tagName === 'TD' || cell.tagName === 'TH') && cell.contentEditable !== 'true') {
             cell.contentEditable = 'true';
             cell.focus();
             
-            // Select all text for easier editing of long strings
             const range = document.createRange();
             range.selectNodeContents(cell);
             const sel = window.getSelection();
@@ -738,7 +1394,6 @@ if (tableContainer) {
         }
     }, true);
 
-    // Prevent arrow keys from bubbling up during edit mode to avoid defocusing/scrolling
     tableContainer.addEventListener('keydown', (e) => {
         const cell = e.target;
         if ((cell.tagName === 'TD' || cell.tagName === 'TH') && cell.contentEditable === 'true') {
@@ -748,7 +1403,7 @@ if (tableContainer) {
         }
     }, true);
 
-    // Show hover info dynamically
+    // Hover tooltip
     tableContainer.addEventListener('mouseover', (e) => {
         const cell = e.target;
         if (cell.tagName === 'TD' || cell.tagName === 'TH') {
@@ -770,7 +1425,10 @@ if (tableContainer) {
     });
 }
 
-// 3. Autocomplete: Input Event
+// =============================================================================
+// AUTOCOMPLETE
+// =============================================================================
+
 queryInput.addEventListener("input", function(e) {
     var a, b, i, val = this.value;
     closeAllLists();
@@ -797,17 +1455,14 @@ queryInput.addEventListener("input", function(e) {
     for (i = 0; i < autocompleteOptions.length; i++) {
         const item = autocompleteOptions[i];
         let isMatch = false;
-        let displayHtml = "";
         let insertVal = item;
 
         if (item.toUpperCase().startsWith(currentWord.toUpperCase())) {
             isMatch = true;
-            displayHtml = "<strong>" + escapeHtml(item.substr(0, currentWord.length)) + "</strong>" + escapeHtml(item.substr(currentWord.length));
         } 
         else if (isBracketStart) {
             if (!item.startsWith('[') && item.toUpperCase().startsWith(searchWord.toUpperCase())) {
                 isMatch = true;
-                displayHtml = "<strong>[" + escapeHtml(item.substr(0, searchWord.length)) + "</strong>" + escapeHtml(item.substr(searchWord.length)) + "]";
                 insertVal = /^[a-zA-Z0-9_]+$/.test(item) ? item : `[${item.replace(/\]/g, ']]')}]`;
             }
         }
@@ -816,7 +1471,6 @@ queryInput.addEventListener("input", function(e) {
             matches.push(insertVal);
             b = document.createElement("DIV");
 
-            // Build autocomplete display using safe DOM methods instead of innerHTML
             const strongEl = document.createElement("strong");
             const trailingText = document.createTextNode("");
             if (item.toUpperCase().startsWith(currentWord.toUpperCase())) {
@@ -847,7 +1501,6 @@ queryInput.addEventListener("input", function(e) {
     a.dataset.word = currentWord;
 });
 
-// 4. Autocomplete: Keydown Event
 queryInput.addEventListener("keydown", function(e) {
     var x = document.getElementById(this.id + "autocomplete-list");
     if (x) x = x.getElementsByTagName("div");
@@ -862,11 +1515,9 @@ queryInput.addEventListener("keydown", function(e) {
             addActive(x);
             e.preventDefault();
         } else if (historyOpen) {
-            // Navigate down through history panel
             navigateHistoryPanel(1);
             e.preventDefault();
         } else {
-            // History navigation: go forward (newer entry)
             if (historyIndex > -1) {
                 historyIndex--;
                 queryInput.value = historyIndex === -1 ? historyDraft : queryHistory[historyIndex];
@@ -881,14 +1532,12 @@ queryInput.addEventListener("keydown", function(e) {
             addActive(x);
             e.preventDefault();
         } else if (historyOpen) {
-            // Navigate up through history panel
             navigateHistoryPanel(-1);
             e.preventDefault();
         } else {
-            // History navigation: go back (older entry)
             if (queryHistory.length > 0) {
                 if (historyIndex === -1) {
-                    historyDraft = queryInput.value; // save current draft
+                    historyDraft = queryInput.value;
                 }
                 if (historyIndex < queryHistory.length - 1) {
                     historyIndex++;
@@ -905,7 +1554,6 @@ queryInput.addEventListener("keydown", function(e) {
         }
     } else if (e.key === "Enter") {
         if (historyOpen) {
-            // Select active history item
             const activeItem = historyListEl.querySelector('.history-item.history-active');
             if (activeItem) {
                 const query = activeItem.dataset.query;
@@ -954,20 +1602,28 @@ queryInput.addEventListener("keydown", function(e) {
     }
 });
 
-// 5. Global Click (Close lists)
 document.addEventListener("click", function (e) {
     closeAllLists(e.target);
 });
 
-// --- Core Logic ---
+// =============================================================================
+// CORE LOGIC
+// =============================================================================
 
 async function updateContent(text, config) {
     currentConfig = config;
-    const { data, errors } = await parseCSV(text);
+    const { data, errors } = await parseCSV(text, detectedDelimiter);
     
     originalRawData = data;
     currentDisplayData = data;
-    originalDataObjects = []; 
+    originalDataObjects = [];
+
+    // Infer column types after parsing
+    columnTypes = inferColumnTypes(data);
+
+    // Reset sort state on fresh data
+    sortState = { col: -1, dir: 'none' };
+    frozenCols = new Set();
 
     const columns = data.length > 0 ? data[0].map(c => {
         return /^[a-zA-Z0-9_]+$/.test(c) ? c : `[${c.replace(/\]/g, ']]')}]`;
@@ -1024,20 +1680,20 @@ function sharedStart(array){
     return a1.substring(0, i);
 }
 
-// --- CSV & Query Logic ---
+// =============================================================================
+// SQL QUERY ENGINE
+// =============================================================================
 
 function runQuery() {
     const query = queryInput.value.trim();
     if (!query) return;
 
-    // Security: Only allow SELECT queries to prevent data manipulation/code execution
     const normalizedQuery = query.replace(/\/\*[\s\S]*?\*\//g, '').trim();
     if (!/^SELECT\s/i.test(normalizedQuery)) {
         errorContainer.textContent = "Query Error: Only SELECT queries are allowed.";
         errorContainer.classList.remove('hidden');
         return;
     }
-    // Block dangerous keywords even within SELECT (e.g. subqueries with side effects)
     const blockedPattern = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP)\b/i;
     if (blockedPattern.test(normalizedQuery)) {
         errorContainer.textContent = "Query Error: Data modification statements are not allowed.";
@@ -1045,15 +1701,12 @@ function runQuery() {
         return;
     }
 
-    // Add to history (skip if identical to the most recent entry)
     if (queryHistory.length === 0 || queryHistory[0] !== query) {
         queryHistory.unshift(query);
         if (queryHistory.length > 50) queryHistory.pop();
     }
-    // Reset history navigation pointer
     historyIndex = -1;
     historyDraft = '';
-    // Close history panel if open
     closeHistoryList();
 
     showLoader();
@@ -1068,12 +1721,16 @@ function runQuery() {
             
             if (!result || result.length === 0) {
                 currentDisplayData = [];
+                columnTypes = [];
                 await renderTable([], []);
                 return;
             }
 
             const newData = objectsToData(result);
             currentDisplayData = newData;
+            // Recompute types for query result columns
+            columnTypes = inferColumnTypes(newData);
+            sortState = { col: -1, dir: 'none' };
             await renderTable(newData, []);
             errorContainer.classList.add('hidden');
         } catch (e) {
@@ -1091,9 +1748,11 @@ function resetQuery() {
     historyDraft = '';
     closeHistoryList();
     showLoader();
+    sortState = { col: -1, dir: 'none' };
     setTimeout(async () => {
         try {
             currentDisplayData = originalRawData;
+            columnTypes = inferColumnTypes(originalRawData);
             await renderTable(originalRawData, []);
             errorContainer.classList.add('hidden');
         } finally {
@@ -1105,7 +1764,6 @@ function resetQuery() {
 async function dataToObjects(data) {
     if (data.length < 2) return [];
     const headers = data[0];
-    // Sanitize headers: rename any that could cause prototype pollution
     const safeHeaders = headers.map(h => DANGEROUS_KEYS.has(h) ? `_${h}` : h);
     const objects = [];
     for (let i = 1; i < data.length; i++) {
@@ -1134,7 +1792,14 @@ function objectsToData(objects) {
     return data;
 }
 
-async function parseCSV(text) {
+// =============================================================================
+// CSV PARSER — now accepts a delimiter parameter
+// =============================================================================
+
+async function parseCSV(text, delimiter) {
+    const delim = delimiter || detectedDelimiter || ',';
+    const delimCode = delim.charCodeAt(0);
+
     const data = [];
     const errors = [];
     let currentRow = [];
@@ -1161,7 +1826,7 @@ async function parseCSV(text) {
             if (char === '"') {
                 inQuotes = true;
                 fieldStart = i;
-            } else if (char === ',') {
+            } else if (char === delim) {
                 let field = text.slice(fieldStart, i);
                 if (field.startsWith('"') && field.endsWith('"')) {
                     field = field.slice(1, -1).replace(/""/g, '"');
@@ -1193,7 +1858,7 @@ async function parseCSV(text) {
         }
     }
     
-    if (fieldStart < len || text.endsWith(',')) {
+    if (fieldStart < len || text.endsWith(delim)) {
         let field = text.slice(fieldStart);
         if (field.startsWith('"') && field.endsWith('"')) {
             field = field.slice(1, -1).replace(/""/g, '"');
@@ -1228,7 +1893,7 @@ let saveTimeout;
 function debounceSave() {
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
-        const csvContent = dataToCSV(originalRawData);
+        const csvContent = dataToCSV(originalRawData, detectedDelimiter);
         vscode.postMessage({
             type: 'edit',
             text: csvContent
@@ -1248,27 +1913,22 @@ async function onCellChange(e) {
     const newValue = cell.textContent;
 
     if (currentDisplayData[rowInDisplay] && currentDisplayData[rowInDisplay][col] === newValue) return;
-
     if (!currentDisplayData[rowInDisplay]) return;
 
     currentDisplayData[rowInDisplay][col] = newValue;
-
-    if (currentDisplayData === originalRawData) {
-        // Updated
-    }
-
     debounceSave();
 }
 
-function dataToCSV(data) {
+function dataToCSV(data, delimiter) {
+    const delim = delimiter || ',';
     return data.map(row => {
         return row.map(cell => {
             const text = cell || '';
-            if (text.includes(',') || text.includes('"') || text.includes('\n')) {
+            if (text.includes(delim) || text.includes('"') || text.includes('\n')) {
                 return `"${text.replace(/"/g, '""')}"`;
             }
             return text;
-        }).join(',');
+        }).join(delim);
     }).join('\n');
 }
 
@@ -1281,6 +1941,10 @@ function createColGroup(widths) {
     });
     return colgroup;
 }
+
+// =============================================================================
+// RENDER TABLE — with type badges, sort headers, frozen columns
+// =============================================================================
 
 async function renderTable(data, errors) {
     if (!table || !virtualSpacer) return;
@@ -1297,6 +1961,10 @@ async function renderTable(data, errors) {
 
     updateErrorRuler(errors, data.length);
 
+    // Remove any existing frozen table overlay
+    const existingFrozen = document.getElementById('frozen-overlay');
+    if (existingFrozen) { existingFrozen.remove(); }
+
     if (headerTable) headerTable.innerHTML = '';
     table.innerHTML = '';
     
@@ -1312,10 +1980,18 @@ async function renderTable(data, errors) {
     }
 
     const headerRow = data[0] || [];
+    const frozenArr = [...frozenCols].sort((a, b) => a - b);
+    const hasFrozen = frozenArr.length > 0;
+
+    // Apply current sort
+    let displayData = data;
+    if (sortState.col >= 0 && sortState.dir !== 'none') {
+        displayData = applySortToData(data, sortState.col, sortState.dir);
+        currentDisplayData = displayData;
+    }
     
-    // Calculate Column Widths based on header AND data content
-    // We sample the first 100 rows to get a better estimate
-    const sampleRows = data.slice(1, 101);
+    // Calculate Column Widths (sample first 100 rows)
+    const sampleRows = displayData.slice(1, 101);
     columnWidths = headerRow.map((h, colIndex) => {
         let maxWidth = h.length;
         sampleRows.forEach(row => {
@@ -1323,32 +1999,126 @@ async function renderTable(data, errors) {
             if (cellLength > maxWidth) maxWidth = cellLength;
         });
         
-        const charWidth = 9; // Approximate average char width in pixels
-        const padding = 24;  // Padding + border
+        const charWidth = 9;
+        const padding = 24;
         return Math.max(100, Math.min(600, (maxWidth * charWidth) + padding));
     });
 
+    // Widths for visible (non-frozen) columns
+    const visibleWidths = columnWidths.filter((_, i) => !frozenCols.has(i));
+    const frozenWidths = frozenArr.map(i => columnWidths[i]);
+
+    const totalTableWidth = (hasFrozen ? visibleWidths : columnWidths).reduce((a, b) => a + b, 0);
+    const frozenTotalWidth = frozenWidths.reduce((a, b) => a + b, 0);
+
+    // Build colgroup for main tables.
+    // When frozen: prepend one spacer <col> that is exactly frozenTotalWidth wide,
+    // followed by the visible column widths. This keeps header and body perfectly aligned
+    // without relying on padding-left (which has cross-browser scroll quirks).
+    function buildMainColGroup() {
+        const colgroup = document.createElement('colgroup');
+        if (hasFrozen) {
+            const spacerCol = document.createElement('col');
+            spacerCol.style.width = frozenTotalWidth + 'px';
+            colgroup.appendChild(spacerCol);
+        }
+        visibleWidths.forEach(w => {
+            const col = document.createElement('col');
+            col.style.width = w + 'px';
+            colgroup.appendChild(col);
+        });
+        return colgroup;
+    }
+
     // Add colgroups to both tables for perfect alignment
-    if (headerTable) headerTable.appendChild(createColGroup(columnWidths));
-    table.appendChild(createColGroup(columnWidths));
+    if (headerTable) headerTable.appendChild(hasFrozen ? buildMainColGroup() : createColGroup(columnWidths));
+    table.appendChild(hasFrozen ? buildMainColGroup() : createColGroup(columnWidths));
 
-    // Ensure both tables have the exact same total width
-    const totalTableWidth = columnWidths.reduce((a, b) => a + b, 0);
-    if (headerTable) headerTable.style.width = totalTableWidth + 'px';
-    table.style.width = totalTableWidth + 'px';
+    const mainTableWidth = frozenTotalWidth + totalTableWidth;
+    if (headerTable) headerTable.style.width = (hasFrozen ? mainTableWidth : totalTableWidth) + 'px';
+    table.style.width = (hasFrozen ? mainTableWidth : totalTableWidth) + 'px';
 
-    // Compensate header for the body's vertical scrollbar width to ensure right-edge alignment
+    // No padding-left needed — the spacer col handles the offset.
     const scrollbarWidth = tableContainer.offsetWidth - tableContainer.clientWidth;
     if (headerContainer) {
         headerContainer.style.paddingRight = scrollbarWidth + 'px';
+        headerContainer.style.paddingLeft = '0';
+    }
+    if (tableContainer) {
+        tableContainer.style.paddingLeft = '0';
     }
 
     // Build Header Table
     const thead = document.createElement('thead');
     const trHead = document.createElement('tr');
+
+    // Spacer th to reserve space under the frozen overlay
+    if (hasFrozen) {
+        const spacerTh = document.createElement('th');
+        spacerTh.style.width = frozenTotalWidth + 'px';
+        spacerTh.style.minWidth = frozenTotalWidth + 'px';
+        spacerTh.style.padding = '0';
+        spacerTh.style.border = 'none';
+        spacerTh.setAttribute('aria-hidden', 'true');
+        trHead.appendChild(spacerTh);
+    }
     headerRow.forEach((colName, index) => {
+        if (frozenCols.has(index)) { return; } // frozen headers rendered separately
         const th = document.createElement('th');
-        th.textContent = colName;
+        th.dataset.colIndex = index;
+
+        // Type badge
+        const type = columnTypes[index] || 'string';
+        const badgeSpan = document.createElement('span');
+        badgeSpan.className = `type-badge type-${type}`;
+        badgeSpan.textContent = TYPE_BADGES[type] || 'abc';
+        badgeSpan.title = TYPE_TITLES[type] || 'String';
+        th.appendChild(badgeSpan);
+
+        // Column name
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'col-name-text';
+        nameSpan.textContent = ' ' + colName;
+        th.appendChild(nameSpan);
+
+        // Sort indicator
+        const sortSpan = document.createElement('span');
+        sortSpan.className = 'sort-indicator';
+        if (index === sortState.col) {
+            sortSpan.textContent = sortState.dir === 'asc' ? ' ▲' : ' ▼';
+        }
+        th.appendChild(sortSpan);
+
+        // Click: sort on single click, stats popover on shift+click
+        th.addEventListener('click', (e) => {
+            if (e.shiftKey) {
+                showStatsPopover(index, th);
+            } else {
+                hideStatsPopover();
+                cycleSortDir(index);
+                updateSortIndicators();
+                // Re-render with sort applied
+                showLoader();
+                setTimeout(async () => {
+                    try {
+                        const sorted = applySortToData(currentDisplayData, sortState.col, sortState.dir);
+                        currentDisplayData = sorted;
+                        await renderTable(sorted, []);
+                    } finally {
+                        hideLoader();
+                    }
+                }, 10);
+            }
+        });
+
+        // Right-click: freeze context menu
+        th.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showFreezeContextMenu(index, e);
+        });
+
+        th.title = `${colName} (${TYPE_TITLES[type] || 'String'})\nClick to sort | Shift+click for stats | Right-click to freeze pane`;
+        th.classList.add('col-stats-trigger');
         trHead.appendChild(th);
     });
     thead.appendChild(trHead);
@@ -1358,14 +2128,123 @@ async function renderTable(data, errors) {
     const tbody = document.createElement('tbody');
     table.appendChild(tbody);
 
-    const dataRowCount = data.length - 1; // exclude header
+    const dataRowCount = displayData.length - 1; // exclude header
     virtualSpacer.style.height = spacerHeight(dataRowCount) + 'px';
 
+    // Build Frozen overlay (header + body) if any columns are frozen
+    if (hasFrozen) {
+        buildFrozenOverlay(displayData, frozenArr, frozenWidths, frozenTotalWidth, dataRowCount);
+    }
+
     updateVirtualTable();
+
+    // Rebuild schema panel if it's open
+    if (schemaPanel && !schemaPanel.classList.contains('hidden')) {
+        buildSchemaPanel();
+    }
 
     clearTimeout(slowLoadTimer);
     if (slowLoadModal) slowLoadModal.classList.add('hidden');
 }
+
+/**
+ * Build the frozen column overlay: a fixed-position div containing
+ * a header table and a body table (for visible rows).
+ */
+function buildFrozenOverlay(data, frozenArr, frozenWidths, totalFrozenWidth, dataRowCount) {
+    // Remove old
+    const old = document.getElementById('frozen-overlay');
+    if (old) { old.remove(); }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'frozen-overlay';
+    overlay.className = 'frozen-overlay';
+    overlay.style.width = totalFrozenWidth + 'px';
+
+    // Frozen header table
+    const frozenHeaderWrap = document.createElement('div');
+    frozenHeaderWrap.className = 'frozen-header-wrap';
+    frozenHeaderWrap.style.height = headerContainer ? (headerContainer.offsetHeight || 33) + 'px' : '33px';
+
+    const fHeaderTable = document.createElement('table');
+    fHeaderTable.id = 'frozen-header-table';
+    fHeaderTable.className = 'frozen-header-table';
+    fHeaderTable.appendChild(createColGroup(frozenWidths));
+    fHeaderTable.style.width = totalFrozenWidth + 'px';
+    const fThead = document.createElement('thead');
+    const fTrHead = document.createElement('tr');
+    frozenArr.forEach((colIndex) => {
+        const th = document.createElement('th');
+        th.className = 'frozen-col-header';
+        th.dataset.colIndex = colIndex;
+
+        const type = columnTypes[colIndex] || 'string';
+        const badgeSpan = document.createElement('span');
+        badgeSpan.className = `type-badge type-${type}`;
+        badgeSpan.textContent = TYPE_BADGES[type] || 'abc';
+        th.appendChild(badgeSpan);
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'col-name-text';
+        nameSpan.textContent = ' ' + (data[0][colIndex] || '');
+        th.appendChild(nameSpan);
+
+        // Sort on frozen header click
+        th.addEventListener('click', (e) => {
+            if (e.shiftKey) {
+                showStatsPopover(colIndex, th);
+            } else {
+                cycleSortDir(colIndex);
+                showLoader();
+                setTimeout(async () => {
+                    try {
+                        const sorted = applySortToData(currentDisplayData, sortState.col, sortState.dir);
+                        currentDisplayData = sorted;
+                        await renderTable(sorted, []);
+                    } finally {
+                        hideLoader();
+                    }
+                }, 10);
+            }
+        });
+
+        th.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showFreezeContextMenu(colIndex, e);
+        });
+
+        fTrHead.appendChild(th);
+    });
+    fThead.appendChild(fTrHead);
+    fHeaderTable.appendChild(fThead);
+    frozenHeaderWrap.appendChild(fHeaderTable);
+    overlay.appendChild(frozenHeaderWrap);
+
+    // Frozen body wrap — clips to table container height
+    const frozenBodyWrap = document.createElement('div');
+    frozenBodyWrap.className = 'frozen-body-wrap';
+
+    const fBodyTable = document.createElement('table');
+    fBodyTable.id = 'frozen-body-table';
+    fBodyTable.className = 'frozen-body-table';
+    if (currentConfig.alternatingRows) { fBodyTable.classList.add('alternating-rows'); }
+    fBodyTable.appendChild(createColGroup(frozenWidths));
+    fBodyTable.style.width = totalFrozenWidth + 'px';
+    fBodyTable.appendChild(document.createElement('tbody'));
+    frozenBodyWrap.appendChild(fBodyTable);
+    overlay.appendChild(frozenBodyWrap);
+
+    // Append overlay into the positioned .table-area wrapper so it sits
+    // on top of both header and body without affecting flex flow.
+    const area = tableArea || tableContainer.parentElement;
+    if (area) {
+        area.appendChild(overlay);
+    }
+}
+
+// =============================================================================
+// HTML ESCAPE
+// =============================================================================
 
 function escapeHtml(text) {
     if (!text) return text;
@@ -1377,6 +2256,10 @@ function escapeHtml(text) {
         .replace(/'/g, "&#039;");
 }
 
+// =============================================================================
+// PLAIN TEXT COLORIZER
+// =============================================================================
+
 function colorizeCSV(text) {
     const lines = text.split(/\r?\n/);
     let html = '';
@@ -1387,6 +2270,7 @@ function colorizeCSV(text) {
         let colIndex = 0;
         let currentField = '';
         let inQuotes = false;
+        const delim = detectedDelimiter || ',';
         for (let j = 0; j < line.length; j++) {
             const char = line[j];
             if (inQuotes) {
@@ -1403,9 +2287,9 @@ function colorizeCSV(text) {
                 if (char === '"') {
                     inQuotes = true;
                     currentField += char;
-                } else if (char === ',') {
+                } else if (char === delim) {
                     const colorClass = 'col-color-' + ((colIndex % 10) + 1);
-                    rowHtml += `<span class="${colorClass}">${escapeHtml(currentField)}</span>,`;
+                    rowHtml += `<span class="${colorClass}">${escapeHtml(currentField)}</span>${escapeHtml(delim)}`;
                     currentField = '';
                     colIndex++;
                 } else {
@@ -1423,6 +2307,10 @@ function colorizeCSV(text) {
     return html;
 }
 
+// =============================================================================
+// ERROR RULER
+// =============================================================================
+
 function updateErrorRuler(errors, totalLines) {
     if (!errorRuler) return;
     positionErrorRuler();
@@ -1437,8 +2325,6 @@ function updateErrorRuler(errors, totalLines) {
         marker.title = 'Error on line ' + line;
                 marker.onclick = (e) => {
                     e.stopPropagation();
-                    // Data starts at line 2 (line 1 is header). 
-                    // So line 2 should scroll to offset 0.
                     const targetScrollTop = Math.max(0, (line - 2) * rowHeight);
                     tableContainer.scrollTop = targetScrollTop;
                     
@@ -1448,7 +2334,6 @@ function updateErrorRuler(errors, totalLines) {
                         const buffer = 10;
                         const renderStart = Math.max(1, startRow - buffer);
                         
-                        // Header is separate, so relative index is simple
                         const relativeIndex = line - renderStart - 1; 
                         const tbody = table.querySelector('tbody');
                         if (tbody && tbody.rows[relativeIndex]) {

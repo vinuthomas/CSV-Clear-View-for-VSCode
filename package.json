@@ -3,7 +3,7 @@
   "displayName": "CSV ClearView",
   "description": "A clear and powerful CSV viewer with colored columns, sticky headers, and SQL query capabilities.",
   "publisher": "VinuThomas",
-  "version": "0.3.6",
+  "version": "0.4.0",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
@@ -23,15 +23,20 @@
   ],
   "keywords": [
     "csv",
+    "tsv",
+    "psv",
     "viewer",
     "sql",
     "editor",
     "table",
     "grid",
-    "spreadsheet"
+    "spreadsheet",
+    "data",
+    "statistics"
   ],
   "activationEvents": [
-    "onLanguage:csv"
+    "onLanguage:csv",
+    "onLanguage:tsv"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -48,6 +53,21 @@
         "mimetypes": [
           "text/csv"
         ]
+      },
+      {
+        "id": "tsv",
+        "aliases": [
+          "TSV",
+          "tsv",
+          "Tab Separated Values"
+        ],
+        "extensions": [
+          ".tsv",
+          ".tab"
+        ],
+        "mimetypes": [
+          "text/tab-separated-values"
+        ]
       }
     ],
     "customEditors": [
@@ -57,6 +77,15 @@
         "selector": [
           {
             "filenamePattern": "*.csv"
+          },
+          {
+            "filenamePattern": "*.tsv"
+          },
+          {
+            "filenamePattern": "*.tab"
+          },
+          {
+            "filenamePattern": "*.psv"
           }
         ],
         "priority": "default"
@@ -89,6 +118,19 @@
           "type": "boolean",
           "default": true,
           "description": "Show a prompt to switch to Plain Text mode if the grid takes too long to render."
+        },
+        "csvClearView.delimiter": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", ",", "\t", "|", ";"],
+          "enumDescriptions": [
+            "Auto-detect delimiter from file content (recommended)",
+            "Comma (,) — standard CSV",
+            "Tab (\\t) — TSV files",
+            "Pipe (|) — PSV files",
+            "Semicolon (;) — common in European locales"
+          ],
+          "description": "Column delimiter to use when parsing delimited files. 'auto' detects from the file content."
         }
       }
     }
