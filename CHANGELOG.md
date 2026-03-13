@@ -2,7 +2,31 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
-## [0.3.6] - 2026-03-12
+## [0.4.0] - 2026-03-13
+
+### Added
+
+- **Delimiter Auto-Detection:** CSV ClearView now automatically detects the delimiter from file content (comma, tab, pipe, semicolon) using a statistical heuristic. File extension hints take priority (`.tsv`/`.tab` → tab, `.psv` → pipe). A delimiter badge in the toolbar shows the active delimiter and can be clicked to override it manually.
+- **TSV and PSV support:** `.tsv`, `.tab`, and `.psv` files now open natively in CSV ClearView without any configuration.
+- **Data Type Inference:** Column types (`integer`, `float`, `date`, `boolean`, `string`) are inferred automatically by sampling up to 1,000 rows. Types are re-evaluated after SQL queries and resets.
+- **Type Badges:** A compact badge inside every column header shows the inferred type at a glance (`#` integer, `1.0` float, `date`, `T/F` boolean, `abc` string).
+- **Column Sorting:** Click any column header to sort ascending, click again for descending, click a third time to clear. Sort is type-aware (numeric, date, locale string). Empty values always sort last. Sort direction is shown with `▲`/`▼` indicators.
+- **Column Stats Popover:** Shift+click any column header to open a floating statistics card for that column.
+  - All types: total rows, non-null count, null count, distinct count, top-5 most frequent values with a mini bar chart.
+  - Numeric columns: min, max, mean, median, standard deviation, p25, p75.
+  - Date columns: earliest and latest value.
+  - String columns: min, max, and average character length.
+- **Schema Summary Panel:** Click the **Profile** button in the toolbar to open a docked bottom panel showing a full column profile — name, type, non-empty count, null % bar, distinct count, and min/max for every column. Clicking any row in the panel opens the full stats popover for that column.
+- **Freeze Pane:** Right-click any column header to freeze all columns from the first column through that column as a contiguous pane (Excel/Sheets style). The frozen pane scrolls with the vertical axis but stays fixed during horizontal scrolling. Right-click again to unfreeze.
+- **New config setting:** `csvClearView.delimiter` — set to `auto` (default), `,`, `\t`, `|`, or `;`.
+
+### Fixed
+
+- **Stats Popover not opening on Shift+click:** The outside-click dismiss handler was checking `e.target.classList` directly, which failed when clicking a child element (badge or label span) inside the header cell. Changed to `e.target.closest()` so the popover stays open correctly.
+- **Freeze pane header displacement:** The frozen overlay was being inserted into the flex layout flow rather than as an absolutely positioned layer, pushing the header row downward. Introduced a `.table-area` wrapper with `position: relative` so the overlay sits on top without affecting layout.
+- **Freeze pane column misalignment:** Using `padding-left` on the scrollable containers to offset the main table past the frozen pane caused misalignment between the header and body rows under horizontal scrolling. Replaced with a real spacer `<col>`/`<th>`/`<td>` as the first element of both the header and body tables, guaranteeing pixel-perfect alignment via shared `table-layout: fixed` geometry.
+
+
 
 ### Fixed
 - **Paged View — last page never loaded:** Scrolling to the very bottom of a large file (including CMD+Down) failed to show the final rows. `scrollTopToRow` could return a row index one past the end, making the computed page exceed `maxPage` and blocking the fetch entirely. The result is now clamped to `[0, dataRowCount - 1]`.

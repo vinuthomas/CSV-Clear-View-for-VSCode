@@ -2,42 +2,63 @@
 
 [![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/VinuThomas.csv-clearview.svg)](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview)
 
-A clear and powerful CSV viewer for VS Code with colored columns, sticky headers, and SQL query capabilities. This should work on other IDE which also load Visual Code style plugins. 
+A clear and powerful CSV viewer for VS Code with colored columns, sticky headers, SQL queries, and data profiling tools for data engineers and data scientists.
 
 ## Features
 
-- **Colored Columns:** Each column is color-coded for easy reading (theme-aware).
-- **Sticky Header:** The header row stays at the top while scrolling.
-- **Alternating Rows:** Improved readability with zebra-striping.
+- **Colored Columns:** Each column is color-coded for easy reading (theme-aware for dark and light themes).
+- **Sticky Header:** The header row stays fixed at the top while scrolling.
+- **Alternating Rows:** Zebra-striping for improved row readability.
 - **SQL Queries:** Run SQL queries directly on your CSV data (e.g., `SELECT * FROM ? WHERE [Price] > 100`). Only `SELECT` statements are permitted.
-- **SQL Query History:** Past queries are stored (up to 50 entries). Press `↑`/`↓` in the query box to navigate history, or click the **History** button to open a visual dropdown panel.
+- **SQL Query History:** Past queries are stored (up to 50 entries). Press `↑`/`↓` in the query box to navigate history bash-style, or click the **History** button for a visual dropdown panel.
 - **CSV Linting:** Automatically detects and reports rows with inconsistent column counts, with error markers in the scrollbar for quick navigation.
 - **Native Diagnostics:** Parsing errors are surfaced in the VS Code Problems pane.
-- **Hover Info:** Tooltips display column name and index.
 - **Cell Editing:** Double-click any cell to edit it in-place. Undo/Redo is fully supported.
-- **Large File Support:** Files 500MB+ are supported via virtual scrolling — only visible rows are rendered. Head/Tail sampling is available for instant previews of massive files.
+- **Large File Support:** Files 500MB+ are supported via virtual scrolling — only visible rows are ever rendered. Head/Tail sampling is available for instant previews of massive files.
+- **Delimiter Auto-Detection:** Automatically detects comma, tab, pipe, and semicolon delimiters from file content. A badge in the toolbar shows the active delimiter and can be clicked to override it. `.tsv`, `.tab`, and `.psv` files are supported natively.
+- **Data Type Inference:** Column types (`integer`, `float`, `date`, `boolean`, `string`) are inferred by sampling up to 1,000 rows and shown as compact badges in every column header.
+- **Column Sorting:** Click any column header to sort ascending, click again for descending, click a third time to clear. Sort is type-aware. Empty values always sort last.
+- **Column Stats Popover:** Shift+click any column header to open a statistics card showing min, max, mean, median, std dev, percentiles (numeric), earliest/latest (date), null count, distinct count, and top-5 most frequent values.
+- **Schema Summary Panel:** Click the **Profile** button to open a full column profile panel docked at the bottom — showing type, non-empty count, null %, distinct count, and min/max for every column. Click any row to open the detailed stats popover.
+- **Freeze Pane:** Right-click any column header to freeze all columns up to and including that column (Excel/Sheets style). The frozen pane stays fixed during horizontal scrolling. Right-click to unfreeze.
 
 ## Usage
 
-1. Open any `.csv` file.
-2. The custom editor will automatically activate.
-3. Use the search bar at the top to run SQL queries. Use `?` as the table name.
-   - Example: `SELECT * FROM ? WHERE [Department] = 'Sales'`
-4. Double-click any cell to edit it. Changes are saved back to the file.
-5. For large files, choose **Head**, **Tail**, or **Plain Text** mode from the prompt that appears on open.
+1. Open any `.csv`, `.tsv`, `.tab`, or `.psv` file — the custom editor activates automatically.
+2. Use the SQL bar at the top to filter and query data. Use `?` as the table name.
+   - Example: `SELECT * FROM ? WHERE [Department] = 'Sales' ORDER BY [Salary] DESC`
+3. **Sort:** Click a column header. Shift+click to open the stats popover instead.
+4. **Stats:** Shift+click any column header for detailed statistics.
+5. **Profile:** Click the **Profile** button in the toolbar for a full schema summary panel.
+6. **Freeze pane:** Right-click any column header → "Freeze pane here".
+7. **Delimiter:** Click the delimiter badge in the toolbar to override auto-detection.
+8. **Edit:** Double-click any cell to edit in-place.
+9. For large files, choose **Head**, **Tail**, or **Plain Text** mode from the prompt on open.
 
 ## Settings
 
-- `csvClearView.stickyHeader`: Enable/Disable sticky header (default: `true`).
-- `csvClearView.alternatingRows`: Enable/Disable alternating row colors (default: `true`).
-- `csvClearView.safeModeThreshold`: File size threshold (in MB) above which Safe Mode options are shown for large files (default: `5`).
-- `csvClearView.forceTextColumnColoring`: Force column coloring in Plain Text mode. Performance may vary on very large files (default: `false`).
+| Setting | Default | Description |
+|---|---|---|
+| `csvClearView.stickyHeader` | `true` | Enable/disable sticky header row. |
+| `csvClearView.alternatingRows` | `true` | Enable/disable zebra-stripe row colors. |
+| `csvClearView.safeModeThreshold` | `20` | File size (MB) above which large-file mode options are shown. |
+| `csvClearView.forceTextColumnColoring` | `false` | Force column coloring in Plain Text mode (may affect performance). |
+| `csvClearView.delimiter` | `auto` | Delimiter to use when parsing: `auto`, `,`, `\t`, `\|`, or `;`. |
 
 ## SQL Guide
-- **Table Name:** Always use `?`
-- **Spaces in Columns:** Use brackets, e.g., `[First Name]`
-- **Strings:** Use single quotes, e.g., `'Smith'`
-- **Allowed Statements:** Only `SELECT` queries are permitted. `DROP`, `DELETE`, `INSERT`, `UPDATE`, etc. are blocked for safety.
+
+- **Table name:** Always use `?`
+- **Spaces in column names:** Use brackets — `[First Name]`
+- **String values:** Use single quotes — `'Smith'`
+- **Allowed statements:** Only `SELECT` queries. `DROP`, `DELETE`, `INSERT`, `UPDATE`, etc. are blocked.
+
+## Supported File Types
+
+| Extension | Delimiter |
+|---|---|
+| `.csv` | Auto-detected (usually `,`) |
+| `.tsv`, `.tab` | Tab |
+| `.psv` | Pipe (`\|`) |
 
 ## Development
 
@@ -46,7 +67,6 @@ A clear and powerful CSV viewer for VS Code with colored columns, sticky headers
 - [Visual Studio Code](https://code.visualstudio.com/)
 
 ### Build and Install Locally
-To build the extension and install it in your local VS Code instance, run:
 
 ```bash
 # Install dependencies
@@ -54,8 +74,8 @@ npm install
 
 # Compile, package, and install locally into your VS Code
 npm run compile
-npx @vscode/vsce package --no-dependencies
-code --install-extension csv-clearview-0.3.2.vsix --force
+npx @vscode/vsce package
+code --install-extension csv-clearview-0.4.0.vsix
 ```
 
 ### Debugging
