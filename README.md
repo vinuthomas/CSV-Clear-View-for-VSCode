@@ -1,64 +1,137 @@
-# CSV ClearView for VS Code or Compatible IDE
+# CSV ClearView - The Ultimate CSV Editor for VS Code
 
 [![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/VinuThomas.csv-clearview.svg)](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview)
+[![Downloads](https://img.shields.io/visual-studio-marketplace/d/VinuThomas.csv-clearview.svg)](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview)
 
-A clear and powerful CSV viewer for VS Code with colored columns, sticky headers, SQL queries, and data profiling tools for data engineers and data scientists.
+**Transform your CSV workflow with a powerful, spreadsheet-like editor built for data engineers, analysts, and scientists.** CSV ClearView brings enterprise-grade CSV viewing and editing to VS Code with color-coded columns, in-editor SQL queries, advanced data profiling, and seamless handling of files up to 500MB+.
 
-## Features
+## Why CSV ClearView?
 
-- **Colored Columns:** Each column is color-coded for easy reading (theme-aware for dark and light themes).
-- **Sticky Header:** The header row stays fixed at the top while scrolling.
-- **Alternating Rows:** Zebra-striping for improved row readability.
-- **SQL Queries:** Run SQL queries directly on your CSV data (e.g., `SELECT * FROM ? WHERE [Price] > 100`). Only `SELECT` statements are permitted.
-- **SQL Query History:** Past queries are stored (up to 50 entries). Press `↑`/`↓` in the query box to navigate history bash-style, or click the **History** button for a visual dropdown panel.
-- **CSV Linting:** Automatically detects and reports rows with inconsistent column counts, with error markers in the scrollbar for quick navigation.
-- **Native Diagnostics:** Parsing errors are surfaced in the VS Code Problems pane.
-- **Cell Editing:** Double-click any cell to edit it in-place. Undo/Redo is fully supported.
-- **Large File Support:** Files 500MB+ are supported via virtual scrolling — only visible rows are ever rendered. Head/Tail sampling is available for instant previews of massive files.
-- **Delimiter Auto-Detection:** Automatically detects comma, tab, pipe, and semicolon delimiters from file content. A badge in the toolbar shows the active delimiter and can be clicked to override it. `.tsv`, `.tab`, and `.psv` files are supported natively.
-- **Data Type Inference:** Column types (`integer`, `float`, `date`, `boolean`, `string`) are inferred by sampling up to 1,000 rows and shown as compact badges in every column header.
-- **Column Sorting:** Click any column header to sort ascending, click again for descending, click a third time to clear. Sort is type-aware. Empty values always sort last.
-- **Column Stats Popover:** Shift+click any column header to open a statistics card showing min, max, mean, median, std dev, percentiles (numeric), earliest/latest (date), null count, distinct count, and top-5 most frequent values.
-- **Schema Summary Panel:** Click the **Profile** button to open a full column profile panel docked at the bottom — showing type, non-empty count, null %, distinct count, and min/max for every column. Click any row to open the detailed stats popover.
-- **Freeze Pane:** Right-click any column header to freeze all columns up to and including that column (Excel/Sheets style). The frozen pane stays fixed during horizontal scrolling. Right-click to unfreeze.
+Stop switching between VS Code and Excel. CSV ClearView delivers a **complete data exploration experience** without leaving your editor:
 
-## Usage
+- **📊 Work with massive files** - Handle 500MB+ CSV files with virtual scrolling and instant head/tail sampling
+- **🔍 Query your data instantly** - Run SQL SELECT queries directly on your CSV without external tools
+- **📈 Understand your data** - Built-in statistics, type inference, and data profiling for every column
+- **🎨 Stay oriented** - Color-coded columns, sticky headers, and freeze panes keep you focused
+- **✏️ Edit with confidence** - In-place cell editing with full undo/redo support
+- **⚡ Lightning fast** - Virtual rendering keeps even the largest files responsive
 
-1. Open any `.csv`, `.tsv`, `.tab`, or `.psv` file — the custom editor activates automatically.
-2. Use the SQL bar at the top to filter and query data. Use `?` as the table name.
-   - Example: `SELECT * FROM ? WHERE [Department] = 'Sales' ORDER BY [Salary] DESC`
-3. **Sort:** Click a column header. Shift+click to open the stats popover instead.
-4. **Stats:** Shift+click any column header for detailed statistics.
-5. **Profile:** Click the **Profile** button in the toolbar for a full schema summary panel.
-6. **Freeze pane:** Right-click any column header → "Freeze pane here".
-7. **Delimiter:** Click the delimiter badge in the toolbar to override auto-detection.
-8. **Edit:** Double-click any cell to edit in-place.
-9. For large files, choose **Head**, **Tail**, or **Plain Text** mode from the prompt on open.
+Perfect for data analysis, ETL pipeline debugging, machine learning dataset inspection, log file analysis, and database exports.
 
-## Settings
+## Key Features
+
+### 🎨 Visual Clarity
+- **Colored Columns:** Each column is automatically color-coded for instant visual separation (adapts to dark/light themes)
+- **Sticky Header:** Header row stays fixed at the top while scrolling through thousands of rows
+- **Alternating Rows:** Zebra-striping for improved row readability
+- **Freeze Panes:** Right-click any column header to freeze it Excel-style for easy comparison
+
+### 🔍 Data Analysis & Profiling
+- **SQL Queries:** Run full SQL SELECT statements on your CSV data (powered by AlaSQL)
+  - Example: `SELECT * FROM ? WHERE [Price] > 100 ORDER BY [Date] DESC`
+  - Query history with bash-style ↑/↓ navigation (stores up to 50 queries)
+- **Column Statistics:** Shift+click any column header for instant stats
+  - Numeric: min, max, mean, median, std dev, percentiles
+  - Date: earliest, latest
+  - String: length stats, frequency distribution
+  - All: null count, distinct values, top-5 most common values
+- **Data Type Inference:** Automatic detection of integers, floats, dates, booleans, and strings with visual badges
+- **Schema Summary Panel:** Click **Profile** button for a complete data dictionary showing type, nulls, distinct count, and ranges for every column
+
+### 📊 Large File Support
+- **Virtual Scrolling:** Handle 500MB+ files with only visible rows rendered
+- **Head/Tail Sampling:** Instant preview of massive files without loading everything
+- **Smart Chunking:** Files are processed in chunks to keep VS Code responsive
+- **Configurable Thresholds:** Set your own limits for when large-file mode kicks in
+
+### ✏️ Editing & Validation
+- **In-Place Cell Editing:** Double-click any cell to edit with full undo/redo support
+- **CSV Linting:** Automatic detection of rows with inconsistent column counts
+- **Native Diagnostics:** Parsing errors surface in VS Code's Problems pane
+- **Error Navigation:** Visual error markers in the scrollbar for quick jumping
+
+### 🔧 Format Flexibility
+- **Auto-Delimiter Detection:** Automatically recognizes comma, tab, pipe, and semicolon delimiters
+- **Multi-Format Support:** `.csv`, `.tsv`, `.tab`, `.psv` files open natively
+- **Manual Override:** Click the delimiter badge in the toolbar to change parsing
+- **Type-Aware Sorting:** Click column headers to sort with intelligent handling of numbers, dates, and strings
+
+## Use Cases
+
+✅ **Data Engineers** - Debug ETL pipelines, validate transformations, inspect data quality  
+✅ **Data Scientists** - Quick dataset exploration, feature analysis, ML data validation  
+✅ **Analysts** - Ad-hoc SQL queries, statistical summaries, large report inspection  
+✅ **Developers** - Log file analysis, database export review, test data generation  
+✅ **DBAs** - Query result inspection, data migration validation, schema analysis
+
+## Quick Start
+
+1. **Open any CSV file** - Just open `.csv`, `.tsv`, `.tab`, or `.psv` files and CSV ClearView activates automatically
+2. **Query your data** - Type SQL in the query bar at the top: `SELECT * FROM ? WHERE [Department] = 'Sales' ORDER BY [Salary] DESC`
+3. **Explore statistics** - Shift+click any column header for detailed stats or click **Profile** for a full data summary
+4. **Sort and filter** - Click column headers to sort, right-click to freeze panes
+5. **Edit cells** - Double-click any cell to edit in-place with undo/redo support
+6. **Handle large files** - For 20MB+ files, choose **Head**, **Tail**, or **Plain Text** mode when prompted
+
+## Configuration
+
+Customize CSV ClearView through VS Code settings:
 
 | Setting | Default | Description |
-|---|---|---|
-| `csvClearView.stickyHeader` | `true` | Enable/disable sticky header row. |
-| `csvClearView.alternatingRows` | `true` | Enable/disable zebra-stripe row colors. |
-| `csvClearView.safeModeThreshold` | `20` | File size (MB) above which large-file mode options are shown. |
-| `csvClearView.forceTextColumnColoring` | `false` | Force column coloring in Plain Text mode (may affect performance). |
-| `csvClearView.delimiter` | `auto` | Delimiter to use when parsing: `auto`, `,`, `\t`, `\|`, or `;`. |
+|---------|---------|-------------|
+| `csvClearView.stickyHeader` | `true` | Keep header row fixed at top while scrolling |
+| `csvClearView.alternatingRows` | `true` | Enable zebra-stripe row coloring |
+| `csvClearView.safeModeThreshold` | `20` | File size (MB) to trigger large-file mode options |
+| `csvClearView.forceTextColumnColoring` | `false` | Force column coloring in Plain Text mode (may impact performance) |
+| `csvClearView.delimiter` | `auto` | Delimiter: `auto`, `,`, `\t`, `\|`, or `;` |
 
-## SQL Guide
+## SQL Query Guide
 
-- **Table name:** Always use `?`
-- **Spaces in column names:** Use brackets — `[First Name]`
-- **String values:** Use single quotes — `'Smith'`
-- **Allowed statements:** Only `SELECT` queries. `DROP`, `DELETE`, `INSERT`, `UPDATE`, etc. are blocked.
+CSV ClearView includes a full SQL engine (AlaSQL) for ad-hoc data analysis:
 
-## Supported File Types
+- **Table name:** Always use `?` to reference your CSV data
+- **Column names with spaces:** Wrap in brackets: `[First Name]`, `[Unit Price]`
+- **String literals:** Use single quotes: `'Smith'`, `'New York'`
+- **Allowed operations:** Only `SELECT` statements (safety restriction)
+- **Blocked operations:** `DROP`, `DELETE`, `INSERT`, `UPDATE`, `CREATE`, `ALTER`, etc.
 
-| Extension | Delimiter |
-|---|---|
-| `.csv` | Auto-detected (usually `,`) |
-| `.tsv`, `.tab` | Tab |
-| `.psv` | Pipe (`\|`) |
+**Example queries:**
+```sql
+-- Filter and sort
+SELECT * FROM ? WHERE [Age] > 25 ORDER BY [Salary] DESC
+
+-- Aggregate statistics
+SELECT [Department], COUNT(*) as count, AVG([Salary]) as avg_salary 
+FROM ? GROUP BY [Department]
+
+-- Complex conditions
+SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
+```
+
+## Supported File Formats
+
+| Extension | Delimiter | Notes |
+|-----------|-----------|-------|
+| `.csv` | Auto-detected | Usually comma, but intelligently detects tab, pipe, semicolon |
+| `.tsv`, `.tab` | Tab | Tab-separated values |
+| `.psv` | Pipe (`\|`) | Pipe-separated values |
+
+CSV ClearView automatically detects the delimiter but you can override it using the toolbar badge.
+
+## What's New
+
+See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
+
+### Latest Release (v1.0.1)
+- **Fixed:** Column sorting now preserves horizontal scroll position - no more jumping back to the left when sorting wide CSV files
+
+### Recent Highlights (v0.4.0)
+- Added delimiter auto-detection and TSV/PSV support
+- Introduced data type inference with visual type badges
+- Added column sorting with type-aware comparison
+- New Shift+click column stats popover
+- Schema summary panel with full data profiling
+- Excel-style freeze pane functionality
 
 ## Development
 
@@ -72,16 +145,26 @@ A clear and powerful CSV viewer for VS Code with colored columns, sticky headers
 # Install dependencies
 npm install
 
-# Compile, package, and install locally into your VS Code
+# Compile and package the extension
 npm run compile
 npx @vscode/vsce package
-code --install-extension csv-clearview-0.4.0.vsix
+
+# Install into your VS Code
+code --install-extension csv-clearview-1.0.1.vsix
 ```
 
 ### Debugging
-1. Open the project folder in VS Code.
-2. Press `F5` to open a new Extension Development Host window.
-3. Open any `.csv` file in the new window to test your changes.
+1. Open the project folder in VS Code
+2. Press `F5` to launch the Extension Development Host
+3. Open any `.csv` file in the new window to test your changes
+
+## Keywords
+
+CSV, TSV, viewer, editor, table, grid, spreadsheet, data analysis, SQL queries, data profiling, statistics, large files, virtual scrolling, delimiter detection, data science, ETL, pipe-separated, tab-separated, data visualization, column sorting, data validation
 
 ## License
 MIT
+
+---
+
+**Made with ❤️ for the data community** | [Report Issues](https://github.com/vinuthomas/CSV-Clear-View-for-VSCode/issues) | [Contribute](https://github.com/vinuthomas/CSV-Clear-View-for-VSCode)

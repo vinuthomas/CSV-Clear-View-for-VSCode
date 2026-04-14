@@ -3,7 +3,7 @@
   "displayName": "CSV ClearView",
   "description": "A clear and powerful CSV viewer with colored columns, sticky headers, and SQL query capabilities.",
   "publisher": "VinuThomas",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
@@ -36,7 +36,8 @@
   ],
   "activationEvents": [
     "onLanguage:csv",
-    "onLanguage:tsv"
+    "onLanguage:tsv",
+    "onLanguage:psv"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -67,6 +68,20 @@
         ],
         "mimetypes": [
           "text/tab-separated-values"
+        ]
+      },
+      {
+        "id": "psv",
+        "aliases": [
+          "PSV",
+          "psv",
+          "Pipe Separated Values"
+        ],
+        "extensions": [
+          ".psv"
+        ],
+        "mimetypes": [
+          "text/psv"
         ]
       }
     ],

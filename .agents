@@ -82,12 +82,14 @@ npm run package
 # Compile TypeScript
 npm run compile
 
-# Package extension
-npx @vscode/vsce package
+# Package extension (IMPORTANT: use node_modules/.bin/vsce, not npx)
+node_modules/.bin/vsce package
 
-# Install locally
+# Install locally for testing
 code --install-extension csv-clearview-1.0.1.vsix
 ```
+
+**Note:** Always use `node_modules/.bin/vsce package` instead of `npx @vscode/vsce package`. The npx command doesn't work properly with this project setup.
 
 ## Debugging
 1. Open project in VS Code
@@ -131,9 +133,11 @@ The extension communicates with the webview via `postMessage`:
 - Blocked: `DROP`, `DELETE`, `INSERT`, `UPDATE`, etc.
 
 ## Extension Activation
-- **Activation Events:** `onLanguage:csv`, `onLanguage:tsv`
-- Auto-activates when CSV/TSV files are opened
+- **Activation Events:** `onLanguage:csv`, `onLanguage:tsv`, `onLanguage:psv`
+- Auto-activates when CSV/TSV/PSV files are opened
 - Custom editor has `"priority": "default"` (user can switch to text editor)
+- **Supported File Types:** `.csv`, `.tsv`, `.tab`, `.psv`
+- **Language IDs:** `csv`, `tsv`, `psv`
 
 ## Testing Considerations
 - Test with files of various sizes: <1MB, 20MB, 100MB, 500MB+
@@ -177,5 +181,17 @@ The extension communicates with the webview via `postMessage`:
 - Type inference samples max 1,000 rows (not entire file)
 - Row index checkpoints prevent O(n) memory usage for massive files
 
+## Release Management Guidelines
+
+### Version Release Process
+1. **Changelog Update:** Always update the changelog before creating a new version. Ensure the changelog is complete and up to date before any release is made.
+2. **Marketplace Publishing:** Do NOT push releases to the marketplace automatically. Always allow the user to explicitly request publishing to the marketplace.
+3. **README Update:** Update the README when a release is made to ensure:
+   - The extension blurb is appealing to users searching the marketplace
+   - The feature list is current and complete
+   - Keywords are optimized for marketplace discoverability
+   - Text is compelling for potential users
+
 ## Recent Bug Fixes (v1.0.1)
 - **Scroll Position Preservation:** Fixed issue where sorting columns would reset horizontal scroll position. Now saves and restores `scrollLeft` on both `tableContainer` and `headerContainer` when sorting is triggered (media/csv.js lines ~2102-2110 and ~2199-2207)
+- **PSV File Support:** Added proper language definition and activation event for `.psv` (pipe-separated values) files. Previously PSV files were only handled via custom editor selector without proper language registration, which prevented automatic activation.

@@ -2,11 +2,42 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.0.2] - 2026-04-14
+
+### Added
+
+- **PSV Language Support:** Added complete language definition for `.psv` (pipe-separated values) files in package.json with proper activation events, ensuring PSV files automatically open in CSV ClearView.
+- **Sample PSV File:** Added `samples/sample_data.psv` with employee data for testing PSV functionality.
+
+### Changed
+
+- **README Improvements:** Completely overhauled README with more compelling marketplace copy, better organization, keyword optimization, and detailed use cases for data engineers, analysts, scientists, developers, and DBAs.
+- **Documentation:** Updated context file (`.agents`) with correct packaging instructions and PSV support details.
+
+### Fixed
+
+- **CHANGELOG Completeness:** Added missing release notes for v1.0.0 and v0.3.6, ensuring all historical releases are properly documented.
+
 ## [1.0.1] - 2026-04-14
 
 ### Fixed
 
 - **Column Sort Scroll Position:** Fixed an issue where clicking a column header to sort would reset the horizontal scroll position, causing the view to jump back to the left. The horizontal scroll position is now preserved when sorting, keeping users oriented in wide CSV files.
+- **PSV Language Registration:** Added proper language definition and activation event for `.psv` (pipe-separated values) files. Previously PSV files lacked language registration in package.json, which could prevent automatic activation when opening PSV files.
+
+## [1.0.0] - 2026-04-08
+
+### Security
+
+- **Cryptographic Nonce Generation:** Fixed CSP nonce generation to use `crypto.randomBytes()` instead of `Math.random()`, ensuring cryptographically secure random values for Content Security Policy.
+
+### Changed
+
+- **Dependency Updates:** Updated security-related dependencies:
+  - `brace-expansion` 1.1.12 → 1.1.13 (security fix GHSA-f886-m6hf-6m8v)
+  - `picomatch` 2.3.1 → 2.3.2 (fixes CVE-2026-33671 and CVE-2026-33672)
+  - `yaml` 2.8.2 → 2.8.3 (stack overflow fix)
+- **Version:** Bumped to 1.0.0 to signify production readiness and maturity of the extension.
 
 ## [0.4.0] - 2026-03-13
 
@@ -32,13 +63,14 @@ All notable changes to the "CSV ClearView" extension will be documented in this 
 - **Freeze pane header displacement:** The frozen overlay was being inserted into the flex layout flow rather than as an absolutely positioned layer, pushing the header row downward. Introduced a `.table-area` wrapper with `position: relative` so the overlay sits on top without affecting layout.
 - **Freeze pane column misalignment:** Using `padding-left` on the scrollable containers to offset the main table past the frozen pane caused misalignment between the header and body rows under horizontal scrolling. Replaced with a real spacer `<col>`/`<th>`/`<td>` as the first element of both the header and body tables, guaranteeing pixel-perfect alignment via shared `table-layout: fixed` geometry.
 
-
+## [0.3.6] - 2026-03-13
 
 ### Fixed
-- **Paged View — last page never loaded:** Scrolling to the very bottom of a large file (including CMD+Down) failed to show the final rows. `scrollTopToRow` could return a row index one past the end, making the computed page exceed `maxPage` and blocking the fetch entirely. The result is now clamped to `[0, dataRowCount - 1]`.
-- **Paged View — jump-to-end before index ready:** Pressing CMD+Down immediately after opening a large file (before the row index finished building) caused all scroll positions to map to page 0. When `indexReady` fired the spacer was resized but the viewport was never re-evaluated, leaving the wrong page on screen. The `indexReady` handler now invalidates the current page and re-runs the scroll logic so the correct page is fetched.
-- **Paged View — placeholders never replaced by real data:** Once a page was rendered as loading skeletons, the dedup guard `chunkedLoadedPage === page` prevented it from being re-rendered when the actual data arrived. A new `chunkedLoadedPageHasData` flag allows placeholder renders to be upgraded to real rows as soon as the data is ready.
-- **Paged View — no backward prefetch:** Scrolling upward always showed placeholder rows briefly because only the next page was prefetched. The scroll handler now prefetches `currentPage - 1` as well, making both forward and backward scrolling smooth.
+
+- **Paged View — Last Page Loading:** Fixed issue where scrolling to the very bottom of a large file (including CMD+Down) failed to show the final rows. Row index calculations are now properly clamped to valid ranges.
+- **Paged View — Jump-to-End Timing:** Fixed bug where pressing CMD+Down immediately after opening a large file (before row index finished building) would show the wrong page. The indexReady handler now properly invalidates and refetches the correct page.
+- **Paged View — Placeholder Rendering:** Fixed issue where loading placeholders were never replaced with actual data due to an overly aggressive deduplication guard. Added `chunkedLoadedPageHasData` flag to allow placeholder-to-data upgrades.
+- **Paged View — Backward Scrolling:** Added backward prefetch (currentPage - 1) to eliminate brief placeholder flashes when scrolling upward through large files.
 
 ## [0.3.2] - 2026-03-09
 

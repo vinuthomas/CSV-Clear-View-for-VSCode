@@ -1,0 +1,21 @@
+Employee ID|First Name|Last Name|Department|Salary|Hire Date|Status|Email
+1001|John|Smith|Engineering|95000|2020-03-15|Active|john.smith@company.com
+1002|Sarah|Johnson|Marketing|75000|2019-07-22|Active|sarah.johnson@company.com
+1003|Michael|Williams|Sales|82000|2021-01-10|Active|michael.williams@company.com
+1004|Emily|Brown|Engineering|98000|2018-11-05|Active|emily.brown@company.com
+1005|David|Jones|HR|68000|2020-09-18|Active|david.jones@company.com
+1006|Jessica|Davis|Sales|79000|2019-04-12|Active|jessica.davis@company.com
+1007|Robert|Miller|Engineering|92000|2021-06-30|Active|robert.miller@company.com
+1008|Amanda|Wilson|Marketing|71000|2020-02-14|Active|amanda.wilson@company.com
+1009|Christopher|Moore|Sales|88000|2018-12-20|Active|christopher.moore@company.com
+1010|Jennifer|Taylor|Engineering|103000|2017-08-15|Active|jennifer.taylor@company.com
+1011|Matthew|Anderson|Finance|85000|2019-10-03|Active|matthew.anderson@company.com
+1012|Ashley|Thomas|HR|66000|2021-03-25|Active|ashley.thomas@company.com
+1013|Daniel|Jackson|Engineering|96000|2020-05-08|Active|daniel.jackson@company.com
+1014|Michelle|White|Marketing|73000|2019-11-19|Active|michelle.white@company.com
+1015|James|Harris|Sales|81000|2021-02-01|Inactive|james.harris@company.com
+1016|Lisa|Martin|Engineering|99000|2018-07-14|Active|lisa.martin@company.com
+1017|William|Thompson|Finance|87000|2020-12-10|Active|william.thompson@company.com
+1018|Mary|Garcia|HR|69000|2019-06-28|Active|mary.garcia@company.com
+1019|Richard|Martinez|Sales|84000|2021-04-17|Active|richard.martinez@company.com
+1020|Patricia|Robinson|Marketing|74000|2020-08-22|Active|patricia.robinson@company.com
