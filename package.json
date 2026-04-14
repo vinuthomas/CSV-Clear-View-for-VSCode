@@ -3,7 +3,7 @@
   "displayName": "CSV ClearView",
   "description": "A clear and powerful CSV viewer with colored columns, sticky headers, and SQL query capabilities.",
   "publisher": "VinuThomas",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
@@ -122,7 +122,13 @@
         "csvClearView.delimiter": {
           "type": "string",
           "default": "auto",
-          "enum": ["auto", ",", "\t", "|", ";"],
+          "enum": [
+            "auto",
+            ",",
+            "\t",
+            "|",
+            ";"
+          ],
           "enumDescriptions": [
             "Auto-detect delimiter from file content (recommended)",
             "Comma (,) — standard CSV",
@@ -151,6 +157,7 @@
     "webpack-cli": "^5.0.1"
   },
   "dependencies": {
+    "@vscode/vsce": "^3.7.1",
     "alasql": "^4.17.0"
   }
 }

@@ -2101,9 +2101,16 @@ async function renderTable(data, errors) {
                 showLoader();
                 setTimeout(async () => {
                     try {
+                        // Preserve horizontal scroll position
+                        const savedScrollLeft = tableContainer.scrollLeft;
+                        
                         const sorted = applySortToData(currentDisplayData, sortState.col, sortState.dir);
                         currentDisplayData = sorted;
                         await renderTable(sorted, []);
+                        
+                        // Restore horizontal scroll position
+                        tableContainer.scrollLeft = savedScrollLeft;
+                        headerContainer.scrollLeft = savedScrollLeft;
                     } finally {
                         hideLoader();
                     }
@@ -2198,9 +2205,16 @@ function buildFrozenOverlay(data, frozenArr, frozenWidths, totalFrozenWidth, dat
                 showLoader();
                 setTimeout(async () => {
                     try {
+                        // Preserve horizontal scroll position
+                        const savedScrollLeft = tableContainer.scrollLeft;
+                        
                         const sorted = applySortToData(currentDisplayData, sortState.col, sortState.dir);
                         currentDisplayData = sorted;
                         await renderTable(sorted, []);
+                        
+                        // Restore horizontal scroll position
+                        tableContainer.scrollLeft = savedScrollLeft;
+                        headerContainer.scrollLeft = savedScrollLeft;
                     } finally {
                         hideLoader();
                     }

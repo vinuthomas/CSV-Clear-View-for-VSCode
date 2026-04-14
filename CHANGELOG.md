@@ -2,6 +2,12 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.0.1] - 2026-04-14
+
+### Fixed
+
+- **Column Sort Scroll Position:** Fixed an issue where clicking a column header to sort would reset the horizontal scroll position, causing the view to jump back to the left. The horizontal scroll position is now preserved when sorting, keeping users oriented in wide CSV files.
+
 ## [0.4.0] - 2026-03-13
 
 ### Added
