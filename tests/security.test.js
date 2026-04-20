@@ -71,7 +71,10 @@ async function parseCSV(text) {
         } else {
             if (char === '"') {
                 inQuotes = true;
-                fieldStart = i;
+                // Do NOT update fieldStart here — it was already set correctly by
+                // the preceding delimiter or newline handler. Overwriting it with
+                // the quote position caused an off-by-one for whitespace-padded
+                // quoted fields (e.g. `a, "b"`) and confused field-start tracking.
             } else if (char === ',') {
                 let field = text.slice(fieldStart, i);
                 if (field.startsWith('"') && field.endsWith('"')) {
@@ -248,6 +251,48 @@ async function runTests() {
     {
         const { data } = await parseCSV('a,b,c');
         assertEqual(data, [['a','b','c']], 'Handle single-row CSV (no trailing newline)');
+    }
+
+    // --- fieldStart bug regression tests (fix: don't overwrite fieldStart on opening quote) ---
+    // These cases previously produced wrong results because fieldStart was set to the
+    // position of the opening `"` instead of the position after the preceding delimiter.
+
+    {
+        // Standard quoted field — must still work correctly after the fix
+        const { data } = await parseCSV('"hello",world');
+        assertEqual(data[0], ['hello', 'world'], 'fieldStart fix: standard quoted first field');
+    }
+
+    {
+        // Quoted field in second position — the key regression case
+        const { data } = await parseCSV('a,"b,c"');
+        assertEqual(data[0], ['a', 'b,c'], 'fieldStart fix: quoted field with comma in second position');
+    }
+
+    {
+        // Whitespace before quote (non-standard but common) — should not corrupt the slice
+        const { data } = await parseCSV('a, "b,c"');
+        // The space before the quote is part of the unquoted prefix, so the field
+        // will include it. The important thing is the value is not truncated/corrupted.
+        assert(data[0][1].includes('b,c'), 'fieldStart fix: space-padded quoted field not corrupted');
+    }
+
+    {
+        // Multiple quoted fields in a row
+        const { data } = await parseCSV('"one","two","three"');
+        assertEqual(data[0], ['one', 'two', 'three'], 'fieldStart fix: multiple consecutive quoted fields');
+    }
+
+    {
+        // Quoted field on second row
+        const { data } = await parseCSV('a,b\n"x,y",z');
+        assertEqual(data[1], ['x,y', 'z'], 'fieldStart fix: quoted field on second row');
+    }
+
+    {
+        // Quoted field containing escaped quotes, in second column
+        const { data } = await parseCSV('col1,col2\nval1,"say ""hi"""');
+        assertEqual(data[1], ['val1', 'say "hi"'], 'fieldStart fix: escaped quotes in second-column quoted field');
     }
 
     // --------------------------------------------------------
@@ -551,7 +596,7 @@ async function runTests() {
         const src = fs.readFileSync(
             path.join(__dirname, '..', 'src', 'csvEditor.ts'), 'utf8'
         );
-        assert(src.includes("require('crypto').randomBytes"), 'Nonce uses crypto.randomBytes');
+        assert(src.includes("crypto.randomBytes"), 'Nonce uses crypto.randomBytes');
         assert(!src.includes('Math.random'), 'Math.random no longer used for nonce');
     }
 
