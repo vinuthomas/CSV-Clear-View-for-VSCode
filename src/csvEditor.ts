@@ -320,6 +320,21 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					webviewPanel.webview.postMessage({ type: 'queryError', message: 'Invalid query request' });
 					return;
 				}
+				// Server-side SQL validation (defence-in-depth alongside webview checks)
+				const normalizedQ = e.query.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+				if (!/^SELECT\s/i.test(normalizedQ)) {
+					webviewPanel.webview.postMessage({ type: 'queryError', message: 'Only SELECT queries are allowed' });
+					return;
+				}
+				if (/;/.test(normalizedQ)) {
+					webviewPanel.webview.postMessage({ type: 'queryError', message: 'Semicolons are not allowed in queries' });
+					return;
+				}
+				const blocked = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP|ATTACH|DETACH|SOURCE|PRAGMA|SHOW\s+TABLES|SHOW\s+DATABASES|SET\s+OPTION)\b/i;
+				if (blocked.test(normalizedQ)) {
+					webviewPanel.webview.postMessage({ type: 'queryError', message: 'Data modification statements are not allowed' });
+					return;
+				}
 				try {
 					const result = alasql(e.query, [e.data]);
 					webviewPanel.webview.postMessage({ type: 'queryResult', result });

@@ -1726,7 +1726,13 @@ function runQuery() {
         errorContainer.classList.remove('hidden');
         return;
     }
-    const blockedPattern = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP)\b/i;
+    // Block semicolons (prevent multi-statement injection)
+    if (/;/.test(normalizedQuery)) {
+        errorContainer.textContent = "Query Error: Semicolons are not allowed in queries.";
+        errorContainer.classList.remove('hidden');
+        return;
+    }
+    const blockedPattern = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP|ATTACH|DETACH|SOURCE|PRAGMA|SHOW\s+TABLES|SHOW\s+DATABASES|SET\s+OPTION)\b/i;
     if (blockedPattern.test(normalizedQuery)) {
         errorContainer.textContent = "Query Error: Data modification statements are not allowed.";
         errorContainer.classList.remove('hidden');
