@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 
 const CHUNKED_MODE_THRESHOLD = 500 * 1024 * 1024; // 500 MB
 const CHUNK_ROWS = 500; // rows per page delivered to the webview
@@ -612,10 +613,5 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 }
 
 function getNonce(): string {
-	let text = '';
-	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	for (let i = 0; i < 32; i++) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
-	}
-	return text;
+	return crypto.randomBytes(16).toString('hex');
 }
