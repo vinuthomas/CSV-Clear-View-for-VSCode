@@ -1281,6 +1281,17 @@ function handlePageData(message) {
                 chunkedCache.delete(key);
             }
         }
+        // Hard size cap as a backstop against runaway memory usage.
+        const MAX_CACHED_PAGES = 50;
+        if (chunkedCache.size > MAX_CACHED_PAGES) {
+            // Evict the oldest entries (Map preserves insertion order)
+            const toDelete = chunkedCache.size - MAX_CACHED_PAGES;
+            let deleted = 0;
+            for (const key of chunkedCache.keys()) {
+                chunkedCache.delete(key);
+                if (++deleted >= toDelete) { break; }
+            }
+        }
 
         if (page === chunkedLoadedPage) {
             chunkedLoadedPageHasData = false;
