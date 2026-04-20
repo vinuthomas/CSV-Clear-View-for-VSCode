@@ -1142,6 +1142,38 @@ window.addEventListener('message', event => {
                 handleChunkedScroll();
             }
             break;
+
+        case 'queryResult':
+            // Response from the extension host after running an AlaSQL query.
+            (async () => {
+                try {
+                    const result = message.result;
+                    if (!result || result.length === 0) {
+                        currentDisplayData = [];
+                        columnTypes = [];
+                        await renderTable([], []);
+                    } else {
+                        const newData = objectsToData(result);
+                        currentDisplayData = newData;
+                        columnTypes = inferColumnTypes(newData);
+                        sortState = { col: -1, dir: 'none' };
+                        await renderTable(newData, []);
+                        errorContainer.classList.add('hidden');
+                    }
+                } catch (e) {
+                    errorContainer.textContent = "Query Error: " + e.message;
+                    errorContainer.classList.remove('hidden');
+                } finally {
+                    hideLoader();
+                }
+            })();
+            break;
+
+        case 'queryError':
+            errorContainer.textContent = "Query Error: " + message.message;
+            errorContainer.classList.remove('hidden');
+            hideLoader();
+            break;
     }
 });
 
@@ -1717,26 +1749,12 @@ function runQuery() {
                 originalDataObjects = await dataToObjects(originalRawData);
             }
 
-            const result = alasql(query, [originalDataObjects]);
-            
-            if (!result || result.length === 0) {
-                currentDisplayData = [];
-                columnTypes = [];
-                await renderTable([], []);
-                return;
-            }
-
-            const newData = objectsToData(result);
-            currentDisplayData = newData;
-            // Recompute types for query result columns
-            columnTypes = inferColumnTypes(newData);
-            sortState = { col: -1, dir: 'none' };
-            await renderTable(newData, []);
-            errorContainer.classList.add('hidden');
+            // Execute query on the extension host (avoids unsafe-eval in CSP).
+            vscode.postMessage({ type: 'runQuery', query, data: originalDataObjects });
+            // Result handled asynchronously via 'queryResult' / 'queryError' messages.
         } catch (e) {
             errorContainer.textContent = "Query Error: " + e.message;
             errorContainer.classList.remove('hidden');
-        } finally {
             hideLoader();
         }
     }, 50);
