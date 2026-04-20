@@ -276,7 +276,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 
 		// Handle file changes
 		const watcher = vscode.workspace.createFileSystemWatcher(document.uri.fsPath);
-		watcher.onDidChange(() => {
+		const watcherListener = watcher.onDidChange(() => {
 			// Invalidate row index so it is rebuilt on next access
 			rowIndex = null;
 			updateWebview();
@@ -284,6 +284,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 
 		webviewPanel.onDidDispose(() => {
 			disposed = true;
+			watcherListener.dispose();
 			watcher.dispose();
 		});
 
