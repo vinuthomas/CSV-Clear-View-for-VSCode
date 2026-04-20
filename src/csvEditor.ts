@@ -57,6 +57,10 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 
 	private static readonly viewType = 'csvClearView.edit';
 
+	/** Stored so it can be disposed when the provider is released. */
+	private readonly _onDidChangeCustomDocumentEmitter = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<CsvDocument>>();
+	readonly onDidChangeCustomDocument = this._onDidChangeCustomDocumentEmitter.event;
+
 	constructor(
 		private readonly context: vscode.ExtensionContext
 	) { }
@@ -570,8 +574,6 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		await vscode.workspace.fs.writeFile(destination, uint8Array);
 	}
 
-	// Unused for CustomEditorProvider but keeping for structure
-	readonly onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<CsvDocument>>().event;
 	async backupCustomDocument(_document: CsvDocument, _context: vscode.CustomDocumentBackupContext, _token: vscode.CancellationToken): Promise<vscode.CustomDocumentBackup> {
 		return { id: '', delete: () => {} };
 	}
