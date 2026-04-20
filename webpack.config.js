@@ -13,6 +13,7 @@ module.exports = {
   },
   externals: {
     vscode: 'commonjs vscode',
+    alasql: 'commonjs alasql',
   },
   resolve: {
     extensions: ['.ts', '.js'],

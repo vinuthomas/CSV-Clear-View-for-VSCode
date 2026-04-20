@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
+// AlaSQL is kept as an external (not bundled by webpack) so its Node.js build
+// is loaded at runtime without triggering webpack's static analysis of optional
+// react-native peer dependencies.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const alasql = require('alasql') as (query: string, params: unknown[]) => unknown[];
 
 const CHUNKED_MODE_THRESHOLD = 500 * 1024 * 1024; // 500 MB
 const CHUNK_ROWS = 500; // rows per page delivered to the webview
@@ -333,6 +338,24 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					}
 					return;
 				}
+
+				case 'runQuery': {
+					// Execute SQL on the extension host (Node.js) so the webview
+					// CSP does not need 'unsafe-eval'.
+					if (typeof e.query !== 'string') { return; }
+					try {
+						const result = alasql(e.query, [e.data ?? []]);
+						if (disposed) { return; }
+						webviewPanel.webview.postMessage({ type: 'queryResult', rows: result });
+					} catch (err) {
+						if (disposed) { return; }
+						webviewPanel.webview.postMessage({
+							type: 'queryError',
+							message: (err as Error).message
+						});
+					}
+					return;
+				}
 			}
 		});
 	}
@@ -537,7 +560,6 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 	private getHtmlForWebview(webview: vscode.Webview): string {
 		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'csv.js'));
 		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'csv.css'));
-		const alasqlUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'alasql.min.js'));
 
 		const nonce = getNonce();
 
@@ -546,7 +568,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			<html lang="en">
 			<head>
 				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}' 'unsafe-eval';">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 				<link href="${styleUri}" rel="stylesheet" />
 				<title>CSV ClearView</title>
@@ -605,8 +628,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				<div id="text-container" class="text-container hidden">
 					<pre id="raw-text"></pre>
 				</div>
-				<script nonce="${nonce}" src="${alasqlUri}"></script>
-				<script nonce="${nonce}" src="${scriptUri}"></script>
+			<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;
 	}
