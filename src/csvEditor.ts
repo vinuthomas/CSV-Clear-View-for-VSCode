@@ -393,6 +393,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		let offset    = 0;
 		let rowCount  = 0; // rows seen so far (row 0 = header at byte 0)
 		let inQuotes  = false;
+		let prevWasQuote = false; // for tracking escaped "" inside quoted fields
 		let nextSample = SAMPLE_INTERVAL; // next byte offset at which to save a checkpoint
 		let lastByteWasNewline = false;
 
@@ -409,14 +410,23 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			for (let i = 0; i < bytesRead; i++) {
 				const ch = buf[i];
 				if (ch === 0x22 /* " */) {
-					inQuotes = !inQuotes;
-				} else if (!inQuotes && ch === 0x0a /* \n */) {
-					rowCount++;
-					const nextRowByte = offset + i + 1;
-					if (nextRowByte < fileSize && nextRowByte >= nextSample) {
-						checkpointBytes.push(nextRowByte);
-						checkpointRows.push(rowCount);
-						nextSample = nextRowByte + SAMPLE_INTERVAL;
+					if (inQuotes && prevWasQuote) {
+						// Escaped double-quote ("") — stay inside the field, reset flag
+						prevWasQuote = false;
+					} else {
+						inQuotes = !inQuotes;
+						prevWasQuote = inQuotes; // set flag when we just opened/may be escaping
+					}
+				} else {
+					prevWasQuote = false;
+					if (!inQuotes && ch === 0x0a /* \n */) {
+						rowCount++;
+						const nextRowByte = offset + i + 1;
+						if (nextRowByte < fileSize && nextRowByte >= nextSample) {
+							checkpointBytes.push(nextRowByte);
+							checkpointRows.push(rowCount);
+							nextSample = nextRowByte + SAMPLE_INTERVAL;
+						}
 					}
 				}
 				lastByteWasNewline = (ch === 0x0a);
