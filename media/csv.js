@@ -1855,7 +1855,10 @@ async function parseCSV(text, delimiter) {
         } else {
             if (char === '"') {
                 inQuotes = true;
-                fieldStart = i;
+                // Do NOT update fieldStart here — it was already set correctly by
+                // the preceding delimiter or newline handler. Overwriting it with
+                // the quote position caused an off-by-one for whitespace-padded
+                // quoted fields (e.g. `a, "b"`) and confused field-start tracking.
             } else if (char === delim) {
                 let field = text.slice(fieldStart, i);
                 if (field.startsWith('"') && field.endsWith('"')) {
