@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
 import alasql = require('alasql');
 
 const CHUNKED_MODE_THRESHOLD = 500 * 1024 * 1024; // 500 MB
@@ -369,7 +370,6 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		const SCAN_BLOCK     = 4 * 1024 * 1024;  // 4 MB read blocks
 		const SAMPLE_INTERVAL = 4 * 1024 * 1024; // one checkpoint per 4 MB
 
-		const fs = require('fs') as typeof import('fs');
 		const fd = fs.openSync(uri.fsPath, 'r');
 
 		const checkpointBytes: number[] = [0]; // checkpoint 0: byte 0, row 0
@@ -444,7 +444,6 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		const cpByte = checkpointBytes[lo];
 		const cpRow  = checkpointRows[lo];
 
-		const fs = require('fs') as typeof import('fs');
 		const fd = fs.openSync(index.fsPath, 'r');
 
 		try {
@@ -521,7 +520,6 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 
 		if (actualLength <= 0) { return new Uint8Array(0); }
 
-		const fs = require('fs');
 		const fd = fs.openSync(uri.fsPath, 'r');
 		try {
 			const buffer = Buffer.alloc(actualLength);
