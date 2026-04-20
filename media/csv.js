@@ -1937,16 +1937,28 @@ function debounceSave() {
 async function onCellChange(e) {
     const cell = e.target;
     const scrollTop = tableContainer.scrollTop;
-    const startRow = Math.max(1, Math.floor(scrollTop / rowHeight));
+    const dataRowCount = currentDisplayData.length - 1; // exclude header
+
+    // Use scrollTopToRow() — same helper used by updateVirtualTable — so that
+    // the row mapping is correct even for large files where the virtual spacer
+    // height is scaled and Math.floor(scrollTop / rowHeight) would be wrong.
+    const firstVisibleRow = scrollTopToRow(scrollTop, dataRowCount); // 0-based data row
+    const startRow = Math.max(1, firstVisibleRow); // 1-based (header is index 0 in currentDisplayData)
     const buffer = 10;
     const renderStart = Math.max(1, startRow - buffer);
-    
+
+    // cell.parentElement.rowIndex is the 0-based index within the <tbody>.
+    // tbody row 0 corresponds to currentDisplayData[renderStart], so:
     const rowInDisplay = renderStart + cell.parentElement.rowIndex;
-    const col = cell.cellIndex;
+
+    // cell.cellIndex includes the frozen-column spacer <td> at index 0 when
+    // columns are frozen. Skip over it by subtracting 1 if frozenCols is active.
+    const col = frozenCols.size > 0 ? cell.cellIndex - 1 : cell.cellIndex;
+
     const newValue = cell.textContent;
 
-    if (currentDisplayData[rowInDisplay] && currentDisplayData[rowInDisplay][col] === newValue) return;
     if (!currentDisplayData[rowInDisplay]) return;
+    if (currentDisplayData[rowInDisplay][col] === newValue) return;
 
     currentDisplayData[rowInDisplay][col] = newValue;
     debounceSave();
