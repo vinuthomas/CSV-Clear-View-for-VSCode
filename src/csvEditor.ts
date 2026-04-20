@@ -306,7 +306,9 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						console.error('Edit payload too large, ignoring');
 						return;
 					}
-					this.saveDocument(document, e.text);
+					this.saveDocument(document, e.text).catch(err => {
+						vscode.window.showErrorMessage(`CSV ClearView: Failed to save file — ${err.message || err}`);
+					});
 					return;
 
 				case 'runQuery': {
