@@ -2285,8 +2285,9 @@ function buildFrozenOverlay(data, frozenArr, frozenWidths, totalFrozenWidth, dat
 // =============================================================================
 
 function escapeHtml(text) {
-    if (!text) return text;
-    return text
+    if (text === null || text === undefined) return '';
+    const str = String(text);
+    return str
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
