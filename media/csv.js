@@ -1142,39 +1142,6 @@ window.addEventListener('message', event => {
                 handleChunkedScroll();
             }
             break;
-
-        case 'queryResult': {
-            // SQL was executed on the extension host; render the results.
-            const result = message.rows;
-            setTimeout(async () => {
-                try {
-                    if (!result || result.length === 0) {
-                        currentDisplayData = [];
-                        columnTypes = [];
-                        await renderTable([], []);
-                        return;
-                    }
-                    const newData = objectsToData(result);
-                    currentDisplayData = newData;
-                    columnTypes = inferColumnTypes(newData);
-                    sortState = { col: -1, dir: 'none' };
-                    await renderTable(newData, []);
-                    errorContainer.classList.add('hidden');
-                } catch (e) {
-                    errorContainer.textContent = "Query Error: " + e.message;
-                    errorContainer.classList.remove('hidden');
-                } finally {
-                    hideLoader();
-                }
-            }, 0);
-            break;
-        }
-
-        case 'queryError':
-            errorContainer.textContent = "Query Error: " + message.message;
-            errorContainer.classList.remove('hidden');
-            hideLoader();
-            break;
     }
 });
 
@@ -1717,11 +1684,6 @@ function sharedStart(array){
 // SQL QUERY ENGINE
 // =============================================================================
 
-// SQL execution now runs in the extension host (Node.js) to avoid requiring
-// 'unsafe-eval' in the CSP. The webview sends a 'runQuery' message with the
-// query and the current data as plain objects, and receives a 'queryResult'
-// or 'queryError' response.
-
 function runQuery() {
     const query = queryInput.value.trim();
     if (!query) return;
@@ -1749,24 +1711,32 @@ function runQuery() {
 
     showLoader();
 
-    // Build the data objects to send to the extension host for SQL execution.
-    // We do this async so large datasets don't block the UI thread.
     setTimeout(async () => {
         try {
             if (originalDataObjects.length === 0 && originalRawData.length > 0) {
                 originalDataObjects = await dataToObjects(originalRawData);
             }
 
-            // Send query + data to extension host; result comes back via 'queryResult' message.
-            vscode.postMessage({
-                type: 'runQuery',
-                query,
-                data: originalDataObjects
-            });
-            // Loader is hidden when the 'queryResult' message arrives.
+            const result = alasql(query, [originalDataObjects]);
+            
+            if (!result || result.length === 0) {
+                currentDisplayData = [];
+                columnTypes = [];
+                await renderTable([], []);
+                return;
+            }
+
+            const newData = objectsToData(result);
+            currentDisplayData = newData;
+            // Recompute types for query result columns
+            columnTypes = inferColumnTypes(newData);
+            sortState = { col: -1, dir: 'none' };
+            await renderTable(newData, []);
+            errorContainer.classList.add('hidden');
         } catch (e) {
             errorContainer.textContent = "Query Error: " + e.message;
             errorContainer.classList.remove('hidden');
+        } finally {
             hideLoader();
         }
     }, 50);
@@ -1855,10 +1825,7 @@ async function parseCSV(text, delimiter) {
         } else {
             if (char === '"') {
                 inQuotes = true;
-                // Do NOT update fieldStart here — it was already set correctly by
-                // the preceding delimiter or newline handler. Overwriting it with
-                // the quote position caused an off-by-one for whitespace-padded
-                // quoted fields (e.g. `a, "b"`) and confused field-start tracking.
+                fieldStart = i;
             } else if (char === delim) {
                 let field = text.slice(fieldStart, i);
                 if (field.startsWith('"') && field.endsWith('"')) {
@@ -1937,28 +1904,16 @@ function debounceSave() {
 async function onCellChange(e) {
     const cell = e.target;
     const scrollTop = tableContainer.scrollTop;
-    const dataRowCount = currentDisplayData.length - 1; // exclude header
-
-    // Use scrollTopToRow() — same helper used by updateVirtualTable — so that
-    // the row mapping is correct even for large files where the virtual spacer
-    // height is scaled and Math.floor(scrollTop / rowHeight) would be wrong.
-    const firstVisibleRow = scrollTopToRow(scrollTop, dataRowCount); // 0-based data row
-    const startRow = Math.max(1, firstVisibleRow); // 1-based (header is index 0 in currentDisplayData)
+    const startRow = Math.max(1, Math.floor(scrollTop / rowHeight));
     const buffer = 10;
     const renderStart = Math.max(1, startRow - buffer);
-
-    // cell.parentElement.rowIndex is the 0-based index within the <tbody>.
-    // tbody row 0 corresponds to currentDisplayData[renderStart], so:
+    
     const rowInDisplay = renderStart + cell.parentElement.rowIndex;
-
-    // cell.cellIndex includes the frozen-column spacer <td> at index 0 when
-    // columns are frozen. Skip over it by subtracting 1 if frozenCols is active.
-    const col = frozenCols.size > 0 ? cell.cellIndex - 1 : cell.cellIndex;
-
+    const col = cell.cellIndex;
     const newValue = cell.textContent;
 
+    if (currentDisplayData[rowInDisplay] && currentDisplayData[rowInDisplay][col] === newValue) return;
     if (!currentDisplayData[rowInDisplay]) return;
-    if (currentDisplayData[rowInDisplay][col] === newValue) return;
 
     currentDisplayData[rowInDisplay][col] = newValue;
     debounceSave();
