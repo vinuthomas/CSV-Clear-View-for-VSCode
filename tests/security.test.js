@@ -40,8 +40,9 @@ function assertEqual(actual, expected, testName) {
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 function escapeHtml(text) {
-    if (!text) return text;
-    return text
+    if (text === null || text === undefined) return '';
+    const str = String(text);
+    return str
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -166,16 +167,17 @@ function objectsToData(objects) {
     return data;
 }
 
-function dataToCSV(data) {
+function dataToCSV(data, lineEnding) {
+    const eol = lineEnding || '\n';
     return data.map(row => {
         return row.map(cell => {
             const text = cell || '';
-            if (text.includes(',') || text.includes('"') || text.includes('\n')) {
+            if (text.includes(',') || text.includes('"') || text.includes('\n') || text.includes('\r')) {
                 return `"${text.replace(/"/g, '""')}"`;
             }
             return text;
         }).join(',');
-    }).join('\n');
+    }).join(eol);
 }
 
 // SQL validation function (extracted from the fixed runQuery)
@@ -184,7 +186,10 @@ function validateQuery(query) {
     if (!/^SELECT\s/i.test(normalizedQuery)) {
         return { valid: false, error: "Only SELECT queries are allowed." };
     }
-    const blockedPattern = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP)\b/i;
+    if (/;/.test(normalizedQuery)) {
+        return { valid: false, error: "Semicolons are not allowed in queries." };
+    }
+    const blockedPattern = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP|ATTACH|DETACH|SOURCE|PRAGMA|SHOW\s+TABLES|SHOW\s+DATABASES|SET\s+OPTION)\b/i;
     if (blockedPattern.test(normalizedQuery)) {
         return { valid: false, error: "Data modification statements are not allowed." };
     }
@@ -425,6 +430,42 @@ async function runTests() {
         assert(r.valid, 'Allow SELECT with whitespace');
     }
 
+    // --- New rules added this session ---
+    {
+        const r = validateQuery("SELECT * FROM ?; DROP TABLE foo");
+        assert(!r.valid, 'Block semicolon in query');
+    }
+
+    {
+        const r = validateQuery("SELECT * FROM ?; SELECT 1");
+        assert(!r.valid, 'Block multi-statement via semicolon');
+    }
+
+    {
+        const r = validateQuery("SELECT * FROM ? ATTACH DATABASE 'evil'");
+        assert(!r.valid, 'Block ATTACH command');
+    }
+
+    {
+        const r = validateQuery("SELECT * FROM ? DETACH evil");
+        assert(!r.valid, 'Block DETACH command');
+    }
+
+    {
+        const r = validateQuery("SELECT * FROM ? PRAGMA table_info(?)");
+        assert(!r.valid, 'Block PRAGMA command');
+    }
+
+    {
+        const r = validateQuery("SHOW TABLES");
+        assert(!r.valid, 'Block SHOW TABLES');
+    }
+
+    {
+        const r = validateQuery("SHOW DATABASES");
+        assert(!r.valid, 'Block SHOW DATABASES');
+    }
+
     // --------------------------------------------------------
     console.log('\n🔑 4. NONCE GENERATION');
     // --------------------------------------------------------
@@ -477,9 +518,11 @@ async function runTests() {
     }
 
     {
-        assert(escapeHtml(null) === null, 'Handle null input');
+        assert(escapeHtml(null) === '', 'Handle null input (returns empty string)');
         assert(escapeHtml('') === '', 'Handle empty string');
-        assert(escapeHtml(undefined) === undefined, 'Handle undefined');
+        assert(escapeHtml(undefined) === '', 'Handle undefined (returns empty string)');
+        assert(escapeHtml(0) === '0', 'Handle numeric zero (coerces to string)');
+        assert(escapeHtml(false) === 'false', 'Handle boolean false (coerces to string)');
     }
 
     // --------------------------------------------------------
@@ -508,6 +551,31 @@ async function runTests() {
         const objects = await dataToObjects(data);
         const backToData = objectsToData(objects);
         assertEqual(backToData, [['A','B'],['1','2'],['3','4']], 'Roundtrip through objects');
+    }
+
+    // --- CRLF preservation (new fix) ---
+    {
+        const data = [['Name','City'],['Alice','NYC'],['Bob','LA']];
+        const crlfOutput = dataToCSV(data, '\r\n');
+        assert(crlfOutput.includes('\r\n'), 'dataToCSV preserves CRLF when requested');
+        assert(!crlfOutput.startsWith('\r\n'), 'CRLF only between rows, not at start');
+        const lines = crlfOutput.split('\r\n');
+        assert(lines.length === 3, 'CRLF-separated output has correct row count');
+    }
+
+    {
+        const data = [['A'],['val\rwith-cr']];
+        const output = dataToCSV(data);
+        assert(output.includes('"val\rwith-cr"'), 'dataToCSV quotes cells containing \\r');
+    }
+
+    {
+        // Roundtrip with CRLF
+        const csvText = 'A,B\r\n1,2\r\n3,4';
+        const { data } = await parseCSV(csvText);
+        const serialized = dataToCSV(data, '\r\n');
+        const { data: reparsed } = await parseCSV(serialized);
+        assertEqual(data, reparsed, 'CRLF roundtrip preserves data');
     }
 
     // --------------------------------------------------------
@@ -608,6 +676,35 @@ async function runTests() {
         assert(!src.includes('createDiagnosticCollection'), 'Unused diagnostics collection removed');
     }
 
+    // New: extension host source checks for this session's fixes
+    {
+        const src = fs.readFileSync(
+            path.join(__dirname, '..', 'src', 'csvEditor.ts'), 'utf8'
+        );
+
+        // CSP no longer contains unsafe-eval
+        assert(!src.includes("'unsafe-eval'"), 'CSP does not contain unsafe-eval');
+        // alasql is imported at module level
+        assert(src.includes("import alasql"), 'alasql imported at module level in extension host');
+        // runQuery handler exists
+        assert(src.includes("case 'runQuery'"), 'Extension host handles runQuery messages');
+        // queryResult response
+        assert(src.includes("type: 'queryResult'"), 'Extension host sends queryResult response');
+        // Server-side semicolon block
+        assert(src.includes('/;/'), 'Server-side SQL validation blocks semicolons');
+        // ATTACH/DETACH blocked server-side
+        assert(src.includes('ATTACH'), 'Server-side SQL validation blocks ATTACH');
+        // watcher listener is disposed
+        assert(src.includes('watcherListener.dispose()'), 'File watcher listener is disposed on panel close');
+        // saveDocument errors surfaced
+        assert(src.includes('showErrorMessage'), 'saveDocument errors shown via showErrorMessage');
+        // fs imported at module level (not inline require)
+        assert(src.includes("import * as fs from 'fs'"), 'fs imported at module level');
+        assert(!src.includes("require('fs')"), 'No inline require(fs) calls remain');
+        // EventEmitter stored as class field
+        assert(src.includes('_onDidChangeCustomDocumentEmitter'), 'EventEmitter stored as named class field');
+    }
+
     // --------------------------------------------------------
     console.log('\n🌐 8. FRONTEND SECURITY (csv.js source verification)');
     // --------------------------------------------------------
@@ -629,6 +726,25 @@ async function runTests() {
         // The new pattern uses createElement + textContent
         assert(src.includes("hiddenInput.type = \"hidden\""), 'Autocomplete uses createElement for hidden input');
         assert(src.includes("strongEl.textContent"), 'Autocomplete uses textContent for display');
+
+        // New: message origin check handles empty string correctly (not truthy-gated)
+        assert(src.includes("event.origin !== ''"), 'Origin check handles empty-string origin correctly');
+
+        // New: SQL now runs on extension host, not in webview via alasql()
+        assert(src.includes("type: 'runQuery'"), 'Webview sends runQuery postMessage to extension host');
+        assert(!src.includes("alasql("), 'Webview does not call alasql() directly (moved to host)');
+
+        // New: chunkedCache has a hard size cap
+        assert(src.includes("MAX_CACHED_PAGES"), 'chunkedCache has a hard page cap constant');
+
+        // New: date inference uses strict pattern
+        assert(src.includes("DATE_PATTERN"), 'Date inference uses strict regex pattern before new Date()');
+
+        // New: semicolons blocked in SQL validation
+        assert(src.includes("/;/"), 'SQL validation blocks semicolons');
+
+        // New: var replaced with const/let in autocomplete
+        assert(!src.match(/^\s*var [a-zA-Z]/m), 'No bare var declarations remain in csv.js');
     }
 
     // --------------------------------------------------------
