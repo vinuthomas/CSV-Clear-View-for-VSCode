@@ -91,6 +91,7 @@ CSV ClearView includes a full SQL engine (AlaSQL) for ad-hoc data analysis:
 
 - **Table name:** Always use `?` to reference your CSV data
 - **Column names with spaces:** Wrap in brackets: `[First Name]`, `[Unit Price]`
+- **Column names are case-sensitive:** `[Price]` and `[price]` are treated as different columns — use the exact casing from the header row
 - **String literals:** Use single quotes: `'Smith'`, `'New York'`
 - **Allowed operations:** Only `SELECT` statements (safety restriction)
 - **Blocked operations:** `DROP`, `DELETE`, `INSERT`, `UPDATE`, `CREATE`, `ALTER`, etc.

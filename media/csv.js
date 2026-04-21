@@ -267,7 +267,7 @@ function inferColumnTypes(data) {
         let nonEmptyCount = 0;
 
         for (const row of sampleRows) {
-            const raw = (row[c] || '').trim();
+            const raw = String(row[c] == null ? '' : row[c]).trim();
             if (raw === '' || raw === null || raw === undefined) { continue; }
             nonEmptyCount++;
 
@@ -1822,7 +1822,13 @@ async function dataToObjects(data) {
         const row = data[i];
         const obj = Object.create(null);
         safeHeaders.forEach((h, index) => {
-            obj[h] = row[index];
+            const val = row[index];
+            // Coerce numeric strings to numbers so AlaSQL aggregates (AVG, SUM, etc.) work correctly.
+            if (val !== '' && val != null && !isNaN(Number(val))) {
+                obj[h] = Number(val);
+            } else {
+                obj[h] = val;
+            }
         });
         objects.push(obj);
 
@@ -1838,7 +1844,7 @@ function objectsToData(objects) {
     const headers = Object.keys(objects[0]);
     const data = [headers];
     objects.forEach(obj => {
-        const row = headers.map(h => obj[h]);
+        const row = headers.map(h => obj[h] == null ? '' : String(obj[h]));
         data.push(row);
     });
     return data;

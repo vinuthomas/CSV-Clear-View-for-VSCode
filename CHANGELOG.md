@@ -2,6 +2,17 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.0.5] - 2026-04-21
+
+### Fixed
+
+- **SQL aggregation functions (AVG, SUM, MIN, MAX):** Numeric CSV values are now correctly coerced to numbers before being passed to the SQL engine. Previously, all values were strings, causing aggregation functions like `AVG([Price])` to silently drop the result column. Queries such as `SELECT [Product], COUNT(*) as [count], AVG([Price]) as avg_price FROM ? GROUP BY [Product]` now return all expected columns.
+- **`inferColumnTypes` crash on numeric query results:** Fixed a `trim is not a function` error that occurred when rendering SQL query results containing numeric values (e.g. from `COUNT(*)` or `AVG()`). Values are now safely coerced to strings before type inference.
+
+### Changed
+
+- **README:** Added a note to the SQL Query Guide clarifying that column names are case-sensitive and must match the header row exactly.
+
 ## [1.0.4] - 2026-04-21
 
 ### Fixed
