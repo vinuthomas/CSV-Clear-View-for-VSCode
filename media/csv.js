@@ -277,11 +277,17 @@ function inferColumnTypes(data) {
             if (isFloat && !/^-?\d*\.?\d+([eE][+-]?\d+)?$/.test(raw)) { isFloat = false; }
             // Boolean
             if (isBool && !/^(true|false|yes|no|1|0|y|n)$/i.test(raw)) { isBool = false; }
-            // Date: try native parse + sanity check year in [1900..2100]
+            // Date: require a recognisable date pattern first, then native parse + year sanity check.
+            // This prevents plain numbers and booleans from being mis-classified as dates.
             if (isDate) {
-                const d = new Date(raw);
-                if (isNaN(d.getTime()) || d.getFullYear() < 1900 || d.getFullYear() > 2100) {
+                const DATE_PATTERN = /^\d{4}[-/]\d{1,2}[-/]\d{1,2}([ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$|^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$/;
+                if (!DATE_PATTERN.test(raw)) {
                     isDate = false;
+                } else {
+                    const d = new Date(raw);
+                    if (isNaN(d.getTime()) || d.getFullYear() < 1900 || d.getFullYear() > 2100) {
+                        isDate = false;
+                    }
                 }
             }
         }
