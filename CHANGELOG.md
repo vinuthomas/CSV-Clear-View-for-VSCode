@@ -2,7 +2,39 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
-## [1.0.2] - 2026-04-14
+## [1.0.3] - 2026-04-21
+
+### Security
+
+- **Eliminated `unsafe-eval` from Content Security Policy:** SQL queries are now executed on the extension host (Node.js) instead of the webview. The `alasql` library is bundled into the extension host via webpack, and queries are dispatched via `postMessage`. The webview CSP is now nonce-only with no `unsafe-eval`.
+- **Server-side SQL validation:** Added defence-in-depth SQL validation on the extension host in addition to the existing webview-side checks. Blocks semicolons (multi-statement injection), `ATTACH`, `DETACH`, `PRAGMA`, `SHOW TABLES`, `SHOW DATABASES`, and `SET OPTION` commands.
+- **Expanded webview SQL validation:** Extended the blocked-keyword list with AlaSQL-specific bypass commands: `ATTACH`, `DETACH`, `SOURCE`, `PRAGMA`, `SHOW TABLES`, `SHOW DATABASES`, `SET OPTION`. Semicolons are now explicitly blocked.
+- **Fixed message origin check:** The webview message listener now correctly handles VS Code's empty-string `event.origin` (previously a truthy guard skipped the check entirely when origin was `''`).
+
+### Fixed
+
+- **File system watcher listener leak:** The `onDidChange` listener disposable returned by `createFileSystemWatcher` is now stored and disposed when the editor panel closes.
+- **`buildRowIndex` escaped-quote tracking:** The byte-level row-index scanner now correctly handles `""` (escaped double-quote inside a quoted field) without toggling `inQuotes` twice and misidentifying newlines inside quoted fields as row boundaries.
+- **`escapeHtml` null/undefined safety:** `escapeHtml` now returns `''` for `null` or `undefined` inputs and coerces all values via `String()`, preventing uncaught `.replace()` errors when rendering cell data.
+- **Date type inference:** Date columns now require a recognisable date pattern (ISO 8601, `YYYY/MM/DD`, `DD/MM/YYYY`, etc.) before falling back to `new Date()` parsing, preventing plain numbers and short strings from being mis-classified as dates.
+- **`dataToCSV` CRLF preservation:** When serialising edited data back to CSV, the original file's line endings (CRLF vs LF) are now detected and preserved. Cells containing `\r` are also correctly quoted.
+- **Tooltip row index on large files:** The hover tooltip row number now uses `scrollTopToRow()` (which accounts for virtual-spacer scaling on files with millions of rows) instead of the naive `Math.floor(scrollTop / rowHeight)` formula.
+- **`saveDocument` error surfacing:** File-write errors are now reported to the user via `vscode.window.showErrorMessage` instead of being silently swallowed.
+
+### Changed
+
+- **`onDidChangeCustomDocument` EventEmitter stored as class field:** The emitter is now held as `_onDidChangeCustomDocumentEmitter` so it can be properly disposed if needed, rather than being created inline and immediately discarded.
+- **`chunkedCache` hard size cap:** Added a 50-page hard cap as a backstop against unbounded memory growth in paged view mode (the existing ±15-page eviction window remains the primary eviction mechanism).
+- **`fs` module import hoisted to module level:** Replaced all inline `require('fs')` calls inside methods with a single `import * as fs from 'fs'` at the top of `csvEditor.ts`.
+- **`@vscode/vsce` moved to devDependencies:** The packaging tool is a build-time dependency, not a runtime one.
+- **TypeScript upgraded to 5.x (5.9.3):** Updated TypeScript and `@types/node` (to v18) for stricter type checking and modern language features.
+- **Replaced `var` with `const`/`let`** in autocomplete and helper functions in `csv.js`.
+
+### Tests
+
+- Expanded test suite from 87 to 119 tests covering all new and changed behaviour: semicolon/AlaSQL SQL blocking, CRLF roundtrip, `escapeHtml` edge cases, backend source assertions (no `unsafe-eval`, alasql host import, `runQuery` handler, watcher listener disposal, `fs` module import), and frontend source assertions (origin check, postMessage dispatch, `DATE_PATTERN`, `MAX_CACHED_PAGES`).
+
+
 
 ### Added
 
