@@ -183,7 +183,20 @@ The extension communicates with the webview via `postMessage`:
 
 ## Release Management Guidelines
 
-### Version Release Process
+### ⚠️ CRITICAL: Release Approval Required
+**NEVER package, version-bump, create a GitHub release, or publish to the marketplace without explicit user instruction.** The workflow is:
+1. Make and commit code changes
+2. Run tests
+3. **Stop and wait** — ask the user if they want to test locally before releasing
+4. Only proceed with packaging/releasing when the user explicitly says to
+
+Local testing install command (for user reference, do NOT run automatically):
+```bash
+node_modules/.bin/vsce package
+code --install-extension csv-clearview-x.x.x.vsix
+```
+
+### Version Release Process (only when explicitly requested)
 1. **Changelog Update:** Always update the changelog before creating a new version. Ensure the changelog is complete and up to date before any release is made.
 2. **README Update:** Update the README when a release is made to ensure:
    - The extension blurb is appealing to users searching the marketplace

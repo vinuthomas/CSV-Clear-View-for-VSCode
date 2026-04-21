@@ -193,6 +193,9 @@ function validateQuery(query) {
     if (blockedPattern.test(normalizedQuery)) {
         return { valid: false, error: "Data modification statements are not allowed." };
     }
+    if (/(?<!\])"(?!\[)/.test(normalizedQuery.replace(/\[[^\]]*\]/g, ''))) {
+        return { valid: false, error: "Use single quotes for string values, not double quotes." };
+    }
     return { valid: true };
 }
 
@@ -464,6 +467,25 @@ async function runTests() {
     {
         const r = validateQuery("SHOW DATABASES");
         assert(!r.valid, 'Block SHOW DATABASES');
+    }
+
+    // --- Double-quote string literal detection ---
+    {
+        const r = validateQuery('SELECT * FROM ? WHERE [Column_4]="Row7_Col5"');
+        assert(!r.valid, 'Block double-quoted string literal (use single quotes)');
+        assert(r.error.includes('single quotes'), 'Error message suggests single quotes');
+    }
+
+    {
+        // Single quotes should work fine
+        const r = validateQuery("SELECT * FROM ? WHERE [Column_4]='Row7_Col5'");
+        assert(r.valid, 'Allow single-quoted string literal');
+    }
+
+    {
+        // Bracket-quoted column name containing a double-quote character should not be blocked
+        const r = validateQuery('SELECT * FROM ? WHERE [Col"Name]=\'val\'');
+        assert(r.valid, 'Allow double-quote inside bracket-quoted column name');
     }
 
     // --------------------------------------------------------
@@ -741,7 +763,8 @@ async function runTests() {
         assert(src.includes("DATE_PATTERN"), 'Date inference uses strict regex pattern before new Date()');
 
         // New: semicolons blocked in SQL validation
-        assert(src.includes("/;/"), 'SQL validation blocks semicolons');
+         assert(src.includes("/;/"), 'SQL validation blocks semicolons');
+        assert(src.includes("single quotes"), 'SQL validation detects double-quoted string literals');
 
         // New: var replaced with const/let in autocomplete
         assert(!src.match(/^\s*var [a-zA-Z]/m), 'No bare var declarations remain in csv.js');

@@ -1759,6 +1759,13 @@ function runQuery() {
         errorContainer.classList.remove('hidden');
         return;
     }
+    // Detect double-quoted string literals (invalid in AlaSQL — use single quotes)
+    // Match a " that is not part of a bracket-quoted identifier like [col]
+    if (/(?<!\])"(?!\[)/.test(normalizedQuery.replace(/\[[^\]]*\]/g, ''))) {
+        errorContainer.textContent = "Query Error: Use single quotes for string values, not double quotes. Example: WHERE [Column]='value'";
+        errorContainer.classList.remove('hidden');
+        return;
+    }
 
     if (queryHistory.length === 0 || queryHistory[0] !== query) {
         queryHistory.unshift(query);
