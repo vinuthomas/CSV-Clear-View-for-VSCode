@@ -2,6 +2,12 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.0.4] - 2026-04-21
+
+### Fixed
+
+- **SQL double-quote detection:** When a query uses double quotes around a string value (e.g. `WHERE [Col]="value"`), a clear, actionable error message is now shown — *"Use single quotes for string values, not double quotes. Example: WHERE [Column]='value'"* — instead of AlaSQL's cryptic internal parse error. Bracket-quoted column names (e.g. `[Col"Name]`) are correctly excluded from this check.
+
 ## [1.0.3] - 2026-04-21
 
 ### Security
