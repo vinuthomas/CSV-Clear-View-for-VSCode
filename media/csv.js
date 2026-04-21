@@ -1964,15 +1964,17 @@ async function onCellChange(e) {
 
 function dataToCSV(data, delimiter) {
     const delim = delimiter || ',';
+    // Preserve the original file's line endings (CRLF vs LF).
+    const lineEnding = currentText && currentText.includes('\r\n') ? '\r\n' : '\n';
     return data.map(row => {
         return row.map(cell => {
             const text = cell || '';
-            if (text.includes(delim) || text.includes('"') || text.includes('\n')) {
+            if (text.includes(delim) || text.includes('"') || text.includes('\n') || text.includes('\r')) {
                 return `"${text.replace(/"/g, '""')}"`;
             }
             return text;
         }).join(delim);
-    }).join('\n');
+    }).join(lineEnding);
 }
 
 function createColGroup(widths) {
