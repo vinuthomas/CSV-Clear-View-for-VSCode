@@ -1465,7 +1465,8 @@ if (tableContainer) {
                 
                 const rowInTable = cell.parentElement.rowIndex;
                 const scrollTop = tableContainer.scrollTop;
-                const startRow = Math.max(1, Math.floor(scrollTop / rowHeight));
+                const dataRowCount = currentDisplayData.length - 1;
+                const startRow = Math.max(1, scrollTopToRow(scrollTop, dataRowCount));
                 const buffer = 10;
                 const renderStart = Math.max(1, startRow - buffer);
                 
