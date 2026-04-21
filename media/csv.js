@@ -1481,7 +1481,7 @@ if (tableContainer) {
 // =============================================================================
 
 queryInput.addEventListener("input", function(e) {
-    var a, b, i, val = this.value;
+    let a, b, i, val = this.value;
     closeAllLists();
     if (!val) { return false;}
     currentFocus = -1;
@@ -1553,7 +1553,7 @@ queryInput.addEventListener("input", function(e) {
 });
 
 queryInput.addEventListener("keydown", function(e) {
-    var x = document.getElementById(this.id + "autocomplete-list");
+    let x = document.getElementById(this.id + "autocomplete-list");
     if (x) x = x.getElementsByTagName("div");
     
     const autocompleteOpen = x && x.length > 0;
@@ -1645,7 +1645,7 @@ queryInput.addEventListener("keydown", function(e) {
                  const common = sharedStart(matches);
                  if (common.length > currentWord.length) {
                       insertValue(common);
-                      var event = new Event('input', { bubbles: true });
+                      const event = new Event('input', { bubbles: true });
                       this.dispatchEvent(event);
                  }
              }
@@ -1702,8 +1702,8 @@ function removeActive(x) {
 }
 
 function closeAllLists(elmnt) {
-    var x = document.getElementsByClassName("autocomplete-items");
-    for (var i = 0; i < x.length; i++) {
+    const x = document.getElementsByClassName("autocomplete-items");
+    for (let i = 0; i < x.length; i++) {
         if (elmnt != x[i] && elmnt != queryInput) {
             x[i].parentNode.removeChild(x[i]);
         }
@@ -1725,8 +1725,9 @@ function insertValue(val) {
 }
 
 function sharedStart(array){
-    var A= array.concat().sort(), 
-    a1= A[0], a2= A[A.length-1], L= a1.length, i= 0;
+    const A = array.concat().sort();
+    const a1 = A[0], a2 = A[A.length-1];
+    let L = a1.length, i = 0;
     while(i<L && a1.charAt(i).toLowerCase()=== a2.charAt(i).toLowerCase()) i++;
     return a1.substring(0, i);
 }
