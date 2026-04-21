@@ -16,7 +16,11 @@ class CsvDocument implements vscode.CustomDocument {
 		public readonly size: number
 	) { }
 
-	dispose(): void { }
+	dispose(): void {
+		// CsvDocument holds no resources of its own (file handles are opened and
+		// closed per-operation). The webview panel and file-system watcher are
+		// disposed via the panel's onDidDispose listener in openCustomDocument.
+	}
 }
 
 /**

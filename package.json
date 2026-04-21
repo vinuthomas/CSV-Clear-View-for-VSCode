@@ -164,7 +164,7 @@
     "test-compile": "tsc -p ./"
   },
   "devDependencies": {
-    "@types/node": "^16.x",
+    "@types/node": "^18.19.130",
     "@types/vscode": "^1.75.0",
     "@vscode/vsce": "^3.7.1",
     "ts-loader": "^9.4.2",
