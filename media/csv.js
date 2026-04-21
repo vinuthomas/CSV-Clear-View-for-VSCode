@@ -973,8 +973,10 @@ function switchToPlainTextMode() {
 // =============================================================================
 
 window.addEventListener('message', event => {
-    // Only accept messages from the VS Code webview host
-    if (event.origin && !event.origin.startsWith('vscode-webview://')) {
+    // Only accept messages from the VS Code webview host.
+    // event.origin is '' in most VS Code webview contexts; block any non-empty
+    // origin that does not match the expected vscode-webview:// scheme.
+    if (event.origin !== '' && !event.origin.startsWith('vscode-webview://')) {
         console.warn('Ignoring message from unexpected origin:', event.origin);
         return;
     }
