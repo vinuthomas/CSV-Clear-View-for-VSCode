@@ -165,14 +165,14 @@
   },
   "devDependencies": {
     "@types/node": "^18.19.130",
-    "@types/vscode": "^1.75.0",
-    "@vscode/vsce": "^3.7.1",
-    "ts-loader": "^9.4.2",
+    "@types/vscode": "^1.116.0",
+    "@vscode/vsce": "^3.9.1",
+    "ts-loader": "^9.5.7",
     "typescript": "^5.9.3",
-    "webpack": "^5.75.0",
+    "webpack": "^5.106.2",
     "webpack-cli": "^5.0.1"
   },
   "dependencies": {
-    "alasql": "^4.17.0"
+    "alasql": "^4.17.2"
   }
 }
