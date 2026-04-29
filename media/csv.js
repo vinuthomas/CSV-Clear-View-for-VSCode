@@ -38,6 +38,7 @@ let filtersActive = false;      // true when filter row is visible
 
 // --- Duplicate Detection State ---
 let dupesMode = false;          // true when duplicate rows are highlighted
+let dupesOnlyMode = false;      // true when table is filtered to show only dupes with line numbers
 
 // Convert a logical row index (0-based data rows, i.e. excluding header) to
 // a scrollTop pixel value within the capped spacer.
@@ -891,7 +892,10 @@ function updateVirtualTable() {
         const row = slice[i];
         const absoluteRowIdx = renderStart + i; // index into currentDisplayData (1-based data)
         const isDupe = dupesMode && dupeIndicesGlobal.has(absoluteRowIdx);
-        html += `<tr style="height: ${rowHeight}px"${isDupe ? ' class="dupe-row"' : ''}>`;
+        // In dupes-only mode, blank rows are group separators
+        const isSeparator = dupesOnlyMode && row.every(c => c === '');
+        const rowClass = isSeparator ? 'dupe-separator-row' : (isDupe ? 'dupe-row' : '');
+        html += `<tr style="height: ${rowHeight}px"${rowClass ? ` class="${rowClass}"` : ''}>`;
         // Spacer td that sits under the frozen overlay
         if (frozenCols.size > 0) {
             html += `<td style="width:${frozenSpacerWidth}px;min-width:${frozenSpacerWidth}px;padding:0;border:none;" aria-hidden="true"></td>`;
@@ -899,7 +903,12 @@ function updateVirtualTable() {
         for (let colIndex = 0; colIndex < columnWidths.length; colIndex++) {
             if (frozenCols.has(colIndex)) { continue; } // rendered in frozen overlay
             const cell = row[colIndex] || '';
-            html += `<td>${escapeHtml(cell)}</td>`;
+            if (dupesOnlyMode && colIndex === 0) {
+                // Line number column — styled as a pin, not editable
+                html += `<td class="dupe-linenum-cell">${escapeHtml(cell)}</td>`;
+            } else {
+                html += `<td>${escapeHtml(cell)}</td>`;
+            }
         }
         html += '</tr>';
     }
@@ -1921,6 +1930,24 @@ function findDuplicateRows(data) {
     return dupeIndices;
 }
 
+// Returns Map<key, originalLineNumbers[]> — groups of duplicate rows with their
+// 1-based CSV line numbers (header = line 1, first data row = line 2).
+function buildDupeGroups(data) {
+    if (!data || data.length < 2) { return new Map(); }
+    const seen = new Map(); // key -> [ {lineNum, row} ]
+    for (let i = 1; i < data.length; i++) {
+        const key = data[i].join('\x00');
+        if (!seen.has(key)) { seen.set(key, []); }
+        seen.get(key).push({ lineNum: i + 1, row: data[i] }); // line 1 = header
+    }
+    // Keep only keys with >1 occurrence
+    const groups = new Map();
+    for (const [key, entries] of seen) {
+        if (entries.length > 1) { groups.set(key, entries); }
+    }
+    return groups;
+}
+
 let dupeIndicesGlobal = new Set(); // currently highlighted dupe rows
 
 function runDuplicateDetection() {
@@ -1941,10 +1968,9 @@ function runDuplicateDetection() {
         dupesBanner.innerHTML = '<span class="dupes-none">✓ No duplicate rows found.</span> <button id="dupes-clear-btn" class="dupes-clear-btn">Dismiss</button>';
         dupesBanner.classList.remove('hidden');
     } else {
-        // Count unique duplicated row sets (not total occurrences)
-        const uniqueGroups = countDupeGroups(currentDisplayData);
+        const groups = buildDupeGroups(currentDisplayData);
         dupesBanner.innerHTML =
-            `<span class="dupes-found">⚠ ${dupeIndices.size} duplicate rows found across ${uniqueGroups} group(s).</span>` +
+            `<span class="dupes-found">⚠ ${dupeIndices.size} duplicate rows found across ${groups.size} group(s).</span>` +
             ` <button id="dupes-show-only-btn" class="dupes-action-btn">Show only duplicates</button>` +
             ` <button id="dupes-clear-btn" class="dupes-clear-btn">Dismiss</button>`;
         dupesBanner.classList.remove('hidden');
@@ -1955,55 +1981,75 @@ function runDuplicateDetection() {
 
     const showOnlyBtn = document.getElementById('dupes-show-only-btn');
     if (showOnlyBtn) {
-        showOnlyBtn.addEventListener('click', () => {
-            // Filter currentDisplayData to show only duplicated rows
-            const header = currentDisplayData[0];
-            const dupeRows = currentDisplayData.filter((_, i) => i === 0 || dupeIndices.has(i));
-            currentDisplayData = dupeRows;
-            dupeIndicesGlobal = findDuplicateRows(currentDisplayData);
-            renderTable(currentDisplayData, []);
-            if (dupesBanner) {
-                dupesBanner.innerHTML =
-                    `<span class="dupes-found">Showing ${dupeRows.length - 1} duplicate rows.</span>` +
-                    ` <button id="dupes-reset-btn" class="dupes-action-btn">Show all rows</button>` +
-                    ` <button id="dupes-clear-btn" class="dupes-clear-btn">Dismiss</button>`;
-                const resetBtn = document.getElementById('dupes-reset-btn');
-                if (resetBtn) { resetBtn.addEventListener('click', resetFromDupes); }
-                const cb = document.getElementById('dupes-clear-btn');
-                if (cb) { cb.addEventListener('click', dismissDupesBanner); }
-            }
-        });
+        showOnlyBtn.addEventListener('click', () => showDupesOnly(currentDisplayData));
     }
 
     // Re-render to apply highlight classes
     renderTable(currentDisplayData, []);
 }
 
-function countDupeGroups(data) {
-    if (!data || data.length < 2) { return 0; }
-    const seen = new Map();
-    let groups = 0;
-    for (let i = 1; i < data.length; i++) {
-        const key = data[i].join('\x00');
-        if (!seen.has(key)) { seen.set(key, 0); }
-        seen.set(key, seen.get(key) + 1);
+// Build and display the grouped duplicate-only view with a leading # (line number) column.
+function showDupesOnly(data) {
+    const groups = buildDupeGroups(data);
+    if (groups.size === 0) { return; }
+
+    // Build flat display data:
+    // Row 0 = header with "#" prepended
+    // Then for each group: its rows (with line number prepended), followed by a blank separator row
+    const header = data[0];
+    const lineNumHeader = ['#', ...header];
+    const displayRows = [lineNumHeader];
+
+    let groupIdx = 0;
+    for (const entries of groups.values()) {
+        for (const { lineNum, row } of entries) {
+            displayRows.push([String(lineNum), ...row]);
+        }
+        // Blank separator between groups (except after the last one)
+        groupIdx++;
+        if (groupIdx < groups.size) {
+            displayRows.push(new Array(lineNumHeader.length).fill(''));
+        }
     }
-    for (const count of seen.values()) {
-        if (count > 1) { groups++; }
+
+    dupesOnlyMode = true;
+    dupesMode = false;
+    dupeIndicesGlobal = new Set();
+    currentDisplayData = displayRows;
+    dupeIndicesGlobal = findDuplicateRows(displayRows);
+    dupesMode = true;
+    renderTable(displayRows, []);
+
+    if (dupesBanner) {
+        const totalRows = displayRows.length - 1 - (groups.size - 1); // subtract separator rows
+        dupesBanner.innerHTML =
+            `<span class="dupes-found">Showing ${totalRows} duplicate rows in ${groups.size} group(s).</span>` +
+            ` <button id="dupes-reset-btn" class="dupes-action-btn">Show all rows</button>` +
+            ` <button id="dupes-clear-btn" class="dupes-clear-btn">Dismiss</button>`;
+        const resetBtn = document.getElementById('dupes-reset-btn');
+        if (resetBtn) { resetBtn.addEventListener('click', resetFromDupes); }
+        const cb = document.getElementById('dupes-clear-btn');
+        if (cb) { cb.addEventListener('click', dismissDupesBanner); }
     }
-    return groups;
 }
 
 function dismissDupesBanner() {
     dupesMode = false;
+    dupesOnlyMode = false;
     dupeIndicesGlobal = new Set();
     if (dupesBanner) { dupesBanner.classList.add('hidden'); }
     if (dupesBtn) { dupesBtn.classList.remove('dupes-btn-active'); }
+    // If we were in dupes-only mode, restore the full dataset
+    currentDisplayData = originalRawData.slice();
+    if (sortState.col >= 0 && sortState.dir !== 'none') {
+        currentDisplayData = applySortToData(currentDisplayData, sortState.col, sortState.dir);
+    }
     renderTable(currentDisplayData, []);
 }
 
 function resetFromDupes() {
     dupesMode = false;
+    dupesOnlyMode = false;
     dupeIndicesGlobal = new Set();
     currentDisplayData = originalRawData.slice();
     if (sortState.col >= 0 && sortState.dir !== 'none') {
@@ -2048,6 +2094,7 @@ async function updateContent(text, config) {
     columnFilters = {};
     filtersActive = false;
     dupesMode = false;
+    dupesOnlyMode = false;
     dupeIndicesGlobal = new Set();
     removeFilterRow();
     if (filterBtn) { filterBtn.classList.remove('filter-row-open', 'filter-btn-active'); }
@@ -2512,6 +2559,14 @@ async function renderTable(data, errors) {
         if (frozenCols.has(index)) { return; } // frozen headers rendered separately
         const th = document.createElement('th');
         th.dataset.colIndex = index;
+
+        // In dupes-only mode, column 0 is the line-number pin — render simply
+        if (dupesOnlyMode && index === 0) {
+            th.className = 'dupe-linenum-header';
+            th.textContent = '#';
+            trHead.appendChild(th);
+            return;
+        }
 
         // Type badge
         const type = columnTypes[index] || 'string';

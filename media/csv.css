@@ -1194,4 +1194,35 @@ tr.dupe-row td {
     background-color: var(--vscode-diffEditor-insertedLineBackground, rgba(255, 160, 0, 0.12)) !important;
 }
 
+/* Group separator row in dupes-only view */
+tr.dupe-separator-row td {
+    height: 8px !important;
+    padding: 0 !important;
+    background: var(--vscode-editorGroup-border) !important;
+    border: none !important;
+    opacity: 0.4;
+}
+
+/* Line number column in dupes-only view */
+td.dupe-linenum-cell {
+    font-size: 0.85em;
+    color: var(--vscode-editorLineNumber-foreground, #858585);
+    background: var(--vscode-editorGutter-background, var(--vscode-editor-background)) !important;
+    text-align: right;
+    padding-right: 8px !important;
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+    border-right: 1px solid var(--vscode-editorGroup-border) !important;
+}
+
+th.dupe-linenum-header {
+    text-align: right;
+    padding-right: 8px !important;
+    color: var(--vscode-editorLineNumber-foreground, #858585);
+    font-weight: normal;
+    font-size: 0.85em;
+    background: var(--vscode-editorGutter-background, var(--vscode-editor-background)) !important;
+    border-right: 1px solid var(--vscode-editorGroup-border) !important;
+}
+
 /* Active duplicates button — handled by .toolbar-btn active rules above */
