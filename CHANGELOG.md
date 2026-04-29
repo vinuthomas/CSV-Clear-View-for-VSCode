@@ -2,6 +2,16 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.0.6] - 2026-04-28
+
+### Security
+
+- **Dependency updates:** Updated `@vscode/vsce` (3.7.1 → 3.9.1), `alasql` (4.17.0 → 4.17.2), `webpack` (5.105.0 → 5.106.2), and `ts-loader` (9.5.4 → 9.5.7) to pull in latest security patches and bug fixes.
+
+### Changed
+
+- **Minimum VS Code version:** Bumped `engines.vscode` from `^1.75.0` to `^1.109.0` for compatibility with updated `@vscode/vsce` packaging tool.
+
 ## [1.0.5] - 2026-04-21
 
 ### Fixed
