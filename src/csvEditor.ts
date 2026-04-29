@@ -631,7 +631,6 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					<button id="reset-query" class="toolbar-btn" title="Reset to original data">Reset</button>
 					<div class="toolbar-divider"></div>
 					<button id="goto-row-btn" class="toolbar-btn" title="Go to row by number">Go to Row</button>
-					<button id="filter-btn" class="toolbar-btn" title="Toggle column filters">Filter</button>
 					<button id="profile-btn" class="toolbar-btn" title="Toggle column profile panel">Profile</button>
 					<button id="dupes-btn" class="toolbar-btn" title="Find duplicate rows">Duplicates</button>
 					<div class="toolbar-divider"></div>
@@ -643,7 +642,6 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					<div class="header-container">
 						<table id="header-table"></table>
 					</div>
-					<div id="filter-row-container" class="filter-row-container hidden"></div>
 					<div class="table-container">
 						<div id="virtual-spacer" class="virtual-spacer"></div>
 						<table id="csv-table"></table>

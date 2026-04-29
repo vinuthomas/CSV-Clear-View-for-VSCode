@@ -750,10 +750,6 @@ if (tableContainer) {
         if (headerContainer) {
             headerContainer.scrollLeft = tableContainer.scrollLeft;
         }
-        // Sync filter row horizontal scroll
-        if (filterRowContainer && filtersActive) {
-            filterRowContainer.scrollLeft = tableContainer.scrollLeft;
-        }
         // Sync frozen table vertical scroll
         const frozenBody = document.getElementById('frozen-body-table');
         if (frozenBody) {
@@ -1765,64 +1761,38 @@ document.addEventListener('click', (e) => {
 // =============================================================================
 
 function buildFilterRow() {
-    if (!filterRowContainer || !currentDisplayData || currentDisplayData.length === 0) { return; }
+    if (!headerTable || !currentDisplayData || currentDisplayData.length === 0) { return; }
     const headers = currentDisplayData[0];
+    const thead = headerTable.querySelector('thead');
+    if (!thead) { return; }
 
-    // Remember which column index is focused so we can restore it after rebuild
-    let focusedColIndex = -1;
-    filterRowContainer.querySelectorAll('.filter-input').forEach((inp, i) => {
-        if (document.activeElement === inp) { focusedColIndex = i; }
+    // Remember which visible column index had focus so we can restore it
+    let focusedVisibleIdx = -1;
+    thead.querySelectorAll('.filter-input').forEach((inp, i) => {
+        if (document.activeElement === inp) { focusedVisibleIdx = i; }
     });
 
-    // Rebuild as a table that mirrors the header table exactly:
-    // same colgroup, same table-layout:fixed, same scrollbar padding-right.
-    filterRowContainer.innerHTML = '';
+    // Remove any existing filter row
+    const existing = thead.querySelector('#filter-tr');
+    if (existing) { existing.remove(); }
 
-    const scrollbarWidth = tableContainer.offsetWidth - tableContainer.clientWidth;
-    filterRowContainer.style.paddingRight = scrollbarWidth + 'px';
-    filterRowContainer.style.paddingLeft = '0';
-    filterRowContainer.scrollLeft = tableContainer.scrollLeft;
-
-    const filterTable = document.createElement('table');
-    filterTable.className = 'filter-table';
-
-    // Use the same frozen-aware colgroup as the header table
-    const frozenArr = [...frozenCols].sort((a, b) => a - b);
-    const hasFrozen = frozenArr.length > 0;
-    const frozenTotalWidth = frozenArr.reduce((sum, i) => sum + (columnWidths[i] || 0), 0);
-
-    if (hasFrozen) {
-        // Build the same spacer+visible colgroup used by the header table
-        const cg = document.createElement('colgroup');
-        const spacer = document.createElement('col');
-        spacer.style.width = frozenTotalWidth + 'px';
-        cg.appendChild(spacer);
-        columnWidths.forEach((w, i) => {
-            if (frozenCols.has(i)) { return; }
-            const col = document.createElement('col');
-            col.style.width = w + 'px';
-            cg.appendChild(col);
-        });
-        filterTable.appendChild(cg);
-        filterTable.style.width = (frozenTotalWidth + columnWidths.filter((_, i) => !frozenCols.has(i)).reduce((a, b) => a + b, 0)) + 'px';
-    } else {
-        filterTable.appendChild(createColGroup(columnWidths));
-        filterTable.style.width = columnWidths.reduce((a, b) => a + b, 0) + 'px';
-    }
-
-    const tbody = document.createElement('tbody');
     const tr = document.createElement('tr');
+    tr.id = 'filter-tr';
 
-    // Spacer cell when frozen cols are present
-    if (hasFrozen) {
+    // Frozen spacer cell — mirrors the spacer th in the header row
+    const frozenArr = [...frozenCols].sort((a, b) => a - b);
+    if (frozenArr.length > 0) {
+        const frozenTotalWidth = frozenArr.reduce((sum, i) => sum + (columnWidths[i] || 0), 0);
         const td = document.createElement('td');
         td.style.width = frozenTotalWidth + 'px';
-        td.style.minWidth = frozenTotalWidth + 'px';
         td.style.padding = '0';
         td.style.border = 'none';
         td.setAttribute('aria-hidden', 'true');
         tr.appendChild(td);
     }
+
+    // Ensure columnWidths covers all header columns
+    while (columnWidths.length < headers.length) { columnWidths.push(150); }
 
     let visibleIdx = 0;
     headers.forEach((colName, colIndex) => {
@@ -1850,8 +1820,7 @@ function buildFilterRow() {
         td.appendChild(input);
         tr.appendChild(td);
 
-        if (visibleIdx === focusedColIndex) {
-            // Restore focus after rebuild using microtask so DOM is ready
+        if (visibleIdx === focusedVisibleIdx) {
             const captured = input;
             Promise.resolve().then(() => {
                 captured.focus();
@@ -1861,9 +1830,7 @@ function buildFilterRow() {
         visibleIdx++;
     });
 
-    tbody.appendChild(tr);
-    filterTable.appendChild(tbody);
-    filterRowContainer.appendChild(filterTable);
+    thead.appendChild(tr);
 }
 
 function applyFilters() {
@@ -1896,7 +1863,7 @@ function clearAllFilters() {
         currentDisplayData = applySortToData(currentDisplayData, sortState.col, sortState.dir);
     }
     renderTable(currentDisplayData, []);
-    buildFilterRow(); // reset input values
+    if (filtersActive) { buildFilterRow(); } // reset input values
     updateFilterBtnState();
 }
 
@@ -1914,19 +1881,23 @@ function updateFilterBtnState() {
 
 if (filterBtn) {
     filterBtn.addEventListener('click', () => {
-        if (!filterRowContainer) { return; }
         filtersActive = !filtersActive;
         if (filtersActive) {
             buildFilterRow();
-            filterRowContainer.classList.remove('hidden');
             filterBtn.classList.add('filter-row-open');
             filterBtn.title = 'Hide filter row';
         } else {
-            filterRowContainer.classList.add('hidden');
+            removeFilterRow();
             filterBtn.classList.remove('filter-row-open');
             clearAllFilters();
         }
     });
+}
+
+function removeFilterRow() {
+    if (!headerTable) { return; }
+    const tr = headerTable.querySelector('#filter-tr');
+    if (tr) { tr.remove(); }
 }
 
 // =============================================================================
@@ -2078,7 +2049,7 @@ async function updateContent(text, config) {
     filtersActive = false;
     dupesMode = false;
     dupeIndicesGlobal = new Set();
-    if (filterRowContainer) { filterRowContainer.classList.add('hidden'); filterRowContainer.innerHTML = ''; }
+    removeFilterRow();
     if (filterBtn) { filterBtn.classList.remove('filter-row-open', 'filter-btn-active'); }
     if (dupesBanner) { dupesBanner.classList.add('hidden'); }
     if (dupesBtn) { dupesBtn.classList.remove('dupes-btn-active'); }
@@ -2431,6 +2402,11 @@ async function renderTable(data, errors) {
     const existingFrozen = document.getElementById('frozen-overlay');
     if (existingFrozen) { existingFrozen.remove(); }
 
+    // Detach the filter row before wiping the header so we can reattach it
+    // afterwards without rebuilding — this preserves focus during keystroke filtering.
+    const existingFilterTr = headerTable ? headerTable.querySelector('#filter-tr') : null;
+    if (existingFilterTr) { existingFilterTr.remove(); }
+
     if (headerTable) headerTable.innerHTML = '';
     table.innerHTML = '';
     
@@ -2620,9 +2596,17 @@ async function renderTable(data, errors) {
         buildSchemaPanel();
     }
 
-    // Rebuild filter row if filters are active (column widths may have changed)
-    if (filtersActive && filterRowContainer) {
-        buildFilterRow();
+    // Reattach or build the filter row
+    if (filtersActive) {
+        const thead = headerTable ? headerTable.querySelector('thead') : null;
+        if (thead) {
+            if (existingFilterTr) {
+                // Reattach the existing row — inputs, values and focus intact
+                thead.appendChild(existingFilterTr);
+            } else {
+                buildFilterRow();
+            }
+        }
     }
 
     clearTimeout(slowLoadTimer);

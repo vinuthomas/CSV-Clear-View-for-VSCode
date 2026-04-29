@@ -1110,31 +1110,13 @@ tr.goto-row-highlight td {
    COLUMN FILTERS
    ============================================================================= */
 
-.filter-row-container {
-    flex-shrink: 0;
-    overflow: hidden;
-    background: var(--vscode-editor-background);
-    border-bottom: 1px solid var(--vscode-editorGroup-border);
-    position: relative;
-}
-
-.filter-table {
-    border-collapse: collapse;
-    table-layout: fixed;
-    position: static;
-    top: auto;
-    left: auto;
-    min-width: unset;
-    width: max-content;
-}
-
-.filter-cell {
-    padding: 4px 4px;
-    border-right: 1px solid var(--vscode-editorGroup-border);
-    border-top: none;
+/* Filter row — rendered as a second <tr> inside #header-table's <thead> */
+#filter-tr td.filter-cell {
+    padding: 3px 4px;
+    border-top: 1px solid var(--vscode-editorGroup-border);
     border-bottom: none;
     border-left: none;
-    vertical-align: middle;
+    border-right: none;
     height: auto;
     min-width: unset;
     width: auto;
@@ -1142,10 +1124,7 @@ tr.goto-row-highlight td {
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
-}
-
-.filter-cell:last-child {
-    border-right: none;
+    background: var(--vscode-editor-background);
 }
 
 .filter-input {
