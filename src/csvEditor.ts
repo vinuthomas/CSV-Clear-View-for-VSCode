@@ -626,17 +626,24 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						<input type="text" id="sql-query" placeholder="SELECT * FROM ? WHERE [Last Name] = 'Smith'" autocomplete="off" />
 						<div id="history-list" class="history-list hidden"></div>
 					</div>
-					<button id="history-btn" title="Query History (↑/↓ to navigate)">History</button>
-					<button id="run-query">Run Query</button>
-					<button id="reset-query">Reset</button>
-					<button id="profile-btn" title="Toggle column profile panel">Profile</button>
+					<button id="history-btn" class="toolbar-btn" title="Query History (↑/↓ to navigate)">History</button>
+					<button id="run-query" class="toolbar-btn toolbar-btn-primary" title="Run SQL query">Run</button>
+					<button id="reset-query" class="toolbar-btn" title="Reset to original data">Reset</button>
+					<div class="toolbar-divider"></div>
+					<button id="goto-row-btn" class="toolbar-btn" title="Go to row by number">Go to Row</button>
+					<button id="filter-btn" class="toolbar-btn" title="Toggle column filters">Filter</button>
+					<button id="profile-btn" class="toolbar-btn" title="Toggle column profile panel">Profile</button>
+					<button id="dupes-btn" class="toolbar-btn" title="Find duplicate rows">Duplicates</button>
+					<div class="toolbar-divider"></div>
 					<div id="delimiter-display" class="delimiter-badge hidden" title="Click to change delimiter">Delim: ,</div>
 				</div>
 				<div id="error-container" class="error-container hidden"></div>
+				<div id="dupes-banner" class="dupes-banner hidden"></div>
 				<div class="table-area">
 					<div class="header-container">
 						<table id="header-table"></table>
 					</div>
+					<div id="filter-row-container" class="filter-row-container hidden"></div>
 					<div class="table-container">
 						<div id="virtual-spacer" class="virtual-spacer"></div>
 						<table id="csv-table"></table>
@@ -650,7 +657,15 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					<div id="schema-panel-body" class="schema-panel-body"></div>
 				</div>
 				<div id="stats-popover" class="stats-popover hidden"></div>
-				<div id="text-container" class="text-container hidden">
+			<div id="goto-row-modal" class="goto-row-modal hidden">
+				<div class="goto-row-inner">
+					<label for="goto-row-input">Go to row:</label>
+					<input type="number" id="goto-row-input" min="1" placeholder="Row number…" />
+					<button id="goto-row-ok">Go</button>
+					<button id="goto-row-cancel">✕</button>
+				</div>
+			</div>
+			<div id="text-container" class="text-container hidden">
 					<pre id="raw-text"></pre>
 			</div>
 			<script nonce="${nonce}" src="${scriptUri}"></script>

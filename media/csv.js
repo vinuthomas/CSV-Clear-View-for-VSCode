@@ -32,6 +32,13 @@ let sortState = { col: -1, dir: 'none' }; // col: index, dir: 'asc'|'desc'|'none
 let frozenCols = new Set();     // set of frozen column indices
 let activePopoverCol = -1;      // which column's stats popover is open (-1 = none)
 
+// --- Column Filter State ---
+let columnFilters = {};         // colIndex -> filter string (case-insensitive contains)
+let filtersActive = false;      // true when filter row is visible
+
+// --- Duplicate Detection State ---
+let dupesMode = false;          // true when duplicate rows are highlighted
+
 // Convert a logical row index (0-based data rows, i.e. excluding header) to
 // a scrollTop pixel value within the capped spacer.
 function rowToScrollTop(rowIndex, dataRowCount) {
@@ -101,6 +108,15 @@ const schemaPanelBody = document.getElementById('schema-panel-body');
 const schemaCloseBtn = document.getElementById('schema-close-btn');
 const statsPopover = document.getElementById('stats-popover');
 const delimiterDisplay = document.getElementById('delimiter-display');
+const gotoRowBtn = document.getElementById('goto-row-btn');
+const gotoRowModal = document.getElementById('goto-row-modal');
+const gotoRowInput = document.getElementById('goto-row-input');
+const gotoRowOk = document.getElementById('goto-row-ok');
+const gotoRowCancel = document.getElementById('goto-row-cancel');
+const filterBtn = document.getElementById('filter-btn');
+const filterRowContainer = document.getElementById('filter-row-container');
+const dupesBtn = document.getElementById('dupes-btn');
+const dupesBanner = document.getElementById('dupes-banner');
 
 // --- Constants ---
 const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'GROUP BY', 'LIMIT', 'JOIN', 'ON', 'AS', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'LIKE', 'IN', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'];
@@ -734,6 +750,10 @@ if (tableContainer) {
         if (headerContainer) {
             headerContainer.scrollLeft = tableContainer.scrollLeft;
         }
+        // Sync filter row horizontal scroll
+        if (filterRowContainer && filtersActive) {
+            filterRowContainer.scrollLeft = tableContainer.scrollLeft;
+        }
         // Sync frozen table vertical scroll
         const frozenBody = document.getElementById('frozen-body-table');
         if (frozenBody) {
@@ -873,7 +893,9 @@ function updateVirtualTable() {
         : 0;
     for (let i = 0; i < slice.length; i++) {
         const row = slice[i];
-        html += `<tr style="height: ${rowHeight}px">`;
+        const absoluteRowIdx = renderStart + i; // index into currentDisplayData (1-based data)
+        const isDupe = dupesMode && dupeIndicesGlobal.has(absoluteRowIdx);
+        html += `<tr style="height: ${rowHeight}px"${isDupe ? ' class="dupe-row"' : ''}>`;
         // Spacer td that sits under the frozen overlay
         if (frozenCols.size > 0) {
             html += `<td style="width:${frozenSpacerWidth}px;min-width:${frozenSpacerWidth}px;padding:0;border:none;" aria-hidden="true"></td>`;
@@ -1659,6 +1681,380 @@ document.addEventListener("click", function (e) {
 });
 
 // =============================================================================
+// GO TO ROW
+// =============================================================================
+
+function openGotoRowModal() {
+    if (!gotoRowModal || !gotoRowInput) { return; }
+    gotoRowModal.classList.remove('hidden');
+    gotoRowInput.value = '';
+    gotoRowInput.focus();
+}
+
+function closeGotoRowModal() {
+    if (gotoRowModal) { gotoRowModal.classList.add('hidden'); }
+}
+
+function executeGotoRow() {
+    if (!gotoRowInput) { return; }
+    const raw = parseInt(gotoRowInput.value, 10);
+    if (isNaN(raw) || raw < 1) { return; }
+    closeGotoRowModal();
+    scrollToDataRow(raw - 1); // 0-based data row
+}
+
+/** Scroll the table so that 0-based data row `dataRowIndex` is visible. */
+function scrollToDataRow(dataRowIndex) {
+    if (!tableContainer) { return; }
+    const rowCount = isChunkedMode ? chunkedTotalRows : (currentDisplayData.length - 1);
+    const clamped = Math.max(0, Math.min(dataRowIndex, rowCount - 1));
+    const targetScrollTop = rowToScrollTop(clamped, rowCount);
+    tableContainer.scrollTop = targetScrollTop;
+    if (!isChunkedMode) {
+        updateVirtualTable();
+        // Brief highlight on target row
+        setTimeout(() => {
+            highlightDataRow(clamped);
+        }, 60);
+    }
+}
+
+function highlightDataRow(dataRowIndex) {
+    // dataRowIndex is 0-based (excluding header)
+    const scrollTop = tableContainer.scrollTop;
+    const rowCount = currentDisplayData.length - 1;
+    const startRow = scrollTopToRow(scrollTop, rowCount);
+    const buffer = 10;
+    const renderStart = Math.max(1, startRow - buffer);
+    const absoluteIndex = dataRowIndex + 1; // +1 for header
+    const relativeIndex = absoluteIndex - renderStart;
+    const tbody = table ? table.querySelector('tbody') : null;
+    if (tbody && tbody.rows[relativeIndex]) {
+        const row = tbody.rows[relativeIndex];
+        row.classList.add('goto-row-highlight');
+        setTimeout(() => row.classList.remove('goto-row-highlight'), 1500);
+    }
+}
+
+if (gotoRowBtn) {
+    gotoRowBtn.addEventListener('click', openGotoRowModal);
+}
+if (gotoRowOk) {
+    gotoRowOk.addEventListener('click', executeGotoRow);
+}
+if (gotoRowCancel) {
+    gotoRowCancel.addEventListener('click', closeGotoRowModal);
+}
+if (gotoRowInput) {
+    gotoRowInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { executeGotoRow(); }
+        if (e.key === 'Escape') { closeGotoRowModal(); }
+    });
+}
+// Close on outside click
+document.addEventListener('click', (e) => {
+    if (gotoRowModal && !gotoRowModal.classList.contains('hidden')) {
+        if (!gotoRowModal.contains(e.target) && e.target !== gotoRowBtn) {
+            closeGotoRowModal();
+        }
+    }
+});
+
+// =============================================================================
+// COLUMN FILTERS
+// =============================================================================
+
+function buildFilterRow() {
+    if (!filterRowContainer || !currentDisplayData || currentDisplayData.length === 0) { return; }
+    const headers = currentDisplayData[0];
+
+    // Remember which column index is focused so we can restore it after rebuild
+    let focusedColIndex = -1;
+    filterRowContainer.querySelectorAll('.filter-input').forEach((inp, i) => {
+        if (document.activeElement === inp) { focusedColIndex = i; }
+    });
+
+    // Rebuild as a table that mirrors the header table exactly:
+    // same colgroup, same table-layout:fixed, same scrollbar padding-right.
+    filterRowContainer.innerHTML = '';
+
+    const scrollbarWidth = tableContainer.offsetWidth - tableContainer.clientWidth;
+    filterRowContainer.style.paddingRight = scrollbarWidth + 'px';
+    filterRowContainer.style.paddingLeft = '0';
+    filterRowContainer.scrollLeft = tableContainer.scrollLeft;
+
+    const filterTable = document.createElement('table');
+    filterTable.className = 'filter-table';
+
+    // Use the same frozen-aware colgroup as the header table
+    const frozenArr = [...frozenCols].sort((a, b) => a - b);
+    const hasFrozen = frozenArr.length > 0;
+    const frozenTotalWidth = frozenArr.reduce((sum, i) => sum + (columnWidths[i] || 0), 0);
+
+    if (hasFrozen) {
+        // Build the same spacer+visible colgroup used by the header table
+        const cg = document.createElement('colgroup');
+        const spacer = document.createElement('col');
+        spacer.style.width = frozenTotalWidth + 'px';
+        cg.appendChild(spacer);
+        columnWidths.forEach((w, i) => {
+            if (frozenCols.has(i)) { return; }
+            const col = document.createElement('col');
+            col.style.width = w + 'px';
+            cg.appendChild(col);
+        });
+        filterTable.appendChild(cg);
+        filterTable.style.width = (frozenTotalWidth + columnWidths.filter((_, i) => !frozenCols.has(i)).reduce((a, b) => a + b, 0)) + 'px';
+    } else {
+        filterTable.appendChild(createColGroup(columnWidths));
+        filterTable.style.width = columnWidths.reduce((a, b) => a + b, 0) + 'px';
+    }
+
+    const tbody = document.createElement('tbody');
+    const tr = document.createElement('tr');
+
+    // Spacer cell when frozen cols are present
+    if (hasFrozen) {
+        const td = document.createElement('td');
+        td.style.width = frozenTotalWidth + 'px';
+        td.style.minWidth = frozenTotalWidth + 'px';
+        td.style.padding = '0';
+        td.style.border = 'none';
+        td.setAttribute('aria-hidden', 'true');
+        tr.appendChild(td);
+    }
+
+    let visibleIdx = 0;
+    headers.forEach((colName, colIndex) => {
+        if (frozenCols.has(colIndex)) { return; }
+
+        const td = document.createElement('td');
+        td.className = 'filter-cell';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'filter-input';
+        input.placeholder = 'Filter…';
+        input.title = `Filter: ${colName}`;
+        input.value = columnFilters[colIndex] || '';
+        input.dataset.colIndex = colIndex;
+
+        input.addEventListener('input', () => {
+            columnFilters[colIndex] = input.value;
+            applyFilters();
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { clearAllFilters(); }
+        });
+
+        td.appendChild(input);
+        tr.appendChild(td);
+
+        if (visibleIdx === focusedColIndex) {
+            // Restore focus after rebuild using microtask so DOM is ready
+            const captured = input;
+            Promise.resolve().then(() => {
+                captured.focus();
+                captured.selectionStart = captured.selectionEnd = captured.value.length;
+            });
+        }
+        visibleIdx++;
+    });
+
+    tbody.appendChild(tr);
+    filterTable.appendChild(tbody);
+    filterRowContainer.appendChild(filterTable);
+}
+
+function applyFilters() {
+    if (!originalRawData || originalRawData.length === 0) { return; }
+    const activeFilters = Object.entries(columnFilters).filter(([, v]) => v.trim() !== '');
+    if (activeFilters.length === 0) {
+        currentDisplayData = originalRawData.slice();
+    } else {
+        const header = originalRawData[0];
+        const filtered = originalRawData.slice(1).filter(row => {
+            return activeFilters.every(([colIdx, filterVal]) => {
+                const cell = (row[colIdx] || '').toLowerCase();
+                return cell.includes(filterVal.toLowerCase());
+            });
+        });
+        currentDisplayData = [header, ...filtered];
+    }
+    // Re-apply sort if active
+    if (sortState.col >= 0 && sortState.dir !== 'none') {
+        currentDisplayData = applySortToData(currentDisplayData, sortState.col, sortState.dir);
+    }
+    renderTable(currentDisplayData, []);
+    updateFilterBtnState();
+}
+
+function clearAllFilters() {
+    columnFilters = {};
+    currentDisplayData = originalRawData.slice();
+    if (sortState.col >= 0 && sortState.dir !== 'none') {
+        currentDisplayData = applySortToData(currentDisplayData, sortState.col, sortState.dir);
+    }
+    renderTable(currentDisplayData, []);
+    buildFilterRow(); // reset input values
+    updateFilterBtnState();
+}
+
+function updateFilterBtnState() {
+    if (!filterBtn) { return; }
+    const hasActiveFilters = Object.values(columnFilters).some(v => v.trim() !== '');
+    if (hasActiveFilters) {
+        filterBtn.classList.add('filter-btn-active');
+        filterBtn.title = 'Filters active — click to toggle filter row';
+    } else {
+        filterBtn.classList.remove('filter-btn-active');
+        filterBtn.title = 'Toggle column filters';
+    }
+}
+
+if (filterBtn) {
+    filterBtn.addEventListener('click', () => {
+        if (!filterRowContainer) { return; }
+        filtersActive = !filtersActive;
+        if (filtersActive) {
+            buildFilterRow();
+            filterRowContainer.classList.remove('hidden');
+            filterBtn.classList.add('filter-row-open');
+            filterBtn.title = 'Hide filter row';
+        } else {
+            filterRowContainer.classList.add('hidden');
+            filterBtn.classList.remove('filter-row-open');
+            clearAllFilters();
+        }
+    });
+}
+
+// =============================================================================
+// DUPLICATE ROW DETECTION
+// =============================================================================
+
+function findDuplicateRows(data) {
+    // Returns a Set of 1-based row indices (in data[]) that are duplicates.
+    if (!data || data.length < 2) { return new Set(); }
+    const seen = new Map(); // serialized row -> first occurrence index
+    const dupeIndices = new Set();
+    for (let i = 1; i < data.length; i++) {
+        const key = data[i].join('\x00'); // use null byte as safe separator
+        if (seen.has(key)) {
+            dupeIndices.add(i);
+            dupeIndices.add(seen.get(key)); // also mark the first occurrence
+        } else {
+            seen.set(key, i);
+        }
+    }
+    return dupeIndices;
+}
+
+let dupeIndicesGlobal = new Set(); // currently highlighted dupe rows
+
+function runDuplicateDetection() {
+    if (isChunkedMode) {
+        if (dupesBanner) {
+            dupesBanner.innerHTML = '<span>Duplicate detection is not available in Paged View mode.</span>';
+            dupesBanner.classList.remove('hidden');
+        }
+        return;
+    }
+    const dupeIndices = findDuplicateRows(currentDisplayData);
+    dupeIndicesGlobal = dupeIndices;
+    dupesMode = dupeIndices.size > 0;
+
+    if (!dupesBanner) { return; }
+
+    if (dupeIndices.size === 0) {
+        dupesBanner.innerHTML = '<span class="dupes-none">✓ No duplicate rows found.</span> <button id="dupes-clear-btn" class="dupes-clear-btn">Dismiss</button>';
+        dupesBanner.classList.remove('hidden');
+    } else {
+        // Count unique duplicated row sets (not total occurrences)
+        const uniqueGroups = countDupeGroups(currentDisplayData);
+        dupesBanner.innerHTML =
+            `<span class="dupes-found">⚠ ${dupeIndices.size} duplicate rows found across ${uniqueGroups} group(s).</span>` +
+            ` <button id="dupes-show-only-btn" class="dupes-action-btn">Show only duplicates</button>` +
+            ` <button id="dupes-clear-btn" class="dupes-clear-btn">Dismiss</button>`;
+        dupesBanner.classList.remove('hidden');
+    }
+    // Attach banner button handlers
+    const clearBtn = document.getElementById('dupes-clear-btn');
+    if (clearBtn) { clearBtn.addEventListener('click', dismissDupesBanner); }
+
+    const showOnlyBtn = document.getElementById('dupes-show-only-btn');
+    if (showOnlyBtn) {
+        showOnlyBtn.addEventListener('click', () => {
+            // Filter currentDisplayData to show only duplicated rows
+            const header = currentDisplayData[0];
+            const dupeRows = currentDisplayData.filter((_, i) => i === 0 || dupeIndices.has(i));
+            currentDisplayData = dupeRows;
+            dupeIndicesGlobal = findDuplicateRows(currentDisplayData);
+            renderTable(currentDisplayData, []);
+            if (dupesBanner) {
+                dupesBanner.innerHTML =
+                    `<span class="dupes-found">Showing ${dupeRows.length - 1} duplicate rows.</span>` +
+                    ` <button id="dupes-reset-btn" class="dupes-action-btn">Show all rows</button>` +
+                    ` <button id="dupes-clear-btn" class="dupes-clear-btn">Dismiss</button>`;
+                const resetBtn = document.getElementById('dupes-reset-btn');
+                if (resetBtn) { resetBtn.addEventListener('click', resetFromDupes); }
+                const cb = document.getElementById('dupes-clear-btn');
+                if (cb) { cb.addEventListener('click', dismissDupesBanner); }
+            }
+        });
+    }
+
+    // Re-render to apply highlight classes
+    renderTable(currentDisplayData, []);
+}
+
+function countDupeGroups(data) {
+    if (!data || data.length < 2) { return 0; }
+    const seen = new Map();
+    let groups = 0;
+    for (let i = 1; i < data.length; i++) {
+        const key = data[i].join('\x00');
+        if (!seen.has(key)) { seen.set(key, 0); }
+        seen.set(key, seen.get(key) + 1);
+    }
+    for (const count of seen.values()) {
+        if (count > 1) { groups++; }
+    }
+    return groups;
+}
+
+function dismissDupesBanner() {
+    dupesMode = false;
+    dupeIndicesGlobal = new Set();
+    if (dupesBanner) { dupesBanner.classList.add('hidden'); }
+    if (dupesBtn) { dupesBtn.classList.remove('dupes-btn-active'); }
+    renderTable(currentDisplayData, []);
+}
+
+function resetFromDupes() {
+    dupesMode = false;
+    dupeIndicesGlobal = new Set();
+    currentDisplayData = originalRawData.slice();
+    if (sortState.col >= 0 && sortState.dir !== 'none') {
+        currentDisplayData = applySortToData(currentDisplayData, sortState.col, sortState.dir);
+    }
+    renderTable(currentDisplayData, []);
+    if (dupesBanner) { dupesBanner.classList.add('hidden'); }
+    if (dupesBtn) { dupesBtn.classList.remove('dupes-btn-active'); }
+}
+
+if (dupesBtn) {
+    dupesBtn.addEventListener('click', () => {
+        if (dupesMode) {
+            dismissDupesBanner();
+        } else {
+            dupesBtn.classList.add('dupes-btn-active');
+            runDuplicateDetection();
+        }
+    });
+}
+
+// =============================================================================
 // CORE LOGIC
 // =============================================================================
 
@@ -1676,6 +2072,16 @@ async function updateContent(text, config) {
     // Reset sort state on fresh data
     sortState = { col: -1, dir: 'none' };
     frozenCols = new Set();
+
+    // Reset filter and dupe state on fresh data
+    columnFilters = {};
+    filtersActive = false;
+    dupesMode = false;
+    dupeIndicesGlobal = new Set();
+    if (filterRowContainer) { filterRowContainer.classList.add('hidden'); filterRowContainer.innerHTML = ''; }
+    if (filterBtn) { filterBtn.classList.remove('filter-row-open', 'filter-btn-active'); }
+    if (dupesBanner) { dupesBanner.classList.add('hidden'); }
+    if (dupesBtn) { dupesBtn.classList.remove('dupes-btn-active'); }
 
     const columns = data.length > 0 ? data[0].map(c => {
         return /^[a-zA-Z0-9_]+$/.test(c) ? c : `[${c.replace(/\]/g, ']]')}]`;
@@ -2050,19 +2456,23 @@ async function renderTable(data, errors) {
         currentDisplayData = displayData;
     }
     
-    // Calculate Column Widths (sample first 100 rows)
-    const sampleRows = displayData.slice(1, 101);
-    columnWidths = headerRow.map((h, colIndex) => {
-        let maxWidth = h.length;
-        sampleRows.forEach(row => {
-            const cellLength = row[colIndex] ? row[colIndex].length : 0;
-            if (cellLength > maxWidth) maxWidth = cellLength;
+    // Calculate Column Widths (sample first 100 rows).
+    // Skip recalculation when filters are active — preserve the widths from the
+    // full dataset so filter fields stay aligned even with zero result rows.
+    const hasExistingWidths = filtersActive && columnWidths.length === headerRow.length;
+    if (!hasExistingWidths) {
+        const sampleRows = displayData.slice(1, 101);
+        columnWidths = headerRow.map((h, colIndex) => {
+            let maxWidth = h.length;
+            sampleRows.forEach(row => {
+                const cellLength = row[colIndex] ? row[colIndex].length : 0;
+                if (cellLength > maxWidth) maxWidth = cellLength;
+            });
+            const charWidth = 9;
+            const padding = 24;
+            return Math.max(100, Math.min(600, (maxWidth * charWidth) + padding));
         });
-        
-        const charWidth = 9;
-        const padding = 24;
-        return Math.max(100, Math.min(600, (maxWidth * charWidth) + padding));
-    });
+    }
 
     // Widths for visible (non-frozen) columns
     const visibleWidths = columnWidths.filter((_, i) => !frozenCols.has(i));
@@ -2208,6 +2618,11 @@ async function renderTable(data, errors) {
     // Rebuild schema panel if it's open
     if (schemaPanel && !schemaPanel.classList.contains('hidden')) {
         buildSchemaPanel();
+    }
+
+    // Rebuild filter row if filters are active (column widths may have changed)
+    if (filtersActive && filterRowContainer) {
+        buildFilterRow();
     }
 
     clearTimeout(slowLoadTimer);

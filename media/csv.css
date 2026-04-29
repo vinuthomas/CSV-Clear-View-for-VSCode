@@ -126,22 +126,8 @@ body {
     font-size: 0.9em;
 }
 
-#history-btn {
-    background-color: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
-    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
-    border: 1px solid var(--vscode-input-border);
-    font-size: 0.85em;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-#history-btn:hover {
-    background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
-}
-
 #history-btn.history-open {
-    border-color: var(--vscode-focusBorder);
-    outline: 1px solid var(--vscode-focusBorder);
+    /* handled by .toolbar-btn.history-open */
 }
 
 button {
@@ -158,23 +144,58 @@ button:hover {
     background-color: var(--vscode-button-hoverBackground);
 }
 
-/* Profile button */
-#profile-btn {
-    background-color: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
-    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
-    border: 1px solid var(--vscode-input-border);
+/* --- Unified toolbar button style --- */
+.toolbar-btn {
+    background-color: transparent;
+    color: var(--vscode-foreground);
+    border: 1px solid transparent;
+    padding: 3px 9px;
     font-size: 0.85em;
+    border-radius: 2px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    opacity: 0.85;
+    transition: background-color 0.1s, border-color 0.1s, opacity 0.1s;
 }
 
-#profile-btn:hover {
-    background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+.toolbar-btn:hover {
+    background-color: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,0.15));
+    border-color: var(--vscode-toolbar-hoverOutline, transparent);
+    opacity: 1;
 }
 
-#profile-btn.profile-btn-active {
+/* The one button that should stand out: Run */
+.toolbar-btn-primary {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-color: transparent;
+    opacity: 1;
+}
+
+.toolbar-btn-primary:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+/* Active/toggled state for toggle buttons */
+.toolbar-btn.profile-btn-active,
+.toolbar-btn.filter-row-open,
+.toolbar-btn.filter-btn-active,
+.toolbar-btn.dupes-btn-active,
+.toolbar-btn.history-open {
+    background-color: var(--vscode-toolbar-activeBackground, rgba(128,128,128,0.25));
     border-color: var(--vscode-focusBorder);
-    outline: 1px solid var(--vscode-focusBorder);
-    background-color: var(--vscode-list-activeSelectionBackground);
-    color: var(--vscode-list-activeSelectionForeground);
+    opacity: 1;
+}
+
+/* Thin vertical divider between groups */
+.toolbar-divider {
+    width: 1px;
+    height: 18px;
+    background-color: var(--vscode-editorGroup-border);
+    flex-shrink: 0;
+    align-self: center;
+    margin: 0 2px;
 }
 
 /* --- Delimiter badge --- */
@@ -295,7 +316,6 @@ body.vscode-light #raw-text {
     background-color: var(--vscode-editor-background);
     border-bottom: 1px solid var(--vscode-editorGroup-border);
     position: relative;
-    z-index: 10;
     transition: padding-left 0.15s ease;
 }
 
@@ -1002,3 +1022,197 @@ body.vscode-light .type-string   { color: #546e7a; background: rgba(84,110,122,0
     opacity: 0.7;
     font-size: 0.88em;
 }
+
+/* =============================================================================
+   GO TO ROW MODAL
+   ============================================================================= */
+
+.goto-row-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 300;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 80px;
+    background: transparent;
+    pointer-events: none;
+}
+
+.goto-row-modal:not(.hidden) {
+    pointer-events: all;
+}
+
+.goto-row-inner {
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-focusBorder);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 2px;
+    pointer-events: all;
+}
+
+.goto-row-inner label {
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-editor-foreground);
+    white-space: nowrap;
+}
+
+#goto-row-input {
+    width: 110px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    padding: 3px 6px;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+#goto-row-input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+}
+
+#goto-row-ok {
+    padding: 3px 10px;
+}
+
+#goto-row-cancel {
+    background: transparent;
+    border: none;
+    color: var(--vscode-editor-foreground);
+    cursor: pointer;
+    padding: 3px 6px;
+    opacity: 0.7;
+}
+
+#goto-row-cancel:hover {
+    opacity: 1;
+}
+
+/* Highlight animation for the jumped-to row */
+@keyframes gotoRowFlash {
+    0%   { background-color: var(--vscode-editor-findMatchHighlightBackground, rgba(255,215,0,0.4)); }
+    80%  { background-color: var(--vscode-editor-findMatchHighlightBackground, rgba(255,215,0,0.4)); }
+    100% { background-color: transparent; }
+}
+
+tr.goto-row-highlight td {
+    animation: gotoRowFlash 1.5s ease-out forwards;
+}
+
+/* =============================================================================
+   COLUMN FILTERS
+   ============================================================================= */
+
+.filter-row-container {
+    flex-shrink: 0;
+    overflow: hidden;
+    background: var(--vscode-editor-background);
+    border-bottom: 1px solid var(--vscode-editorGroup-border);
+    position: relative;
+}
+
+.filter-table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    position: static;
+    top: auto;
+    left: auto;
+    min-width: unset;
+    width: max-content;
+}
+
+.filter-cell {
+    padding: 4px 4px;
+    border-right: 1px solid var(--vscode-editorGroup-border);
+    border-top: none;
+    border-bottom: none;
+    border-left: none;
+    vertical-align: middle;
+    height: auto;
+    min-width: unset;
+    width: auto;
+    max-width: unset;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.filter-cell:last-child {
+    border-right: none;
+}
+
+.filter-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    padding: 2px 5px;
+    font-family: var(--vscode-font-family);
+    font-size: calc(var(--vscode-font-size) - 1px);
+}
+
+.filter-input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+}
+
+/* Active filter/dupes button states — handled by .toolbar-btn active rules above */
+
+/* =============================================================================
+   DUPLICATE ROWS
+   ============================================================================= */
+
+.dupes-banner {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    background: var(--vscode-inputValidation-warningBackground, rgba(255,200,0,0.15));
+    border-bottom: 1px solid var(--vscode-inputValidation-warningBorder, #b89500);
+    color: var(--vscode-editor-foreground);
+    font-size: var(--vscode-font-size);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dupes-none {
+    color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+.dupes-found {
+    color: var(--vscode-inputValidation-warningForeground, var(--vscode-editor-foreground));
+    font-weight: 600;
+}
+
+.dupes-action-btn {
+    padding: 2px 8px;
+    font-size: var(--vscode-font-size);
+    cursor: pointer;
+}
+
+.dupes-clear-btn {
+    padding: 2px 7px;
+    font-size: var(--vscode-font-size);
+    background: transparent;
+    border: 1px solid var(--vscode-button-border, var(--vscode-editorGroup-border));
+    color: var(--vscode-editor-foreground);
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+.dupes-clear-btn:hover {
+    opacity: 1;
+}
+
+/* Highlight for duplicate rows */
+tr.dupe-row td {
+    background-color: var(--vscode-diffEditor-insertedLineBackground, rgba(255, 160, 0, 0.12)) !important;
+}
+
+/* Active duplicates button — handled by .toolbar-btn active rules above */
