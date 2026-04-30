@@ -3,7 +3,7 @@
   "displayName": "CSV ClearView",
   "description": "A clear and powerful CSV viewer with colored columns, sticky headers, and SQL query capabilities.",
   "publisher": "VinuThomas",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
@@ -37,7 +37,8 @@
   "activationEvents": [
     "onLanguage:csv",
     "onLanguage:tsv",
-    "onLanguage:psv"
+    "onLanguage:psv",
+    "onCommand:csvClearView.openWithCsvEditor"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -85,6 +86,27 @@
         ]
       }
     ],
+    "commands": [
+      {
+        "command": "csvClearView.openWithCsvEditor",
+        "title": "Open with CSV ClearView",
+        "category": "CSV ClearView"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "csvClearView.openWithCsvEditor",
+          "group": "navigation"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "csvClearView.openWithCsvEditor",
+          "group": "navigation"
+        }
+      ]
+    },
     "customEditors": [
       {
         "viewType": "csvClearView.edit",
