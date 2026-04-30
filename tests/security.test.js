@@ -811,9 +811,458 @@ async function runTests() {
         assertEqual(objects[0]['normal'], 'ok', 'Non-dangerous columns unaffected');
     }
 
-    // ========================================
-    // SUMMARY
-    // ========================================
+    // --------------------------------------------------------
+    console.log('\n🔢 11. ROW ↔ SCROLL COORDINATE MAPPING (rowToScrollTop / scrollTopToRow)');
+    // --------------------------------------------------------
+
+    {
+        // Pure implementations mirroring csv.js
+        const ROW_HEIGHT = 30;
+        const MAX_SPACER = 10_000_000; // 10 MB px cap used in csv.js
+
+        function rowToScrollTopPure(rowIndex, dataRowCount) {
+            const totalPx = dataRowCount * ROW_HEIGHT;
+            if (totalPx <= MAX_SPACER) { return rowIndex * ROW_HEIGHT; }
+            return (rowIndex / dataRowCount) * MAX_SPACER;
+        }
+
+        function scrollTopToRowPure(scrollTop, dataRowCount) {
+            const totalPx = dataRowCount * ROW_HEIGHT;
+            let row;
+            if (totalPx <= MAX_SPACER) {
+                row = Math.floor(scrollTop / ROW_HEIGHT);
+            } else {
+                row = Math.floor((scrollTop / MAX_SPACER) * dataRowCount);
+            }
+            return Math.min(row, Math.max(0, dataRowCount - 1));
+        }
+
+        // --- No scaling needed (small file) ---
+        assertEqual(rowToScrollTopPure(0, 100), 0, 'rowToScrollTop: row 0 → 0px (no scaling)');
+        assertEqual(rowToScrollTopPure(10, 100), 300, 'rowToScrollTop: row 10 → 300px (no scaling)');
+        assertEqual(rowToScrollTopPure(99, 100), 2970, 'rowToScrollTop: last row correct (no scaling)');
+
+        // --- Scaling kicks in for huge files ---
+        const hugeRows = 1_000_000; // 30M px > 10M cap → scaling active
+        const topForRow0 = rowToScrollTopPure(0, hugeRows);
+        const topForMidRow = rowToScrollTopPure(500_000, hugeRows);
+        const topForLastRow = rowToScrollTopPure(999_999, hugeRows);
+        assertEqual(topForRow0, 0, 'rowToScrollTop: row 0 → 0px (scaled)');
+        assert(topForMidRow > 0 && topForMidRow < MAX_SPACER, 'rowToScrollTop: mid row within spacer range (scaled)');
+        assert(Math.abs(topForMidRow - MAX_SPACER / 2) < 1, 'rowToScrollTop: mid row ≈ half spacer height (scaled)');
+        assert(topForLastRow <= MAX_SPACER, 'rowToScrollTop: last row does not exceed spacer cap');
+
+        // --- Roundtrip: rowToScrollTop → scrollTopToRow ---
+        for (const rowIdx of [0, 1, 50, 99]) {
+            const px = rowToScrollTopPure(rowIdx, 100);
+            const back = scrollTopToRowPure(px, 100);
+            assertEqual(back, rowIdx, `scrollTopToRow roundtrip: row ${rowIdx}`);
+        }
+
+        // --- Clamp: scrollTop at exact spacer max should not exceed dataRowCount-1 ---
+        const clampedRow = scrollTopToRowPure(MAX_SPACER, hugeRows);
+        assert(clampedRow <= hugeRows - 1, 'scrollTopToRow: clamped to dataRowCount-1 at max scrollTop');
+
+        // --- Edge: single row ---
+        assertEqual(rowToScrollTopPure(0, 1), 0, 'rowToScrollTop: single row → 0px');
+        assertEqual(scrollTopToRowPure(0, 1), 0, 'scrollTopToRow: 0px → row 0 for single row');
+    }
+
+    // --------------------------------------------------------
+    console.log('\n📐 12. VIRTUAL TABLE WINDOWING LOGIC (updateVirtualTable)');
+    // --------------------------------------------------------
+
+    {
+        // Extract the pure windowing math from updateVirtualTable
+        const ROW_HEIGHT = 30;
+        const MAX_SPACER = 10_000_000;
+        const BUFFER = 10;
+
+        function scrollTopToRowPure(scrollTop, dataRowCount) {
+            const totalPx = dataRowCount * ROW_HEIGHT;
+            let row;
+            if (totalPx <= MAX_SPACER) {
+                row = Math.floor(scrollTop / ROW_HEIGHT);
+            } else {
+                row = Math.floor((scrollTop / MAX_SPACER) * dataRowCount);
+            }
+            return Math.min(row, Math.max(0, dataRowCount - 1));
+        }
+
+        function computeWindow(scrollTop, containerHeight, dataRowCount) {
+            const visibleRowCount = Math.ceil(containerHeight / ROW_HEIGHT);
+            let startRow = scrollTopToRowPure(scrollTop, dataRowCount);
+            startRow = Math.max(1, startRow);
+            const renderStart = Math.max(1, startRow - BUFFER);
+            const renderEnd = Math.min(dataRowCount + 1, startRow + visibleRowCount + BUFFER);
+            return { renderStart, renderEnd };
+        }
+
+        const DATA_ROWS = 1000;
+        const CONTAINER_H = 600; // ~20 visible rows
+
+        const visibleRowCount = Math.ceil(CONTAINER_H / ROW_HEIGHT);
+
+        // Scrolled to top
+        const top = computeWindow(0, CONTAINER_H, DATA_ROWS);
+        assertEqual(top.renderStart, 1, 'Virtual window: renderStart=1 at top');
+        assert(top.renderEnd > top.renderStart, 'Virtual window: renderEnd > renderStart at top');
+        assert(top.renderEnd <= DATA_ROWS + 1, 'Virtual window: renderEnd within bounds at top');
+
+        // Scrolled to middle
+        const mid = computeWindow(15000, CONTAINER_H, DATA_ROWS); // row ~500
+        assert(mid.renderStart >= 1, 'Virtual window: renderStart ≥ 1 at middle');
+        assert(mid.renderEnd > mid.renderStart, 'Virtual window: renderEnd > renderStart at middle');
+        assert(mid.renderEnd - mid.renderStart <= visibleRowCount + BUFFER * 2 + 2,
+            'Virtual window: window size bounded by visible+buffer');
+
+        // Scrolled near the bottom
+        const bottom = computeWindow((DATA_ROWS - 1) * ROW_HEIGHT, CONTAINER_H, DATA_ROWS);
+        assert(bottom.renderEnd <= DATA_ROWS + 1, 'Virtual window: renderEnd never exceeds data length');
+
+        // Buffer ensures rows above/below viewport are included
+        const atRow100 = computeWindow(100 * ROW_HEIGHT, CONTAINER_H, DATA_ROWS);
+        assert(atRow100.renderStart <= 100, 'Virtual window: buffer pulls renderStart before visible row');
+        assert(atRow100.renderEnd >= 100 + Math.ceil(CONTAINER_H / ROW_HEIGHT),
+            'Virtual window: buffer extends renderEnd beyond visible row');
+
+        const windowSize = atRow100.renderEnd - atRow100.renderStart;
+        assert(windowSize >= visibleRowCount, 'Virtual window: rendered row count ≥ visible count');
+    }
+
+    // --------------------------------------------------------
+    console.log('\n🧊 13. FROZEN BODY HTML GENERATION (updateFrozenBody)');
+    // --------------------------------------------------------
+
+    {
+        // Mirror the frozen-body slice/html logic from updateFrozenBody
+        function buildFrozenBodyHtml(data, renderStart, renderEnd, frozenCols, rowHeight) {
+            const slice = data.slice(renderStart, renderEnd);
+            const frozenArr = [...frozenCols].sort((a, b) => a - b);
+            let html = '';
+            for (const row of slice) {
+                html += `<tr style="height: ${rowHeight}px">`;
+                for (const c of frozenArr) {
+                    const cell = row[c] || '';
+                    html += `<td>${cell}</td>`;
+                }
+                html += '</tr>';
+            }
+            return html;
+        }
+
+        const sampleData = [
+            ['Name', 'Dept', 'Salary'],
+            ['Alice', 'Eng', '95000'],
+            ['Bob', 'Mkt', '82000'],
+            ['Charlie', 'Sales', '75000'],
+        ];
+
+        // Single frozen column (col 0)
+        const html1 = buildFrozenBodyHtml(sampleData, 1, 4, new Set([0]), 30);
+        assert(html1.includes('<tr style="height: 30px">'), 'Frozen body: row has correct height style');
+        assert(html1.includes('<td>Alice</td>'), 'Frozen body: first frozen cell rendered');
+        assert(html1.includes('<td>Bob</td>'), 'Frozen body: second frozen cell rendered');
+        assert(!html1.includes('Eng'), 'Frozen body: non-frozen columns excluded');
+        assert(!html1.includes('95000'), 'Frozen body: non-frozen data excluded');
+
+        // Two frozen columns (col 0 and col 1)
+        const html2 = buildFrozenBodyHtml(sampleData, 1, 3, new Set([0, 1]), 30);
+        assert(html2.includes('<td>Alice</td>') && html2.includes('<td>Eng</td>'),
+            'Frozen body: both frozen columns included');
+        assert(!html2.includes('95000'), 'Frozen body: salary column excluded with 2 frozen cols');
+
+        // Slice respects renderStart/renderEnd
+        const htmlSlice = buildFrozenBodyHtml(sampleData, 2, 3, new Set([0]), 30);
+        assert(htmlSlice.includes('<td>Bob</td>'), 'Frozen body: slice starts at renderStart');
+        assert(!htmlSlice.includes('<td>Alice</td>'), 'Frozen body: rows before renderStart excluded');
+        assert(!htmlSlice.includes('<td>Charlie</td>'), 'Frozen body: rows after renderEnd excluded');
+
+        // Empty frozen set → early return (no rows rendered), matching updateFrozenBody guard
+        const htmlNone = buildFrozenBodyHtml(sampleData, 1, 4, new Set(), 30);
+        assert(!htmlNone.includes('<td>'), 'Frozen body: no data cells when no frozen columns');
+
+        // Missing cell value falls back to empty string (not undefined/null)
+        const sparseData = [['H1', 'H2'], ['only-one']];
+        const htmlSparse = buildFrozenBodyHtml(sparseData, 1, 2, new Set([1]), 30);
+        assert(htmlSparse.includes('<td></td>'), 'Frozen body: missing cell renders as empty td');
+    }
+
+    // --------------------------------------------------------
+    console.log('\n📂 14. parseCSV WITH CUSTOM DELIMITERS');
+    // --------------------------------------------------------
+
+    {
+        // Replicate the real csv.js parseCSV with delimiter support (simplified, no async yield)
+        function parseCSVWithDelim(text, delimiter) {
+            const delim = delimiter || ',';
+            const data = [];
+            const errors = [];
+            let currentRow = [];
+            let fieldStart = 0;
+            let inQuotes = false;
+            const len = text.length;
+
+            for (let i = 0; i < len; i++) {
+                const char = text[i];
+                if (inQuotes) {
+                    if (char === '"') {
+                        if (i + 1 < len && text[i + 1] === '"') { i++; }
+                        else { inQuotes = false; }
+                    }
+                } else {
+                    if (char === '"') {
+                        inQuotes = true;
+                        fieldStart = i;
+                    } else if (char === delim) {
+                        let field = text.slice(fieldStart, i);
+                        if (field.startsWith('"') && field.endsWith('"')) {
+                            field = field.slice(1, -1).replace(/""/g, '"');
+                        }
+                        currentRow.push(field);
+                        fieldStart = i + 1;
+                    } else if (char === '\n') {
+                        let field = text.slice(fieldStart, i);
+                        if (field.startsWith('"') && field.endsWith('"')) {
+                            field = field.slice(1, -1).replace(/""/g, '"');
+                        }
+                        currentRow.push(field);
+                        data.push(currentRow);
+                        currentRow = [];
+                        fieldStart = i + 1;
+                    } else if (char === '\r') {
+                        let field = text.slice(fieldStart, i);
+                        if (field.startsWith('"') && field.endsWith('"')) {
+                            field = field.slice(1, -1).replace(/""/g, '"');
+                        }
+                        currentRow.push(field);
+                        data.push(currentRow);
+                        currentRow = [];
+                        if (i + 1 < len && text[i + 1] === '\n') { i++; }
+                        fieldStart = i + 1;
+                    }
+                }
+            }
+            if (fieldStart < len || text.endsWith(delim)) {
+                let field = text.slice(fieldStart);
+                if (field.startsWith('"') && field.endsWith('"')) {
+                    field = field.slice(1, -1).replace(/""/g, '"');
+                }
+                currentRow.push(field);
+                data.push(currentRow);
+            }
+            if (data.length > 0) {
+                const headerLength = data[0].length;
+                data.forEach((row, index) => {
+                    if (row.length !== headerLength) {
+                        errors.push({ line: index + 1, message: `Row ${index + 1}: Expected ${headerLength} columns, found ${row.length}.` });
+                    }
+                });
+            }
+            return { data, errors };
+        }
+
+        // Tab delimiter (TSV)
+        {
+            const { data, errors } = parseCSVWithDelim('Name\tAge\tCity\nAlice\t30\tNYC\nBob\t25\tLA', '\t');
+            assertEqual(data[0], ['Name', 'Age', 'City'], 'TSV: header parsed correctly');
+            assertEqual(data[1], ['Alice', '30', 'NYC'], 'TSV: first data row parsed correctly');
+            assertEqual(errors.length, 0, 'TSV: no errors for valid TSV');
+        }
+
+        // Pipe delimiter (PSV)
+        {
+            const { data } = parseCSVWithDelim('A|B|C\n1|2|3', '|');
+            assertEqual(data[0], ['A', 'B', 'C'], 'PSV: header parsed correctly');
+            assertEqual(data[1], ['1', '2', '3'], 'PSV: data row parsed correctly');
+        }
+
+        // Semicolon delimiter
+        {
+            const { data } = parseCSVWithDelim('X;Y\nhello;world', ';');
+            assertEqual(data[1], ['hello', 'world'], 'Semicolon: data row parsed correctly');
+        }
+
+        // Quoted fields still work with custom delimiter
+        {
+            const { data } = parseCSVWithDelim('Name\tNote\nAlice\t"has\ttab inside"', '\t');
+            assertEqual(data[1][1], 'has\ttab inside', 'TSV: quoted field containing tab character parsed correctly');
+        }
+
+        // Comma inside a pipe-delimited quoted field
+        {
+            const { data } = parseCSVWithDelim('A|B\n"1,2,3"|val', '|');
+            assertEqual(data[1][0], '1,2,3', 'PSV: commas inside quoted field not treated as delimiters');
+        }
+
+        // Mismatch detection still works with custom delimiter
+        {
+            const { errors } = parseCSVWithDelim('A\tB\nonly-one', '\t');
+            assert(errors.length > 0, 'TSV: column count mismatch detected');
+        }
+    }
+
+    // --------------------------------------------------------
+    console.log('\n✏️  15. CELL EDIT DATA MUTATION (onCellChange logic)');
+    // --------------------------------------------------------
+
+    {
+        // Mirror the core mutation logic of onCellChange (DOM-free pure extraction)
+        function applyCellEdit(displayData, rowInDisplay, col, newValue) {
+            if (!displayData[rowInDisplay]) { return false; }
+            if (displayData[rowInDisplay][col] === newValue) { return false; } // no-op
+            displayData[rowInDisplay][col] = newValue;
+            return true;
+        }
+
+        const data = [
+            ['Name', 'Age', 'City'],
+            ['Alice', '30', 'NYC'],
+            ['Bob', '25', 'LA'],
+        ];
+
+        // Normal edit
+        const changed = applyCellEdit(data, 1, 0, 'Alicia');
+        assert(changed, 'Cell edit: returns true when value changed');
+        assertEqual(data[1][0], 'Alicia', 'Cell edit: data updated correctly');
+
+        // No-op when value is unchanged
+        const noOp = applyCellEdit(data, 1, 0, 'Alicia');
+        assert(!noOp, 'Cell edit: returns false when value is same (no-op)');
+
+        // Out-of-bounds row → safe no-op
+        const outOfBounds = applyCellEdit(data, 99, 0, 'ghost');
+        assert(!outOfBounds, 'Cell edit: returns false for non-existent row');
+        assertEqual(data.length, 3, 'Cell edit: data length unchanged after out-of-bounds attempt');
+
+        // Edit to empty string
+        const cleared = applyCellEdit(data, 2, 1, '');
+        assert(cleared, 'Cell edit: clearing a cell returns true');
+        assertEqual(data[2][1], '', 'Cell edit: cell correctly cleared to empty string');
+
+        // Edit header row (row 0)
+        const headerEdit = applyCellEdit(data, 0, 2, 'Location');
+        assert(headerEdit, 'Cell edit: header row can be edited');
+        assertEqual(data[0][2], 'Location', 'Cell edit: header updated correctly');
+    }
+
+    // --------------------------------------------------------
+    console.log('\n🔁 16. DUPLICATE ROW DETECTION (findDuplicateRows / buildDupeGroups)');
+    // --------------------------------------------------------
+
+    {
+        function findDuplicateRows(data) {
+            if (!data || data.length < 2) { return new Set(); }
+            const seen = new Map();
+            const dupeIndices = new Set();
+            for (let i = 1; i < data.length; i++) {
+                const key = data[i].join('\x00');
+                if (seen.has(key)) {
+                    dupeIndices.add(i);
+                    dupeIndices.add(seen.get(key));
+                } else {
+                    seen.set(key, i);
+                }
+            }
+            return dupeIndices;
+        }
+
+        function buildDupeGroups(data) {
+            if (!data || data.length < 2) { return new Map(); }
+            const seen = new Map();
+            for (let i = 1; i < data.length; i++) {
+                const key = data[i].join('\x00');
+                if (!seen.has(key)) { seen.set(key, []); }
+                seen.get(key).push({ lineNum: i + 1, row: data[i] });
+            }
+            const groups = new Map();
+            for (const [key, entries] of seen) {
+                if (entries.length > 1) { groups.set(key, entries); }
+            }
+            return groups;
+        }
+
+        // No duplicates
+        {
+            const data = [['A', 'B'], ['1', '2'], ['3', '4']];
+            const dupes = findDuplicateRows(data);
+            assertEqual(dupes.size, 0, 'findDuplicateRows: no dupes in clean data');
+            const groups = buildDupeGroups(data);
+            assertEqual(groups.size, 0, 'buildDupeGroups: no groups in clean data');
+        }
+
+        // Single duplicate pair
+        {
+            const data = [['A', 'B'], ['1', '2'], ['3', '4'], ['1', '2']];
+            const dupes = findDuplicateRows(data);
+            assert(dupes.has(1), 'findDuplicateRows: first occurrence marked');
+            assert(dupes.has(3), 'findDuplicateRows: second occurrence marked');
+            assertEqual(dupes.size, 2, 'findDuplicateRows: exactly 2 indices for one duplicate pair');
+
+            const groups = buildDupeGroups(data);
+            assertEqual(groups.size, 1, 'buildDupeGroups: one group for one duplicate pair');
+            const entries = [...groups.values()][0];
+            assertEqual(entries.length, 2, 'buildDupeGroups: group has 2 entries');
+            assertEqual(entries[0].lineNum, 2, 'buildDupeGroups: first occurrence has lineNum=2 (line 1 is header)');
+            assertEqual(entries[1].lineNum, 4, 'buildDupeGroups: second occurrence has lineNum=4');
+        }
+
+        // Multiple groups
+        {
+            const data = [
+                ['ID', 'Name'],
+                ['1', 'Alice'],
+                ['2', 'Bob'],
+                ['1', 'Alice'], // dupe of row index 1
+                ['3', 'Charlie'],
+                ['2', 'Bob'],   // dupe of row index 2
+            ];
+            const dupes = findDuplicateRows(data);
+            assert(dupes.has(1) && dupes.has(3), 'findDuplicateRows: Alice duplicates both marked');
+            assert(dupes.has(2) && dupes.has(5), 'findDuplicateRows: Bob duplicates both marked');
+            assert(!dupes.has(4), 'findDuplicateRows: unique row (Charlie) not marked');
+
+            const groups = buildDupeGroups(data);
+            assertEqual(groups.size, 2, 'buildDupeGroups: two groups for two duplicate pairs');
+        }
+
+        // Triple occurrence (one row appears 3 times)
+        {
+            const data = [['X'], ['a'], ['a'], ['a']];
+            const dupes = findDuplicateRows(data);
+            // First occurrence is stored, second and third trigger marks on all
+            assert(dupes.size >= 2, 'findDuplicateRows: triple occurrence — at least 2 marked');
+
+            const groups = buildDupeGroups(data);
+            assertEqual(groups.size, 1, 'buildDupeGroups: triple occurrence forms one group');
+            const entries = [...groups.values()][0];
+            assertEqual(entries.length, 3, 'buildDupeGroups: group size=3 for triple occurrence');
+        }
+
+        // Header-only or single data row → no dupes
+        {
+            const empty = findDuplicateRows([['H1', 'H2']]);
+            assertEqual(empty.size, 0, 'findDuplicateRows: header-only data → no dupes');
+            const single = findDuplicateRows([['H'], ['v']]);
+            assertEqual(single.size, 0, 'findDuplicateRows: single data row → no dupes');
+        }
+
+        // Rows that differ only in one field are NOT duplicates
+        {
+            const data = [['A', 'B'], ['1', '2'], ['1', '3']];
+            const dupes = findDuplicateRows(data);
+            assertEqual(dupes.size, 0, 'findDuplicateRows: rows differing in one field are not duplicates');
+        }
+
+        // Line numbers in buildDupeGroups are 1-based CSV lines (header = line 1)
+        {
+            const data = [['H'], ['x'], ['y'], ['x']];
+            const groups = buildDupeGroups(data);
+            const entries = [...groups.values()][0];
+            assertEqual(entries[0].lineNum, 2, 'buildDupeGroups: lineNum accounts for header (row index 1 → line 2)');
+            assertEqual(entries[1].lineNum, 4, 'buildDupeGroups: lineNum correct for later occurrence');
+        }
+    }
 
     console.log('\n' + '='.repeat(50));
     console.log(`Results: ${passed} passed, ${failed} failed`);
