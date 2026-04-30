@@ -2,6 +2,21 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.0.7] - 2026-04-29
+
+### Added
+
+- **Go to Row:** New toolbar button opens a modal where you can type any row number and jump directly to it. The target row flashes briefly to confirm navigation. Works in both normal and paged (chunked) view modes.
+- **Duplicate Row Detection:** New **Duplicates** toolbar button scans all rows and highlights duplicates with an amber tint. A banner reports the number of duplicate rows and how many groups they form.
+  - **Show only duplicates:** Switches to a focused view that hides all non-duplicate rows, groups matching rows together, and adds a **#** line number column showing the original CSV line number of each row — so you can immediately locate duplicates in the source file.
+  - **Group separators:** A thin divider visually separates each duplicate group.
+  - **Show all rows / Dismiss:** Restore the full table or clear the duplicate highlights at any time.
+  - Not available in Paged View mode (chunked files).
+
+### Changed
+
+- **Toolbar redesign:** All toolbar buttons now use a unified ghost style. Only the **Run** (SQL execute) button uses the primary blue accent. Dividers separate the SQL tools from the analysis tools, reducing visual noise.
+
 ## [1.0.6] - 2026-04-28
 
 ### Security

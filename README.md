@@ -3,7 +3,7 @@
 [![Visual Studio Marketplace](https://vsmarketplacebadges.dev/version/VinuThomas.csv-clearview.svg)](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview)
 [![Downloads](https://vsmarketplacebadges.dev/downloads/VinuThomas.csv-clearview.svg)](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview)
 
-**Transform your CSV workflow with a powerful, spreadsheet-like editor built for data engineers, analysts, and scientists.** CSV ClearView brings enterprise-grade CSV viewing and editing to VS Code with color-coded columns, in-editor SQL queries, advanced data profiling, and seamless handling of files up to 500MB+.
+**Transform your CSV workflow with a powerful, spreadsheet-like editor built for data engineers, analysts, and scientists.** CSV ClearView brings enterprise-grade CSV viewing and editing to VS Code with color-coded columns, in-editor SQL queries, advanced data profiling, duplicate detection, and seamless handling of files up to 500MB+.
 
 ## Why CSV ClearView?
 
@@ -14,6 +14,7 @@ Stop switching between VS Code and Excel. CSV ClearView delivers a **complete da
 - **📈 Understand your data** - Built-in statistics, type inference, and data profiling for every column
 - **🎨 Stay oriented** - Color-coded columns, sticky headers, and freeze panes keep you focused
 - **✏️ Edit with confidence** - In-place cell editing with full undo/redo support
+- **🔎 Find duplicates instantly** - One-click duplicate detection with grouped, line-numbered results
 - **⚡ Lightning fast** - Virtual rendering keeps even the largest files responsive
 
 Perfect for data analysis, ETL pipeline debugging, machine learning dataset inspection, log file analysis, and database exports.
@@ -36,7 +37,18 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
   - String: length stats, frequency distribution
   - All: null count, distinct values, top-5 most common values
 - **Data Type Inference:** Automatic detection of integers, floats, dates, booleans, and strings with visual badges
-- **Schema Summary Panel:** Click **Profile** button for a complete data dictionary showing type, nulls, distinct count, and ranges for every column
+- **Schema Summary Panel:** Click **Profile** for a complete data dictionary showing type, nulls, distinct count, and ranges for every column
+
+### 🔎 Duplicate Detection
+- **One-click scan:** Click **Duplicates** to instantly find all duplicate rows across the entire file
+- **Grouped view:** "Show only duplicates" hides non-duplicate rows and groups matching rows together with a thin divider between each group
+- **Original line numbers:** A **#** column shows the exact CSV line number of every duplicate row so you can find it in the source file immediately
+- **Amber highlights:** Duplicate rows are tinted amber in the normal view for quick visual scanning
+- **Non-destructive:** Dismiss or restore the full table at any time — your data is never changed
+
+### 🧭 Navigation
+- **Go to Row:** Jump to any row by number instantly — the target row flashes to confirm navigation
+- **Error markers:** Visual markers in the scrollbar for quick jumping to parsing errors
 
 ### 📊 Large File Support
 - **Virtual Scrolling:** Handle 500MB+ files with only visible rows rendered
@@ -48,7 +60,6 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 - **In-Place Cell Editing:** Double-click any cell to edit with full undo/redo support
 - **CSV Linting:** Automatic detection of rows with inconsistent column counts
 - **Native Diagnostics:** Parsing errors surface in VS Code's Problems pane
-- **Error Navigation:** Visual error markers in the scrollbar for quick jumping
 
 ### 🔧 Format Flexibility
 - **Auto-Delimiter Detection:** Automatically recognizes comma, tab, pipe, and semicolon delimiters
@@ -68,10 +79,12 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 
 1. **Open any CSV file** - Just open `.csv`, `.tsv`, `.tab`, or `.psv` files and CSV ClearView activates automatically
 2. **Query your data** - Type SQL in the query bar at the top: `SELECT * FROM ? WHERE [Department] = 'Sales' ORDER BY [Salary] DESC`
-3. **Explore statistics** - Shift+click any column header for detailed stats or click **Profile** for a full data summary
-4. **Sort and filter** - Click column headers to sort, right-click to freeze panes
-5. **Edit cells** - Double-click any cell to edit in-place with undo/redo support
-6. **Handle large files** - For 20MB+ files, choose **Head**, **Tail**, or **Plain Text** mode when prompted
+3. **Find duplicates** - Click **Duplicates** to scan for duplicate rows, then **Show only duplicates** to see them grouped with original line numbers
+4. **Jump to any row** - Click **Go to Row** and type a row number to navigate instantly
+5. **Explore statistics** - Shift+click any column header for detailed stats or click **Profile** for a full data summary
+6. **Sort and freeze** - Click column headers to sort, right-click to freeze panes
+7. **Edit cells** - Double-click any cell to edit in-place with undo/redo support
+8. **Handle large files** - For 20MB+ files, choose **Head**, **Tail**, or **Plain Text** mode when prompted
 
 ## Configuration
 
@@ -121,18 +134,18 @@ CSV ClearView automatically detects the delimiter but you can override it using 
 
 ## What's New
 
-See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
+See the [CHANGELOG](changelog.md) for detailed release notes.
 
-### Latest Release (v1.0.1)
-- **Fixed:** Column sorting now preserves horizontal scroll position - no more jumping back to the left when sorting wide CSV files
+### Latest Release (v1.0.7)
+- **New: Duplicate Row Detection** — One-click scan finds all duplicate rows, highlights them in amber, and groups them in a focused view with original CSV line numbers so you can locate duplicates in the source file instantly
+- **New: Go to Row** — Jump to any row by number with a single keystroke; the target row flashes to confirm
+- **Toolbar redesign** — Cleaner unified button style with logical groupings
 
-### Recent Highlights (v0.4.0)
-- Added delimiter auto-detection and TSV/PSV support
-- Introduced data type inference with visual type badges
-- Added column sorting with type-aware comparison
-- New Shift+click column stats popover
-- Schema summary panel with full data profiling
-- Excel-style freeze pane functionality
+### Recent Highlights (v1.0.3–v1.0.6)
+- Moved SQL execution to the extension host — removed `unsafe-eval` from Content Security Policy
+- Fixed SQL aggregation functions (AVG, SUM, MIN, MAX) on numeric CSV columns
+- Better SQL error messages for common mistakes (double quotes, etc.)
+- Dependency and security updates
 
 ## Development
 
@@ -148,10 +161,10 @@ npm install
 
 # Compile and package the extension
 npm run compile
-npx @vscode/vsce package
+node_modules/.bin/vsce package
 
 # Install into your VS Code
-code --install-extension csv-clearview-1.0.1.vsix
+code --install-extension csv-clearview-1.0.7.vsix
 ```
 
 ### Debugging
@@ -161,7 +174,7 @@ code --install-extension csv-clearview-1.0.1.vsix
 
 ## Keywords
 
-CSV, TSV, viewer, editor, table, grid, spreadsheet, data analysis, SQL queries, data profiling, statistics, large files, virtual scrolling, delimiter detection, data science, ETL, pipe-separated, tab-separated, data visualization, column sorting, data validation
+CSV, TSV, viewer, editor, table, grid, spreadsheet, data analysis, SQL queries, data profiling, statistics, large files, virtual scrolling, duplicate detection, delimiter detection, data science, ETL, pipe-separated, tab-separated, data visualization, column sorting, data validation, go to row, row navigation
 
 ## License
 MIT
