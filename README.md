@@ -64,6 +64,7 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 ### 🔧 Format Flexibility
 - **Auto-Delimiter Detection:** Automatically recognizes comma, tab, pipe, and semicolon delimiters
 - **Multi-Format Support:** `.csv`, `.tsv`, `.tab`, `.psv` files open natively
+- **Open Any File:** Use the **"Open with CSV ClearView"** command (right-click Explorer or Command Palette) to open any file — `.txt`, `.dat`, `.log`, etc. — in the CSV editor
 - **Manual Override:** Click the delimiter badge in the toolbar to change parsing
 - **Type-Aware Sorting:** Click column headers to sort with intelligent handling of numbers, dates, and strings
 
@@ -78,7 +79,8 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 ## Quick Start
 
 1. **Open any CSV file** - Just open `.csv`, `.tsv`, `.tab`, or `.psv` files and CSV ClearView activates automatically
-2. **Query your data** - Type SQL in the query bar at the top: `SELECT * FROM ? WHERE [Department] = 'Sales' ORDER BY [Salary] DESC`
+2. **Open any file** - Right-click any file in the Explorer and choose **"Open with CSV ClearView"** to open `.txt`, `.dat`, `.log`, or any other delimiter-separated file
+3. **Query your data** - Type SQL in the query bar at the top: `SELECT * FROM ? WHERE [Department] = 'Sales' ORDER BY [Salary] DESC`
 3. **Find duplicates** - Click **Duplicates** to scan for duplicate rows, then **Show only duplicates** to see them grouped with original line numbers
 4. **Jump to any row** - Click **Go to Row** and type a row number to navigate instantly
 5. **Explore statistics** - Shift+click any column header for detailed stats or click **Profile** for a full data summary
@@ -136,12 +138,15 @@ CSV ClearView automatically detects the delimiter but you can override it using 
 
 See the [CHANGELOG](changelog.md) for detailed release notes.
 
-### Latest Release (v1.0.7)
-- **New: Duplicate Row Detection** — One-click scan finds all duplicate rows, highlights them in amber, and groups them in a focused view with original CSV line numbers so you can locate duplicates in the source file instantly
+### Latest Release (v1.0.8)
+- **New: Open with CSV ClearView command** — Open any file (`.txt`, `.dat`, `.log`, etc.) in the CSV editor via right-click in the Explorer, editor tab context menu, or the Command Palette — no matter the file extension
+
+### Recent Highlights (v1.0.7)
+- **New: Duplicate Row Detection** — One-click scan finds all duplicate rows, highlights them in amber, and groups them in a focused view with original CSV line numbers
 - **New: Go to Row** — Jump to any row by number with a single keystroke; the target row flashes to confirm
 - **Toolbar redesign** — Cleaner unified button style with logical groupings
 
-### Recent Highlights (v1.0.3–v1.0.6)
+### Earlier (v1.0.3–v1.0.6)
 - Moved SQL execution to the extension host — removed `unsafe-eval` from Content Security Policy
 - Fixed SQL aggregation functions (AVG, SUM, MIN, MAX) on numeric CSV columns
 - Better SQL error messages for common mistakes (double quotes, etc.)

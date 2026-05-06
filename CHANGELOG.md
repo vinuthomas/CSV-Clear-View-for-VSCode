@@ -2,6 +2,12 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.0.8] - 2026-04-30
+
+### Added
+
+- **Open with CSV ClearView command:** Any file — regardless of extension — can now be opened in the CSV ClearView editor via a new command. Right-click any file in the Explorer or editor tab and choose **"Open with CSV ClearView"**, or invoke it from the Command Palette (`CSV ClearView: Open with CSV ClearView`). This makes it easy to inspect `.txt`, `.dat`, `.log`, or any other delimiter-separated file using the full CSV ClearView interface.
+
 ## [1.0.7] - 2026-04-29
 
 ### Added
