@@ -152,10 +152,13 @@ CSV ClearView automatically detects the delimiter but you can override it using 
 
 See the [CHANGELOG](changelog.md) for detailed release notes.
 
-### Latest Release (v1.0.8)
+### Latest Release (v1.0.9)
+- **Marketplace screenshots** — Added screenshots to the README and marketplace listing so users can evaluate the extension before installing
+
+### Recent Highlights (v1.0.8)
 - **New: Open with CSV ClearView command** — Open any file (`.txt`, `.dat`, `.log`, etc.) in the CSV editor via right-click in the Explorer, editor tab context menu, or the Command Palette — no matter the file extension
 
-### Recent Highlights (v1.0.7)
+### Earlier (v1.0.7)
 - **New: Duplicate Row Detection** — One-click scan finds all duplicate rows, highlights them in amber, and groups them in a focused view with original CSV line numbers
 - **New: Go to Row** — Jump to any row by number with a single keystroke; the target row flashes to confirm
 - **Toolbar redesign** — Cleaner unified button style with logical groupings
