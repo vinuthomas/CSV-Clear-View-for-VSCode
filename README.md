@@ -9,9 +9,15 @@
 
 ![Color-coded columns with alternating rows](screenshots/Color%20seprated%20rows%20in%20CSV.png)
 
+*Each column is automatically color-coded for instant visual separation, with alternating row shading to keep your eyes on the right line — no more losing your place in wide datasets.*
+
 ![SQL query bar for ad-hoc data analysis](screenshots/Search%20or%20query%20CSV%20with%20SQL.png)
 
+*Run SQL SELECT queries directly on your CSV without leaving VS Code. Filter, sort, aggregate, and join — powered by a full in-memory SQL engine.*
+
 ![Data profile panel showing column types and statistics](screenshots/Data%20Profile%20of%20Columns.png)
+
+*The Profile panel gives you a complete schema summary at a glance: inferred data types, null percentage, distinct value counts, and min/max ranges for every column.*
 
 ## Why CSV ClearView?
 
