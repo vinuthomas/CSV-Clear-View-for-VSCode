@@ -2,6 +2,18 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.0.10] - 2026-05-19
+
+### Fixed
+
+- **Open VSX Registration:** Resolved a casing issue with the `publisher` field in `package.json` that was preventing the extension's icon from displaying correctly on the Open VSX registry.
+
+## [1.0.9] - 2026-05-19
+
+### Fixed
+
+- **Open VSX Support:** Added Open VSX support by publishing to the Open VSX registry. Updated `package.json` to properly declare the publisher namespace. Added installation instructions to the README.
+
 ## [1.0.8] - 2026-04-30
 
 ### Added
