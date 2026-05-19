@@ -216,9 +216,10 @@ code --install-extension csv-clearview-x.x.x.vsix
    git tag -a vx.x.x -m "Release vx.x.x"
    git push && git push --tags
    ```
-6. **Marketplace Publishing:** Do NOT push releases to the marketplace automatically. Always allow the user to explicitly request publishing to the marketplace:
+6. **Marketplace Publishing:** Do NOT push releases to the marketplace automatically. Always allow the user to explicitly request publishing. When approved, publish to BOTH the VS Code Marketplace and the Open VSX Registry:
    ```bash
    node_modules/.bin/vsce publish
+   npx ovsx publish
    ```
 7. **GitHub Release:** Create a GitHub release with the VSIX file attached:
    ```bash

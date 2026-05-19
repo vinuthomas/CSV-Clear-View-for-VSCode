@@ -11,6 +11,17 @@ You can install this extension from the Open VSX Registry, which makes it availa
 
 [Install from Open VSX Registry](https://open-vsx.org/extension/vinuthomas/csv-clearview)
 
+### Manual Installation (.vsix)
+
+You can also install the extension manually by downloading the compiled `.vsix` file from the [GitHub Releases](https://github.com/vinuthomas/CSV-Clear-View-for-VSCode/releases) page.
+
+**To install manually in Cursor or VS Code:**
+1. Download the latest `csv-clearview-x.x.x.vsix` file from the Releases page.
+2. Open your editor and go to the **Extensions** view (`Cmd+Shift+X` or `Ctrl+Shift+X`).
+3. Click the `...` (Views and More Actions) menu at the top right of the Extensions view.
+4. Select **Install from VSIX...**
+5. Locate the downloaded file and select it to install.
+
 ## Screenshots
 
 ![Color-coded columns with alternating rows](screenshots/Color%20seprated%20rows%20in%20CSV.png)
