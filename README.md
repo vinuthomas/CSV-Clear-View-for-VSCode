@@ -5,6 +5,12 @@
 
 **Transform your CSV workflow with a powerful, spreadsheet-like editor built for data engineers, analysts, and scientists.** CSV ClearView brings enterprise-grade CSV viewing and editing to VS Code with color-coded columns, in-editor SQL queries, advanced data profiling, duplicate detection, and seamless handling of files up to 500MB+.
 
+## Installation
+
+You can install this extension from the Open VSX Registry, which makes it available for VS Codium, Cursor, Gitpod, and other VS Code-compatible editors:
+
+[Install from Open VSX Registry](https://open-vsx.org/extension/vinuthomas/csv-clearview)
+
 ## Screenshots
 
 ![Color-coded columns with alternating rows](screenshots/Color%20seprated%20rows%20in%20CSV.png)
