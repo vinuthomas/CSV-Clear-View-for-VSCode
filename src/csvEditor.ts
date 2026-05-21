@@ -1,7 +1,14 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
-import alasql = require('alasql');
+
+let _alasql: ((query: string, params?: any[]) => any) | null = null;
+function getAlasql(): (query: string, params?: any[]) => any {
+	if (!_alasql) {
+		_alasql = require('alasql');
+	}
+	return _alasql!;
+}
 
 const CHUNKED_MODE_THRESHOLD = 500 * 1024 * 1024; // 500 MB
 const CHUNK_ROWS = 500; // rows per page delivered to the webview
@@ -344,7 +351,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					return;
 				}
 				try {
-					const result = alasql(e.query, [e.data]);
+					const result = getAlasql()(e.query, [e.data]);
 					webviewPanel.webview.postMessage({ type: 'queryResult', result });
 				} catch (err: any) {
 					webviewPanel.webview.postMessage({ type: 'queryError', message: err.message || String(err) });

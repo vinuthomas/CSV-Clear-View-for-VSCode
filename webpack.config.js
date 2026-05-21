@@ -13,14 +13,12 @@ module.exports = {
   },
   externals: {
     vscode: 'commonjs vscode',
+    // Keep alasql out of the bundle — loaded lazily at runtime from node_modules
+    // when the user first runs a SQL query.
+    alasql: 'commonjs alasql',
   },
   resolve: {
     extensions: ['.ts', '.js'],
-    // Redirect `require('alasql')` to the browser/standard build so webpack
-    // does not pull in the alasql.fs.js build which has react-native peer deps.
-    alias: {
-      alasql: path.resolve(__dirname, 'node_modules/alasql/dist/alasql.js'),
-    },
   },
   module: {
     rules: [

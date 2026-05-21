@@ -11,3 +11,12 @@ vsc-extension-quickstart.md
 **/*.map
 node_modules/**
 *.vsix
+
+# Dev/agent tooling — not needed in published extension
+.claude/**
+.code-review-graph/**
+.github/**
+.mcp.json
+.opencode.json
+AGENTS.md
+tests/**

@@ -196,5 +196,8 @@
   },
   "dependencies": {
     "alasql": "^4.17.2"
+  },
+  "overrides": {
+    "glob": "^13.0.0"
   }
 }
