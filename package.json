@@ -3,7 +3,7 @@
   "displayName": "CSV ClearView",
   "publisher": "vinuthomas",
   "description": "A clear and powerful CSV viewer with colored columns, sticky headers, and SQL query capabilities.",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
