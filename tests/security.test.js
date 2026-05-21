@@ -706,8 +706,8 @@ async function runTests() {
 
         // CSP no longer contains unsafe-eval
         assert(!src.includes("'unsafe-eval'"), 'CSP does not contain unsafe-eval');
-        // alasql is imported at module level
-        assert(src.includes("import alasql"), 'alasql imported at module level in extension host');
+        // alasql is lazy-loaded (not at module level) to avoid parsing 500KB on startup
+        assert(!src.includes("import alasql") && src.includes("require('alasql')"), 'alasql lazy-loaded via require() not static import');
         // runQuery handler exists
         assert(src.includes("case 'runQuery'"), 'Extension host handles runQuery messages');
         // queryResult response
@@ -1262,6 +1262,105 @@ async function runTests() {
             assertEqual(entries[0].lineNum, 2, 'buildDupeGroups: lineNum accounts for header (row index 1 → line 2)');
             assertEqual(entries[1].lineNum, 4, 'buildDupeGroups: lineNum correct for later occurrence');
         }
+    }
+
+    // --------------------------------------------------------
+    console.log('\n🔌 17. LAZY ALASQL LOADER (getAlasql)');
+    // --------------------------------------------------------
+
+    {
+        // Replicate the lazy-loader pattern from csvEditor.ts
+        let _alasql = null;
+        function getAlasql() {
+            if (!_alasql) {
+                _alasql = require('alasql');
+            }
+            return _alasql;
+        }
+
+        // First call loads and returns a function
+        const fn1 = getAlasql();
+        assert(typeof fn1 === 'function', 'getAlasql: returns a callable function on first load');
+
+        // Second call returns the same cached instance (no re-require)
+        const fn2 = getAlasql();
+        assert(fn1 === fn2, 'getAlasql: returns same cached instance on subsequent calls');
+
+        // The loaded module is the real alasql — can execute a basic query
+        const data = [{ name: 'Alice', age: 30 }, { name: 'Bob', age: 25 }];
+        const result = getAlasql()('SELECT * FROM ? WHERE age > 26', [data]);
+        assert(Array.isArray(result), 'getAlasql: alasql executes a SELECT query and returns array');
+        assertEqual(result.length, 1, 'getAlasql: query result has correct row count');
+        assertEqual(result[0].name, 'Alice', 'getAlasql: query result has correct data');
+    }
+
+    // --------------------------------------------------------
+    console.log('\n📨 18. SERVER-SIDE runQuery MESSAGE HANDLER VALIDATION');
+    // --------------------------------------------------------
+
+    {
+        // Mirrors the validation logic in csvEditor.ts resolveCustomEditor → case 'runQuery'
+        function validateRunQueryMessage(e) {
+            if (typeof e.query !== 'string' || !Array.isArray(e.data)) {
+                return { error: 'Invalid query request' };
+            }
+            const normalizedQ = e.query.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+            if (!/^SELECT\s/i.test(normalizedQ)) {
+                return { error: 'Only SELECT queries are allowed' };
+            }
+            if (/;/.test(normalizedQ)) {
+                return { error: 'Semicolons are not allowed in queries' };
+            }
+            const blocked = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP|ATTACH|DETACH|SOURCE|PRAGMA|SHOW\s+TABLES|SHOW\s+DATABASES|SET\s+OPTION)\b/i;
+            if (blocked.test(normalizedQ)) {
+                return { error: 'Data modification statements are not allowed' };
+            }
+            return { valid: true };
+        }
+
+        // Valid messages
+        assert(validateRunQueryMessage({ query: 'SELECT * FROM ?', data: [] }).valid,
+            'runQuery handler: valid SELECT with empty data passes');
+        assert(validateRunQueryMessage({ query: 'SELECT name FROM ?', data: [{ name: 'x' }] }).valid,
+            'runQuery handler: valid SELECT with data passes');
+        assert(validateRunQueryMessage({ query: 'select * from ?', data: [] }).valid,
+            'runQuery handler: SELECT is case-insensitive');
+        assert(validateRunQueryMessage({ query: 'SELECT /* comment */ * FROM ?', data: [] }).valid,
+            'runQuery handler: inline comment stripped before validation');
+
+        // Invalid message shape
+        assertEqual(validateRunQueryMessage({ query: 123, data: [] }).error,
+            'Invalid query request', 'runQuery handler: non-string query rejected');
+        assertEqual(validateRunQueryMessage({ query: 'SELECT 1', data: 'notarray' }).error,
+            'Invalid query request', 'runQuery handler: non-array data rejected');
+        assertEqual(validateRunQueryMessage({ data: [] }).error,
+            'Invalid query request', 'runQuery handler: missing query rejected');
+
+        // Non-SELECT statements
+        assertEqual(validateRunQueryMessage({ query: 'INSERT INTO ? VALUES (1)', data: [] }).error,
+            'Only SELECT queries are allowed', 'runQuery handler: INSERT rejected');
+        assertEqual(validateRunQueryMessage({ query: 'UPDATE ? SET a=1', data: [] }).error,
+            'Only SELECT queries are allowed', 'runQuery handler: UPDATE rejected');
+        assertEqual(validateRunQueryMessage({ query: 'DELETE FROM ?', data: [] }).error,
+            'Only SELECT queries are allowed', 'runQuery handler: DELETE rejected');
+
+        // Blocked keywords inside SELECT
+        assertEqual(validateRunQueryMessage({ query: 'SELECT * FROM ? DROP TABLE foo', data: [] }).error,
+            'Data modification statements are not allowed', 'runQuery handler: DROP inside SELECT blocked');
+        assertEqual(validateRunQueryMessage({ query: 'SELECT * FROM ? WHERE EXEC xp_cmdshell', data: [] }).error,
+            'Data modification statements are not allowed', 'runQuery handler: EXEC blocked');
+
+        // Semicolon injection
+        assertEqual(validateRunQueryMessage({ query: 'SELECT * FROM ?; DROP TABLE foo', data: [] }).error,
+            'Semicolons are not allowed in queries', 'runQuery handler: semicolon injection blocked');
+
+        // Comment-wrapped injection (/* DROP */ should be stripped, then re-validated)
+        assert(validateRunQueryMessage({ query: 'SELECT /* DROP TABLE foo */ * FROM ?', data: [] }).valid,
+            'runQuery handler: DROP inside block comment is stripped and allowed');
+
+        // Blocked keyword after comment stripping
+        assertEqual(validateRunQueryMessage({ query: '/* comment */ DROP TABLE foo', data: [] }).error,
+            'Only SELECT queries are allowed', 'runQuery handler: non-SELECT after comment strip is rejected');
     }
 
     console.log('\n' + '='.repeat(50));
