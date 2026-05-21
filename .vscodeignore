@@ -9,8 +9,9 @@ tsconfig.json
 package-lock.json
 vsc-extension-quickstart.md
 **/*.map
-node_modules/**
 *.vsix
+node_modules/**
+!node_modules/alasql/**
 
 # Dev/agent tooling — not needed in published extension
 .claude/**
