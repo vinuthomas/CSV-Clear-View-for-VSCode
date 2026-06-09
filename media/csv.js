@@ -8,6 +8,7 @@ let currentDisplayData = []; // Data currently being shown (full or filtered)
 let autocompleteOptions = []; // Shared source for autocomplete
 let currentFocus = -1; // Shared focus state for autocomplete
 let isUpdating = false; // Guard for overlapping updates
+let pendingUpdateTimeout = null; // Tracks the scheduled render so a newer message can cancel it
 
 // --- Query History State ---
 let queryHistory = [];  // Most-recent first; max 50 entries
@@ -1124,7 +1125,12 @@ window.addEventListener('message', event => {
             // Use setTimeout to allow the browser to render the loader
             // (skip for chunked — it handles its own async path above)
             if (message.viewMode !== 'chunked') {
-                setTimeout(async () => {
+                if (pendingUpdateTimeout !== null) {
+                    clearTimeout(pendingUpdateTimeout);
+                    pendingUpdateTimeout = null;
+                }
+                pendingUpdateTimeout = setTimeout(async () => {
+                    pendingUpdateTimeout = null;
                     if (isUpdating) return;
                     isUpdating = true;
 
@@ -2248,8 +2254,8 @@ async function dataToObjects(data) {
         safeHeaders.forEach((h, index) => {
             const val = row[index];
             // Coerce numeric strings to numbers so AlaSQL aggregates (AVG, SUM, etc.) work correctly.
-            if (val !== '' && val != null && !isNaN(Number(val))) {
-                obj[h] = Number(val);
+            if (val != null && val.trim() !== '' && !isNaN(Number(val.trim()))) {
+                obj[h] = Number(val.trim());
             } else {
                 obj[h] = val;
             }
@@ -2307,7 +2313,6 @@ async function parseCSV(text, delimiter) {
         } else {
             if (char === '"') {
                 inQuotes = true;
-                fieldStart = i;
             } else if (char === delim) {
                 let field = text.slice(fieldStart, i);
                 if (field.startsWith('"') && field.endsWith('"')) {
@@ -2386,7 +2391,8 @@ function debounceSave() {
 async function onCellChange(e) {
     const cell = e.target;
     const scrollTop = tableContainer.scrollTop;
-    const startRow = Math.max(1, Math.floor(scrollTop / rowHeight));
+    const dataRowCount = currentDisplayData.length - 1;
+    const startRow = Math.max(1, scrollTopToRow(scrollTop, dataRowCount));
     const buffer = 10;
     const renderStart = Math.max(1, startRow - buffer);
     

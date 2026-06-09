@@ -2,6 +2,32 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.0.13] - 2026-06-09
+
+### Fixed
+
+- **CSV parsing — bare embedded quotes no longer truncate field values:** Fields containing a `"` character in the middle of an otherwise unquoted value (e.g. `She said "hello"`) were being corrupted — everything up to and including the embedded quote was discarded, leaving only the partial text after the last quote. Values are now preserved verbatim.
+- **Cell editing on large files now writes to the correct row:** When editing a cell in a file with more than ~333 000 rows, the virtual-scroll spacer scaling was not applied when calculating which row was visible. Edits were silently written to the wrong row, potentially thousands of rows away from the one the user clicked. The correct `scrollTopToRow()` helper is now used.
+- **RFC-4180 mid-field escaped quotes handled correctly in paged (chunked) mode:** The byte-level row indexer (`buildRowIndex`) and row reader (`readRows`) each used different logic for handling `""` escape sequences inside quoted fields. `buildRowIndex` set `prevWasQuote` correctly only on the opening `"`, so any `""` pair not immediately at field-open was misread — `inQuotes` toggled off at the wrong byte, misaligning every subsequent row boundary for files opened in chunked (>500 MB) mode. Both scanners now use consistent deferred-close logic: a `"` inside a quoted field sets a flag and the decision is deferred to the next byte, correctly distinguishing a `""` escape from a closing quote.
+- **Whitespace-only cells no longer coerced to `0` in SQL queries:** Cells containing only spaces or tabs passed the numeric-coercion guard (`Number(' ') === 0`, `isNaN(0) === false`) and were stored as the number `0` in the SQL query engine. This caused incorrect `SUM`, `AVG`, and `WHERE` results and could corrupt exported data. The guard now trims the value before testing.
+- **Rapid file saves no longer drop the second render:** When two `update` messages arrived within the 50 ms debounce window, the second scheduled render found `isUpdating = true` (set by the first) and silently returned, leaving the view showing stale content. A `pendingUpdateTimeout` handle now cancels any in-flight timer so only the latest update is rendered.
+- **Row index rebuild uses current file size after file growth:** `ensureIndex` was passing `document.size` (frozen at the time the editor was opened) to `buildRowIndex`. If the file grew after opening, the index stopped at the original EOF. The current size is now fetched with a fresh `stat` call before each rebuild.
+- **Tail view no longer reads from past EOF after file shrinks:** The tail-mode offset calculation used the stale `document.size` to compute `currentSize - tailSize`. If the file shrank after the editor was opened, the offset exceeded the new file size and the read returned an empty buffer. The current file size is now obtained with a fresh `stat` call before computing the offset.
+- **Page-load errors in chunked mode now shown to the user:** Errors thrown while serving a page request in chunked mode were only logged to the console. The loading spinner stayed active indefinitely with no feedback. Errors are now forwarded to the webview as a visible error message.
+- **`readRange` TOCTOU eliminated:** `readRange` previously called `vscode.workspace.fs.stat` and then `fs.openSync` as two separate operations. A file replacement between the two calls could produce a buffer padded with zeros. The stat call is removed; `fs.readSync`'s actual return value is used to slice the buffer to the correct length, giving a consistent read in a single open/read/close sequence.
+
+## [1.0.12] - 2026-05-21
+
+### Fixed
+
+- **SQL Module Lazy Loading:** Fixed an issue where running SQL queries would throw a `Cannot find module 'alasql'` error. The `alasql` dependency was accidentally omitted from the published extension package when moving to lazy loading. It is now properly bundled inside the VSIX.
+
+## [1.0.11] - 2026-05-21
+
+### Fixed
+
+- **Security Updates:** Updated `alasql` from `4.17.0` to `4.17.2` to resolve potential vulnerabilities and improved lazy-loading mechanism.
+
 ## [1.0.10] - 2026-05-19
 
 ### Fixed

@@ -1,0 +1,7 @@
+Name,Note,Value
+Alice,"She said ""hello"" yesterday",42
+Bob,"A ""complicated"" field with ""many"" escapes",100
+Charlie,"Line one
+Line two with ""embedded newline"" escape",7
+Dave,Normal field,99
+Eve,"Ends with escape""",0

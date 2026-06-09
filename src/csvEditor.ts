@@ -169,7 +169,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		let indexReady = false;
 		const ensureIndex = async (): Promise<RowIndex> => {
 			if (rowIndex) { return rowIndex; }
-			rowIndex = await this.buildRowIndex(document.uri, document.size);
+			const freshStats = await vscode.workspace.fs.stat(document.uri);
+			rowIndex = await this.buildRowIndex(document.uri, freshStats.size);
 			indexReady = true;
 			return rowIndex;
 		};
@@ -242,8 +243,12 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						text = text.substring(0, lastNewline + 1);
 					}
 				} else if (viewMode === 'tail') {
+					// Re-stat: document.size is frozen at open time and may be stale
+					const tailStats = await vscode.workspace.fs.stat(document.uri);
+					const currentSize = tailStats.size;
+
 					// Read header (first 10KB)
-					const headerSize = Math.min(document.size, 10 * 1024);
+					const headerSize = Math.min(currentSize, 10 * 1024);
 					const headerBytes = await this.readRange(document.uri, 0, headerSize);
 					let headerText = Buffer.from(headerBytes).toString('utf8');
 					const firstNewline = headerText.indexOf('\n');
@@ -252,8 +257,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					}
 
 					// Read tail (last 256KB)
-					const tailSize = Math.min(document.size, 256 * 1024);
-					const tailBytes = await this.readRange(document.uri, document.size - tailSize, tailSize);
+					const tailSize = Math.min(currentSize, 256 * 1024);
+					const tailBytes = await this.readRange(document.uri, currentSize - tailSize, tailSize);
 					let tailText = Buffer.from(tailBytes).toString('utf8');
 					// Ensure we start with a full line
 					const firstNewlineInTail = tailText.indexOf('\n');
@@ -381,6 +386,9 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						});
 					} catch (err) {
 						console.error('Error serving page request:', err);
+						if (!disposed) {
+							webviewPanel.webview.postMessage({ type: 'queryError', message: `Error loading page: ${err instanceof Error ? err.message : String(err)}` });
+						}
 					}
 					return;
 				}
@@ -425,14 +433,23 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			for (let i = 0; i < bytesRead; i++) {
 				const ch = buf[i];
 				if (ch === 0x22 /* " */) {
-					if (inQuotes && prevWasQuote) {
-						// Escaped double-quote ("") — stay inside the field, reset flag
+					if (!inQuotes) {
+						// Opening quote — enter quoted field
+						inQuotes = true;
+						prevWasQuote = false;
+					} else if (prevWasQuote) {
+						// Second " of a "" escape sequence — stay inside quoted field
 						prevWasQuote = false;
 					} else {
-						inQuotes = !inQuotes;
-						prevWasQuote = inQuotes; // set flag when we just opened/may be escaping
+						// First " while in a quoted field — may be closing or start of ""
+						// Defer: set flag and resolve on the next byte
+						prevWasQuote = true;
 					}
 				} else {
+					if (inQuotes && prevWasQuote) {
+						// Previous " was the closing quote (confirmed by this non-" byte)
+						inQuotes = false;
+					}
 					prevWasQuote = false;
 					if (!inQuotes && ch === 0x0a /* \n */) {
 						rowCount++;
@@ -492,6 +509,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			let offset    = cpByte;
 			let currentRow = cpRow;
 			let inQuotes  = false;
+			let prevWasQuoteR = false; // mirrors prevWasQuote in buildRowIndex
 
 			// Phase 1: scan forward until we reach clampedStart
 			while (currentRow < clampedStart) {
@@ -500,15 +518,22 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 
 				for (let i = 0; i < bytesRead; i++) {
 					const ch = buf[i];
-					if (ch === 0x22) { inQuotes = !inQuotes; }
-					else if (!inQuotes && ch === 0x0a) {
-						currentRow++;
-						if (currentRow >= clampedStart) {
-							// The next byte is the start of clampedStart
-							offset = offset + i + 1;
-							// Break both loops by jumping to Phase 2
-							// eslint-disable-next-line no-labels
-							break;
+					if (ch === 0x22) {
+						if (!inQuotes) { inQuotes = true; prevWasQuoteR = false; }
+						else if (prevWasQuoteR) { prevWasQuoteR = false; }
+						else { prevWasQuoteR = true; }
+					} else {
+						if (inQuotes && prevWasQuoteR) { inQuotes = false; }
+						prevWasQuoteR = false;
+						if (!inQuotes && ch === 0x0a) {
+							currentRow++;
+							if (currentRow >= clampedStart) {
+								// The next byte is the start of clampedStart
+								offset = offset + i + 1;
+								// Break both loops by jumping to Phase 2
+								// eslint-disable-next-line no-labels
+								break;
+							}
 						}
 					}
 				}
@@ -529,12 +554,19 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				let segEnd = -1;
 				for (let i = 0; i < bytesRead; i++) {
 					const ch = buf[i];
-					if (ch === 0x22) { inQuotes = !inQuotes; }
-					else if (!inQuotes && ch === 0x0a) {
-						rowsCollected++;
-						if (rowsCollected >= needed) {
-							segEnd = i + 1; // include the newline
-							break;
+					if (ch === 0x22) {
+						if (!inQuotes) { inQuotes = true; prevWasQuoteR = false; }
+						else if (prevWasQuoteR) { prevWasQuoteR = false; }
+						else { prevWasQuoteR = true; }
+					} else {
+						if (inQuotes && prevWasQuoteR) { inQuotes = false; }
+						prevWasQuoteR = false;
+						if (!inQuotes && ch === 0x0a) {
+							rowsCollected++;
+							if (rowsCollected >= needed) {
+								segEnd = i + 1; // include the newline
+								break;
+							}
 						}
 					}
 				}
@@ -555,16 +587,12 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 	}
 
 	private async readRange(uri: vscode.Uri, offset: number, length: number): Promise<Uint8Array> {
-		const stats = await vscode.workspace.fs.stat(uri);
-		const actualLength = Math.min(length, stats.size - offset);
-
-		if (actualLength <= 0) { return new Uint8Array(0); }
-
+		if (length <= 0) { return new Uint8Array(0); }
 		const fd = fs.openSync(uri.fsPath, 'r');
 		try {
-			const buffer = Buffer.alloc(actualLength);
-			fs.readSync(fd, buffer, 0, actualLength, offset);
-			return buffer;
+			const buffer = Buffer.alloc(length);
+			const bytesRead = fs.readSync(fd, buffer, 0, length, offset);
+			return bytesRead < length ? buffer.slice(0, bytesRead) : buffer;
 		} finally {
 			fs.closeSync(fd);
 		}

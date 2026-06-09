@@ -1,0 +1,6 @@
+Name,Description,Note
+Alice,She said "hello" to everyone,Bare quote mid-field
+Bob,The phrase "to be or not to be" is famous,Another bare quote
+Charlie,Plain text no quotes,Control row
+Dave,100% "pure" data,Quote near symbol
+Eve,Normal value,No issues here
