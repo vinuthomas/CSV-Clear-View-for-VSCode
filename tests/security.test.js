@@ -316,7 +316,7 @@ async function runTests() {
         const objects = await dataToObjects(data);
 
         // The __proto__ header should be renamed
-        assert(objects[0]['_\x5f_proto__'] !== undefined || objects[0]['___proto__'] !== undefined,
+        assert(objects[0]['___proto__'] !== undefined,
             '__proto__ header renamed to _<name>');
 
         // Verify Object.prototype was NOT polluted
@@ -672,37 +672,22 @@ async function runTests() {
     const fs = require('fs');
     const path = require('path');
 
-    // Test: localResourceRoots (structural verification)
+    // Test: csvEditor.ts structural checks (read once, reused across all assertions below)
     {
         const src = fs.readFileSync(
             path.join(__dirname, '..', 'src', 'csvEditor.ts'), 'utf8'
         );
+
+        // localResourceRoots
         assert(src.includes('localResourceRoots'), 'localResourceRoots is set in webview options');
         assert(src.includes("'media'"), 'localResourceRoots restricted to media folder');
-    }
 
-    // Test: Crypto nonce in source
-    {
-        const src = fs.readFileSync(
-            path.join(__dirname, '..', 'src', 'csvEditor.ts'), 'utf8'
-        );
+        // Crypto nonce
         assert(src.includes("crypto.randomBytes"), 'Nonce uses crypto.randomBytes');
         assert(!src.includes('Math.random'), 'Math.random no longer used for nonce');
-    }
 
-    // Test: Diagnostics collection removed
-    {
-        const src = fs.readFileSync(
-            path.join(__dirname, '..', 'src', 'csvEditor.ts'), 'utf8'
-        );
+        // Diagnostics collection removed
         assert(!src.includes('createDiagnosticCollection'), 'Unused diagnostics collection removed');
-    }
-
-    // New: extension host source checks for this session's fixes
-    {
-        const src = fs.readFileSync(
-            path.join(__dirname, '..', 'src', 'csvEditor.ts'), 'utf8'
-        );
 
         // CSP no longer contains unsafe-eval
         assert(!src.includes("'unsafe-eval'"), 'CSP does not contain unsafe-eval');
@@ -878,17 +863,6 @@ async function runTests() {
         const MAX_SPACER = 10_000_000;
         const BUFFER = 10;
 
-        function scrollTopToRowPure(scrollTop, dataRowCount) {
-            const totalPx = dataRowCount * ROW_HEIGHT;
-            let row;
-            if (totalPx <= MAX_SPACER) {
-                row = Math.floor(scrollTop / ROW_HEIGHT);
-            } else {
-                row = Math.floor((scrollTop / MAX_SPACER) * dataRowCount);
-            }
-            return Math.min(row, Math.max(0, dataRowCount - 1));
-        }
-
         function computeWindow(scrollTop, containerHeight, dataRowCount) {
             const visibleRowCount = Math.ceil(containerHeight / ROW_HEIGHT);
             let startRow = scrollTopToRowPure(scrollTop, dataRowCount);
@@ -1013,7 +987,6 @@ async function runTests() {
                 } else {
                     if (char === '"') {
                         inQuotes = true;
-                        fieldStart = i;
                     } else if (char === delim) {
                         let field = text.slice(fieldStart, i);
                         if (field.startsWith('"') && field.endsWith('"')) {
@@ -1099,6 +1072,12 @@ async function runTests() {
         {
             const { errors } = parseCSVWithDelim('A\tB\nonly-one', '\t');
             assert(errors.length > 0, 'TSV: column count mismatch detected');
+        }
+
+        // Regression: fieldStart must NOT be overwritten on opening quote (mirrors parseCSV fix)
+        {
+            const { data } = parseCSVWithDelim('a\t "b,c"', '\t');
+            assert(data[0][1].includes('b,c'), 'TSV: space-padded quoted field not corrupted (fieldStart regression)');
         }
     }
 
