@@ -2,6 +2,8 @@
 
 [![Visual Studio Marketplace](https://vsmarketplacebadges.dev/version/VinuThomas.csv-clearview.svg)](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview)
 [![Downloads](https://vsmarketplacebadges.dev/downloads/VinuThomas.csv-clearview.svg)](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview)
+[![Open VSX](https://img.shields.io/open-vsx/v/vinuthomas/csv-clearview?label=Open%20VSX)](https://open-vsx.org/extension/vinuthomas/csv-clearview)
+[![Open VSX Downloads](https://img.shields.io/open-vsx/dt/vinuthomas/csv-clearview)](https://open-vsx.org/extension/vinuthomas/csv-clearview)
 
 **Transform your CSV workflow with a powerful, spreadsheet-like editor built for data engineers, analysts, and scientists.** CSV ClearView brings enterprise-grade CSV viewing and editing to VS Code with color-coded columns, in-editor SQL queries, advanced data profiling, duplicate detection, and seamless handling of files up to 500MB+.
 
