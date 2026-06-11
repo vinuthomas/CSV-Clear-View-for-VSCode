@@ -1342,6 +1342,337 @@ async function runTests() {
             'Only SELECT queries are allowed', 'runQuery handler: non-SELECT after comment strip is rejected');
     }
 
+    // --------------------------------------------------------
+    console.log('\n📤 19. serializeToCSV (SQL result export)');
+    // --------------------------------------------------------
+
+    {
+        // Extracted from csv.js — pure function, no DOM deps
+        function serializeToCSV(data) {
+            return data.map(row =>
+                row.map(cell => {
+                    const s = cell == null ? '' : String(cell);
+                    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+                }).join(',')
+            ).join('\n');
+        }
+
+        // Basic output
+        assertEqual(
+            serializeToCSV([['A','B'],['1','2'],['3','4']]),
+            'A,B\n1,2\n3,4',
+            'serializeToCSV: basic header + rows'
+        );
+
+        // Comma in value → quoted
+        assertEqual(
+            serializeToCSV([['Name'],['Smith, John']]),
+            'Name\n"Smith, John"',
+            'serializeToCSV: comma in cell → quoted'
+        );
+
+        // Double quote → "" escaped and quoted
+        assertEqual(
+            serializeToCSV([['Quote'],['say "hi"']]),
+            'Quote\n"say ""hi"""',
+            'serializeToCSV: double quote → "" escaped and quoted'
+        );
+
+        // Newline in cell → quoted
+        assertEqual(
+            serializeToCSV([['Notes'],['line1\nline2']]),
+            'Notes\n"line1\nline2"',
+            'serializeToCSV: newline in cell → quoted'
+        );
+
+        // \r in cell → quoted
+        assertEqual(
+            serializeToCSV([['A'],['val\rwith-cr']]),
+            'A\n"val\rwith-cr"',
+            'serializeToCSV: \\r in cell → quoted'
+        );
+
+        // null → empty string (unquoted)
+        assertEqual(
+            serializeToCSV([['A'],[null]]),
+            'A\n',
+            'serializeToCSV: null cell → empty string'
+        );
+
+        // undefined → empty string
+        assertEqual(
+            serializeToCSV([['A'],[undefined]]),
+            'A\n',
+            'serializeToCSV: undefined cell → empty string'
+        );
+
+        // Numeric values coerced to string, no quotes added
+        assertEqual(
+            serializeToCSV([['N'],[42],[3.14]]),
+            'N\n42\n3.14',
+            'serializeToCSV: numeric values serialized without quotes'
+        );
+
+        // Cell containing only a double-quote char
+        assertEqual(
+            serializeToCSV([['"']]),
+            '""""',
+            'serializeToCSV: single double-quote cell → """"'
+        );
+
+        // Both comma and quote in same cell
+        assertEqual(
+            serializeToCSV([['A'],['a,"b"']]),
+            'A\n"a,""b"""',
+            'serializeToCSV: comma + quote in same cell'
+        );
+
+        // Multi-column roundtrip through parseCSV
+        {
+            const data = [['ID','Name','Bio'],['1','Alice','Loves "coding" and data'],['2','Bob','Has a comma, here'],['3','Charlie','Line1\nLine2']];
+            const csv = serializeToCSV(data);
+            const { data: reparsed } = await parseCSV(csv);
+            assertEqual(reparsed, data, 'serializeToCSV: roundtrip preserves special chars');
+        }
+
+        // Single header row only
+        assertEqual(
+            serializeToCSV([['A','B','C']]),
+            'A,B,C',
+            'serializeToCSV: single header row'
+        );
+
+        // Empty data array
+        assertEqual(
+            serializeToCSV([]),
+            '',
+            'serializeToCSV: empty data → empty string'
+        );
+    }
+
+    // --------------------------------------------------------
+    console.log('\n📊 20. Histogram bucket computation (computeColStats)');
+    // --------------------------------------------------------
+
+    {
+        // Extracted histogram logic + helpers from csv.js
+        function median(sorted) {
+            const mid = Math.floor(sorted.length / 2);
+            return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        }
+        function percentile(sorted, p) {
+            const idx = p * (sorted.length - 1);
+            const lo = Math.floor(idx), hi = Math.ceil(idx);
+            return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+        }
+
+        function computeColStatsWithTypes(data, colIndex, types) {
+            if (data.length < 2) { return null; }
+            const type = types[colIndex] || 'string';
+            const values = [];
+            const freqMap = Object.create(null);
+            let nullCount = 0;
+            for (let i = 1; i < data.length; i++) {
+                const raw = (data[i][colIndex] || '').trim();
+                if (raw === '') { nullCount++; } else {
+                    values.push(raw);
+                    freqMap[raw] = (freqMap[raw] || 0) + 1;
+                }
+            }
+            const total = data.length - 1;
+            const nonNull = values.length;
+            const distinct = Object.keys(freqMap).length;
+            const topValues = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([val, cnt]) => ({ val, cnt }));
+            const stats = { type, total, nonNull, nullCount, distinct, topValues };
+
+            if (type === 'integer' || type === 'float') {
+                const nums = values.map(v => parseFloat(v)).filter(n => !isNaN(n));
+                if (nums.length > 0) {
+                    nums.sort((a, b) => a - b);
+                    stats.min = nums[0];
+                    stats.max = nums[nums.length - 1];
+                    stats.mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+                    stats.median = median(nums);
+                    stats.p25 = percentile(nums, 0.25);
+                    stats.p75 = percentile(nums, 0.75);
+                    const variance = nums.reduce((acc, n) => acc + (n - stats.mean) ** 2, 0) / nums.length;
+                    stats.stddev = Math.sqrt(variance);
+
+                    const NUM_BUCKETS = 10;
+                    if (stats.max > stats.min) {
+                        const bucketSize = (stats.max - stats.min) / NUM_BUCKETS;
+                        const buckets = Array.from({ length: NUM_BUCKETS }, (_, i) => ({
+                            min: stats.min + i * bucketSize,
+                            max: stats.min + (i + 1) * bucketSize,
+                            count: 0
+                        }));
+                        for (const n of nums) {
+                            let bi = Math.floor((n - stats.min) / bucketSize);
+                            if (bi >= NUM_BUCKETS) { bi = NUM_BUCKETS - 1; }
+                            buckets[bi].count++;
+                        }
+                        stats.histogram = buckets;
+                    } else {
+                        stats.histogram = [{ min: stats.min, max: stats.max, count: nums.length }];
+                    }
+                }
+            }
+            return stats;
+        }
+
+        // Integer column produces histogram
+        {
+            const data = [['Val'], ...Array.from({ length: 100 }, (_, i) => [String(i + 1)])];
+            const stats = computeColStatsWithTypes(data, 0, ['integer']);
+            assert(stats.histogram != null, 'histogram: integer column produces histogram field');
+        }
+
+        // Histogram has exactly 10 buckets when range > 0
+        {
+            const data = [['Val'], ...Array.from({ length: 100 }, (_, i) => [String(i)])];
+            const stats = computeColStatsWithTypes(data, 0, ['integer']);
+            assertEqual(stats.histogram.length, 10, 'histogram: 10 buckets for range > 0');
+        }
+
+        // Bucket counts sum to total non-null values
+        {
+            const data = [['Val'], ...Array.from({ length: 50 }, (_, i) => [String(i * 2)])];
+            const stats = computeColStatsWithTypes(data, 0, ['integer']);
+            const total = stats.histogram.reduce((s, b) => s + b.count, 0);
+            assertEqual(total, 50, 'histogram: bucket counts sum to total values');
+        }
+
+        // Min value always lands in first bucket (index 0)
+        {
+            const data = [['Val'],['0'],['25'],['50'],['75'],['100']];
+            const stats = computeColStatsWithTypes(data, 0, ['integer']);
+            assert(stats.histogram[0].count >= 1, 'histogram: min value lands in first bucket');
+        }
+
+        // Max value lands in last bucket (clamped, not index 10)
+        {
+            const data = [['Val'],['0'],['50'],['100']];
+            const stats = computeColStatsWithTypes(data, 0, ['integer']);
+            const last = stats.histogram[stats.histogram.length - 1];
+            assert(last.count >= 1, 'histogram: max value clamped to last bucket');
+        }
+
+        // All identical values → single-bucket histogram
+        {
+            const data = [['Val'],['42'],['42'],['42'],['42']];
+            const stats = computeColStatsWithTypes(data, 0, ['integer']);
+            assertEqual(stats.histogram.length, 1, 'histogram: all-same values → 1 bucket');
+            assertEqual(stats.histogram[0].count, 4, 'histogram: single bucket holds all values');
+        }
+
+        // Float column also gets histogram
+        {
+            const data = [['Price'],['1.1'],['2.2'],['3.3'],['4.4'],['5.5']];
+            const stats = computeColStatsWithTypes(data, 0, ['float']);
+            assert(stats.histogram != null, 'histogram: float column produces histogram');
+        }
+
+        // Bucket boundaries are evenly spaced
+        {
+            const data = [['Val'], ...Array.from({ length: 10 }, (_, i) => [String(i)])];
+            const stats = computeColStatsWithTypes(data, 0, ['integer']);
+            const sizes = stats.histogram.map(b => b.max - b.min);
+            const first = sizes[0];
+            assert(sizes.every(s => Math.abs(s - first) < 1e-9), 'histogram: bucket widths are equal');
+        }
+
+        // String column has no histogram field
+        {
+            const data = [['Name'],['Alice'],['Bob'],['Charlie']];
+            const stats = computeColStatsWithTypes(data, 0, ['string']);
+            assert(stats.histogram == null, 'histogram: string column has no histogram');
+        }
+
+        // Insufficient data (header only) → null stats
+        {
+            const stats = computeColStatsWithTypes([['Val']], 0, ['integer']);
+            assert(stats === null, 'histogram: header-only data → null stats');
+        }
+
+        // Negative and positive range
+        {
+            const data = [['Val'],['-50'],['0'],['50']];
+            const stats = computeColStatsWithTypes(data, 0, ['integer']);
+            assertEqual(stats.histogram.length, 10, 'histogram: negative-to-positive range → 10 buckets');
+            const total = stats.histogram.reduce((s, b) => s + b.count, 0);
+            assertEqual(total, 3, 'histogram: negative-to-positive range → all values counted');
+        }
+
+        // Skewed data — majority in one bucket
+        {
+            const data = [['Val'],['1'],['1'],['1'],['1'],['1'],['1'],['1'],['1'],['1'],['100']];
+            const stats = computeColStatsWithTypes(data, 0, ['integer']);
+            assert(stats.histogram[0].count > stats.histogram[9].count, 'histogram: skewed data — first bucket larger than last');
+        }
+    }
+
+    // --------------------------------------------------------
+    console.log('\n🔧 21. saveQueryResult handler validation');
+    // --------------------------------------------------------
+
+    {
+        // Mirrors the validation logic in csvEditor.ts saveQueryResult case
+        function validateSaveQueryResult(e) {
+            if (typeof e.csv !== 'string') { return { valid: false, reason: 'invalid' }; }
+            return { valid: true };
+        }
+
+        assert(validateSaveQueryResult({ csv: 'A,B\n1,2' }).valid,
+            'saveQueryResult: valid string csv accepted');
+        assert(!validateSaveQueryResult({ csv: 123 }).valid,
+            'saveQueryResult: numeric csv rejected');
+        assert(!validateSaveQueryResult({ csv: null }).valid,
+            'saveQueryResult: null csv rejected');
+        assert(!validateSaveQueryResult({ csv: undefined }).valid,
+            'saveQueryResult: undefined csv rejected');
+        assert(!validateSaveQueryResult({}).valid,
+            'saveQueryResult: missing csv field rejected');
+        assert(!validateSaveQueryResult({ csv: ['A','B'] }).valid,
+            'saveQueryResult: array csv rejected');
+        assert(validateSaveQueryResult({ csv: '' }).valid,
+            'saveQueryResult: empty string csv accepted (edge case — empty result)');
+    }
+
+    // --------------------------------------------------------
+    console.log('\n🆕 22. NEW FEATURE SOURCE VERIFICATION (v1.0.14)');
+    // --------------------------------------------------------
+
+    {
+        const fs = require('fs');
+        const path = require('path');
+        const src = fs.readFileSync(path.join(__dirname, '..', 'media', 'csv.js'), 'utf8');
+        const extSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'csvEditor.ts'), 'utf8');
+
+        // serializeToCSV
+        assert(src.includes('function serializeToCSV'), 'serializeToCSV function exists in csv.js');
+        assert(src.includes("replace(/\"/g, '\"\"')"), 'serializeToCSV uses RFC-4180 double-quote escaping');
+        assert(src.includes("type: 'saveQueryResult'"), 'Webview posts saveQueryResult message to host');
+
+        // Save result button
+        assert(src.includes('saveResultBtn'), 'saveResultBtn DOM ref exists in csv.js');
+        assert(src.includes('isQueryResult'), 'isQueryResult state variable exists in csv.js');
+        assert(src.includes("save-result-btn"), 'save-result-btn referenced in csv.js');
+        assert(extSrc.includes("save-result-btn"), 'save-result-btn button in HTML template');
+        assert(extSrc.includes("case 'saveQueryResult'"), 'saveQueryResult handler in csvEditor.ts');
+
+        // Histogram in schema panel
+        assert(src.includes('function toggleSchemaHistogram'), 'toggleSchemaHistogram function exists');
+        assert(src.includes('schema-hist-row'), 'schema-hist-row class used for inline histogram');
+        assert(src.includes('schema-row-expanded'), 'schema-row-expanded class used for active row');
+
+        // Custom tooltip — data-tip replaces native <title>
+        assert(src.includes("data-tip="), 'Histogram bars use data-tip attribute');
+        assert(!src.match(/<rect[^>]*><title>/), 'No native <title> inside histogram rects');
+        assert(src.includes('chart-tip'), 'chart-tip tooltip element referenced in csv.js');
+        assert(src.includes("closest('rect[data-tip]')"), 'Tooltip delegation targets rect[data-tip]');
+        assert(extSrc.includes('id="chart-tip"'), 'chart-tip div in HTML template');
+    }
+
     console.log('\n' + '='.repeat(50));
     console.log(`Results: ${passed} passed, ${failed} failed`);
     if (failed > 0) {

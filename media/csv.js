@@ -120,6 +120,7 @@ const filterBtn = document.getElementById('filter-btn');
 const filterRowContainer = document.getElementById('filter-row-container');
 const dupesBtn = document.getElementById('dupes-btn');
 const saveResultBtn = document.getElementById('save-result-btn');
+const chartTip = document.getElementById('chart-tip');
 const dupesBanner = document.getElementById('dupes-banner');
 
 // --- Constants ---
@@ -506,7 +507,7 @@ function showStatsPopover(colIndex, thElement) {
             const x = i * (barW + gap);
             const y = chartH - barH;
             const title = `${fmtNum(bucket.min)}–${fmtNum(bucket.max)}: ${bucket.count}`;
-            bars += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="var(--vscode-progressBar-background,#0078d4)" rx="1" opacity="0.85"><title>${escapeHtml(title)}</title></rect>`;
+            bars += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="var(--vscode-progressBar-background,#0078d4)" rx="1" opacity="0.85" data-tip="${escapeHtml(title)}"></rect>`;
         });
         html += `
             <div class="sp-section-title">Distribution</div>
@@ -564,6 +565,28 @@ document.addEventListener('click', (e) => {
         if (!statsPopover.contains(e.target) && !e.target.closest('.col-stats-trigger')) {
             hideStatsPopover();
         }
+    }
+});
+
+// Instant custom tooltip for histogram bars (replaces slow native <title> delay)
+document.addEventListener('mousemove', (e) => {
+    const bar = e.target.closest('rect[data-tip]');
+    if (!bar || !chartTip) { return; }
+    chartTip.textContent = bar.dataset.tip;
+    chartTip.classList.remove('hidden');
+    const x = Math.min(e.clientX + 12, window.innerWidth - chartTip.offsetWidth - 8);
+    const y = e.clientY - chartTip.offsetHeight - 8;
+    chartTip.style.left = x + 'px';
+    chartTip.style.top = (y < 4 ? e.clientY + 16 : y) + 'px';
+});
+document.addEventListener('mouseleave', (e) => {
+    if (e.target.closest && e.target.closest('rect[data-tip]') && chartTip) {
+        chartTip.classList.add('hidden');
+    }
+}, true);
+document.addEventListener('mouseout', (e) => {
+    if (e.target.matches && e.target.matches('rect[data-tip]') && chartTip) {
+        chartTip.classList.add('hidden');
     }
 });
 
@@ -651,18 +674,61 @@ function buildSchemaPanel() {
     html += `</tbody></table>`;
     schemaPanelBody.innerHTML = html;
 
-    // Click on a schema row to show full stats popover anchored to the header column
+    // Click on a schema row: inline histogram for numeric columns, stats popover for others
     schemaPanelBody.querySelectorAll('.schema-row').forEach(row => {
         row.addEventListener('click', () => {
             const colIndex = parseInt(row.dataset.col, 10);
-            // Find the th element in headerTable for this column
-            const ths = headerTable ? headerTable.querySelectorAll('th') : [];
-            const th = ths[colIndex];
-            if (th) {
-                showStatsPopover(colIndex, th);
+            const type = columnTypes[colIndex] || 'string';
+            if (type === 'integer' || type === 'float') {
+                const stats = computeColStats(currentDisplayData, colIndex);
+                if (stats) { toggleSchemaHistogram(row, colIndex, stats); }
+            } else {
+                const ths = headerTable ? headerTable.querySelectorAll('th') : [];
+                const th = ths[colIndex];
+                if (th) { showStatsPopover(colIndex, th); }
             }
         });
     });
+}
+
+function toggleSchemaHistogram(row, colIndex, stats) {
+    const next = row.nextElementSibling;
+    if (next && next.classList.contains('schema-hist-row')) {
+        next.remove();
+        row.classList.remove('schema-row-expanded');
+        return;
+    }
+    // Close any other open histogram
+    schemaPanelBody.querySelectorAll('.schema-hist-row').forEach(r => r.remove());
+    schemaPanelBody.querySelectorAll('.schema-row-expanded').forEach(r => r.classList.remove('schema-row-expanded'));
+
+    if (!stats.histogram || stats.histogram.length === 0) { return; }
+
+    const maxCount = Math.max(...stats.histogram.map(b => b.count));
+    const VB_W = 400, VB_H = 48;
+    const gap = 2;
+    const barW = Math.floor((VB_W - gap * (stats.histogram.length - 1)) / stats.histogram.length);
+    let bars = '';
+    stats.histogram.forEach((bucket, i) => {
+        const barH = maxCount > 0 ? Math.max(2, Math.round((bucket.count / maxCount) * VB_H)) : 0;
+        const x = i * (barW + gap);
+        const y = VB_H - barH;
+        const label = `${fmtNum(bucket.min, 2)}–${fmtNum(bucket.max, 2)}: ${bucket.count}`;
+        bars += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="var(--vscode-progressBar-background,#0078d4)" rx="1" opacity="0.85" data-tip="${escapeHtml(label)}"></rect>`;
+    });
+
+    const histRow = document.createElement('tr');
+    histRow.className = 'schema-hist-row';
+    histRow.innerHTML = `
+        <td colspan="7" class="schema-hist-cell">
+            <svg viewBox="0 0 ${VB_W} ${VB_H}" width="100%" height="${VB_H}" class="sp-chart" xmlns="http://www.w3.org/2000/svg">${bars}</svg>
+            <div class="sp-chart-labels">
+                <span>${fmtNum(stats.min, 2)}</span>
+                <span>${fmtNum(stats.max, 2)}</span>
+            </div>
+        </td>`;
+    row.after(histRow);
+    row.classList.add('schema-row-expanded');
 }
 
 // =============================================================================

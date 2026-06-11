@@ -750,6 +750,21 @@ body.vscode-light .type-string   { color: #546e7a; background: rgba(84,110,122,0
     font-family: var(--vscode-editor-font-family);
 }
 
+.chart-tip {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    background: var(--vscode-editorHoverWidget-background, #1e1e1e);
+    color: var(--vscode-editorHoverWidget-foreground, #d4d4d4);
+    border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+    border-radius: 3px;
+    padding: 3px 7px;
+    font-size: 0.78em;
+    font-family: var(--vscode-editor-font-family);
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
 .sp-chart-wrap {
     padding: 2px 10px 6px;
 }
@@ -872,6 +887,21 @@ body.vscode-light .type-string   { color: #546e7a; background: rgba(84,110,122,0
 
 .schema-row:hover td {
     background-color: var(--vscode-list-hoverBackground);
+}
+
+.schema-row-expanded td {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    border-bottom: none;
+}
+
+.schema-hist-row td {
+    background-color: var(--vscode-list-inactiveSelectionBackground);
+    padding: 4px 10px 8px;
+    border-bottom: 1px solid var(--vscode-editorGroup-border);
+}
+
+.schema-hist-cell {
+    padding: 4px 10px 8px !important;
 }
 
 .schema-idx {

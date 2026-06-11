@@ -703,6 +703,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					<div id="schema-panel-body" class="schema-panel-body"></div>
 				</div>
 				<div id="stats-popover" class="stats-popover hidden"></div>
+				<div id="chart-tip" class="chart-tip hidden"></div>
 			<div id="goto-row-modal" class="goto-row-modal hidden">
 				<div class="goto-row-inner">
 					<label for="goto-row-input">Go to row:</label>
