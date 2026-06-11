@@ -1,7 +1,15 @@
 # CSV ClearView - The Ultimate CSV Editor for VS Code
 
-**VS Code Marketplace** &nbsp;[![Version](https://vsmarketplacebadges.dev/version/VinuThomas.csv-clearview.svg)](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview) [![Downloads](https://vsmarketplacebadges.dev/downloads/VinuThomas.csv-clearview.svg)](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview)  
-**Open VSX** &nbsp;[![Version](https://img.shields.io/open-vsx/v/vinuthomas/csv-clearview?label=Open%20VSX)](https://open-vsx.org/extension/vinuthomas/csv-clearview) [![Downloads](https://img.shields.io/open-vsx/dt/vinuthomas/csv-clearview)](https://open-vsx.org/extension/vinuthomas/csv-clearview)
+<table>
+<tr>
+<td valign="middle"><strong>VS Code Marketplace</strong></td>
+<td valign="middle"><a href="https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview"><img src="https://vsmarketplacebadges.dev/version/VinuThomas.csv-clearview.svg" alt="Version" /></a> <a href="https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview"><img src="https://vsmarketplacebadges.dev/downloads/VinuThomas.csv-clearview.svg" alt="Downloads" /></a></td>
+</tr>
+<tr>
+<td valign="middle"><strong>Open VSX</strong></td>
+<td valign="middle"><a href="https://open-vsx.org/extension/vinuthomas/csv-clearview"><img src="https://img.shields.io/open-vsx/v/vinuthomas/csv-clearview?label=Open%20VSX" alt="Version" /></a> <a href="https://open-vsx.org/extension/vinuthomas/csv-clearview"><img src="https://img.shields.io/open-vsx/dt/vinuthomas/csv-clearview" alt="Downloads" /></a></td>
+</tr>
+</table>
 
 **Transform your CSV workflow with a powerful, spreadsheet-like editor built for data engineers, analysts, and scientists.** CSV ClearView brings enterprise-grade CSV viewing and editing to VS Code with color-coded columns, in-editor SQL queries, advanced data profiling, duplicate detection, and seamless handling of files up to 500MB+.
 
