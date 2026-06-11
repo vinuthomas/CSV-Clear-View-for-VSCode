@@ -36,6 +36,10 @@ You can also install the extension manually by downloading the compiled `.vsix` 
 
 *The Profile panel gives you a complete schema summary at a glance: inferred data types, null percentage, distinct value counts, and min/max ranges for every column.*
 
+![Histogram distribution chart in the column stats popover](screenshots/Histogram%20Stats%20PopOver.png)
+
+*Shift+click any numeric column header to see an instant distribution histogram alongside min, max, mean, median, and percentile stats — no external tools needed.*
+
 ## Why CSV ClearView?
 
 Stop switching between VS Code and Excel. CSV ClearView delivers a **complete data exploration experience** without leaving your editor:
@@ -63,10 +67,11 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
   - Example: `SELECT * FROM ? WHERE [Price] > 100 ORDER BY [Date] DESC`
   - Query history with bash-style ↑/↓ navigation (stores up to 50 queries)
 - **Column Statistics:** Shift+click any column header for instant stats
-  - Numeric: min, max, mean, median, std dev, percentiles
+  - Numeric: min, max, mean, median, std dev, percentiles, **inline histogram**
   - Date: earliest, latest
   - String: length stats, frequency distribution
   - All: null count, distinct values, top-5 most common values
+- **Save SQL Results:** After running a query, click **Save CSV** to export the filtered/aggregated result as a new CSV file via a native save dialog
 - **Data Type Inference:** Automatic detection of integers, floats, dates, booleans, and strings with visual badges
 - **Schema Summary Panel:** Click **Profile** for a complete data dictionary showing type, nulls, distinct count, and ranges for every column
 
@@ -169,16 +174,17 @@ CSV ClearView automatically detects the delimiter but you can override it using 
 
 See the [CHANGELOG](changelog.md) for detailed release notes.
 
-### Latest Release (v1.0.9)
-- **Marketplace screenshots** — Added screenshots to the README and marketplace listing so users can evaluate the extension before installing
+### Latest Release (v1.0.14)
+- **New: Column Histogram** — Shift+click any numeric column header to see an instant distribution histogram in the stats popover, alongside min/max/mean/median and percentiles
+- **New: Save SQL Results** — After running a SQL query, click the new **Save CSV** toolbar button to export the result as a new CSV file via a native save dialog
 
-### Recent Highlights (v1.0.8)
-- **New: Open with CSV ClearView command** — Open any file (`.txt`, `.dat`, `.log`, etc.) in the CSV editor via right-click in the Explorer, editor tab context menu, or the Command Palette — no matter the file extension
+### Recent Highlights (v1.0.13)
+- **10 correctness bug fixes** — CSV parsing, cell editing on large files, RFC-4180 quote handling in chunked mode, whitespace coercion in SQL, and more
 
-### Earlier (v1.0.7)
-- **New: Duplicate Row Detection** — One-click scan finds all duplicate rows, highlights them in amber, and groups them in a focused view with original CSV line numbers
-- **New: Go to Row** — Jump to any row by number with a single keystroke; the target row flashes to confirm
-- **Toolbar redesign** — Cleaner unified button style with logical groupings
+### Earlier (v1.0.7–v1.0.8)
+- **New: Open with CSV ClearView command** — Open any file (`.txt`, `.dat`, `.log`, etc.) in the CSV editor via right-click or Command Palette
+- **New: Duplicate Row Detection** — One-click scan finds all duplicate rows, highlights them in amber, and groups them with original CSV line numbers
+- **New: Go to Row** — Jump to any row by number with a single keystroke
 
 ### Earlier (v1.0.3–v1.0.6)
 - Moved SQL execution to the extension host — removed `unsafe-eval` from Content Security Policy

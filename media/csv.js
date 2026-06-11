@@ -32,6 +32,7 @@ let columnTypes = [];           // 'integer' | 'float' | 'date' | 'boolean' | 's
 let sortState = { col: -1, dir: 'none' }; // col: index, dir: 'asc'|'desc'|'none'
 let frozenCols = new Set();     // set of frozen column indices
 let activePopoverCol = -1;      // which column's stats popover is open (-1 = none)
+let isQueryResult = false;      // true when the table is showing SQL query results
 
 // --- Column Filter State ---
 let columnFilters = {};         // colIndex -> filter string (case-insensitive contains)
@@ -118,6 +119,7 @@ const gotoRowCancel = document.getElementById('goto-row-cancel');
 const filterBtn = document.getElementById('filter-btn');
 const filterRowContainer = document.getElementById('filter-row-container');
 const dupesBtn = document.getElementById('dupes-btn');
+const saveResultBtn = document.getElementById('save-result-btn');
 const dupesBanner = document.getElementById('dupes-banner');
 
 // --- Constants ---
@@ -377,6 +379,24 @@ function computeColStats(data, colIndex) {
             stats.p75 = percentile(nums, 0.75);
             const variance = nums.reduce((acc, n) => acc + (n - stats.mean) ** 2, 0) / nums.length;
             stats.stddev = Math.sqrt(variance);
+
+            const NUM_BUCKETS = 10;
+            if (stats.max > stats.min) {
+                const bucketSize = (stats.max - stats.min) / NUM_BUCKETS;
+                const buckets = Array.from({ length: NUM_BUCKETS }, (_, i) => ({
+                    min: stats.min + i * bucketSize,
+                    max: stats.min + (i + 1) * bucketSize,
+                    count: 0
+                }));
+                for (const n of nums) {
+                    let bi = Math.floor((n - stats.min) / bucketSize);
+                    if (bi >= NUM_BUCKETS) { bi = NUM_BUCKETS - 1; }
+                    buckets[bi].count++;
+                }
+                stats.histogram = buckets;
+            } else {
+                stats.histogram = [{ min: stats.min, max: stats.max, count: nums.length }];
+            }
         }
     } else if (type === 'date') {
         const dates = values.map(v => new Date(v)).filter(d => !isNaN(d.getTime()));
@@ -473,6 +493,31 @@ function showStatsPopover(colIndex, thElement) {
     }
 
     html += `</table>`;
+
+    if ((type === 'integer' || type === 'float') && stats.histogram && stats.histogram.length > 0) {
+        const maxCount = Math.max(...stats.histogram.map(b => b.count));
+        const chartW = 258;
+        const chartH = 52;
+        const gap = 1;
+        const barW = Math.floor((chartW - gap * (stats.histogram.length - 1)) / stats.histogram.length);
+        let bars = '';
+        stats.histogram.forEach((bucket, i) => {
+            const barH = maxCount > 0 ? Math.max(2, Math.round((bucket.count / maxCount) * chartH)) : 0;
+            const x = i * (barW + gap);
+            const y = chartH - barH;
+            const title = `${fmtNum(bucket.min)}–${fmtNum(bucket.max)}: ${bucket.count}`;
+            bars += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="var(--vscode-progressBar-background,#0078d4)" rx="1" opacity="0.85"><title>${escapeHtml(title)}</title></rect>`;
+        });
+        html += `
+            <div class="sp-section-title">Distribution</div>
+            <div class="sp-chart-wrap">
+                <svg width="${chartW}" height="${chartH}" class="sp-chart" xmlns="http://www.w3.org/2000/svg">${bars}</svg>
+                <div class="sp-chart-labels">
+                    <span>${fmtNum(stats.min, 2)}</span>
+                    <span>${fmtNum(stats.max, 2)}</span>
+                </div>
+            </div>`;
+    }
 
     if (stats.topValues && stats.topValues.length > 0) {
         html += `<div class="sp-section-title">Top Values</div>`;
@@ -1200,6 +1245,8 @@ window.addEventListener('message', event => {
                         sortState = { col: -1, dir: 'none' };
                         await renderTable(newData, []);
                         errorContainer.classList.add('hidden');
+                        isQueryResult = true;
+                        if (saveResultBtn) { saveResultBtn.classList.remove('hidden'); }
                     }
                 } catch (e) {
                     errorContainer.textContent = "Query Error: " + e.message;
@@ -2229,6 +2276,8 @@ function resetQuery() {
     historyIndex = -1;
     historyDraft = '';
     closeHistoryList();
+    isQueryResult = false;
+    if (saveResultBtn) { saveResultBtn.classList.add('hidden'); }
     showLoader();
     sortState = { col: -1, dir: 'none' };
     setTimeout(async () => {
@@ -2241,6 +2290,23 @@ function resetQuery() {
             hideLoader();
         }
     }, 50);
+}
+
+function serializeToCSV(data) {
+    return data.map(row =>
+        row.map(cell => {
+            const s = cell == null ? '' : String(cell);
+            return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        }).join(',')
+    ).join('\n');
+}
+
+if (saveResultBtn) {
+    saveResultBtn.addEventListener('click', () => {
+        if (!isQueryResult || !currentDisplayData || currentDisplayData.length === 0) { return; }
+        const csv = serializeToCSV(currentDisplayData);
+        vscode.postMessage({ type: 'saveQueryResult', csv });
+    });
 }
 
 async function dataToObjects(data) {

@@ -2,6 +2,13 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.0.14] - 2026-06-11
+
+### Added
+
+- **Histogram distribution chart in column stats popover:** Shift+clicking a numeric (integer or float) column header now renders an inline SVG histogram below the existing statistics table. Values are bucketed into 10 equal-width ranges and drawn as vertical bars scaled to the tallest bucket. Hovering any bar shows the exact value range and row count in a tooltip. The chart adapts to the VS Code color theme. For columns where all values are identical, a single full-height bar is shown.
+- **Save SQL query results as CSV:** After running a SQL query, a **Save CSV** button appears in the toolbar next to Reset. Clicking it opens a native VS Code save dialog (defaulting to `query-result.csv`) and writes the filtered or aggregated result as a properly quoted RFC-4180 CSV file. The button disappears when the view is reset to the original data.
+
 ## [1.0.13] - 2026-06-09
 
 ### Fixed

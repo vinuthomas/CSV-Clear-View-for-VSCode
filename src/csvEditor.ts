@@ -364,7 +364,19 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				return;
 			}
 
-			case 'requestPage': {
+			case 'saveQueryResult': {
+					if (typeof e.csv !== 'string') { return; }
+					const saveUri = await vscode.window.showSaveDialog({
+						defaultUri: vscode.Uri.file('query-result.csv'),
+						filters: { 'CSV Files': ['csv'] }
+					});
+					if (!saveUri) { return; }
+					await vscode.workspace.fs.writeFile(saveUri, Buffer.from(e.csv, 'utf8'));
+					vscode.window.showInformationMessage(`Saved: ${saveUri.fsPath}`);
+					return;
+				}
+
+				case 'requestPage': {
 					// Webview requests a specific page of rows.
 					// e.startRow: 0-based data row index (excludes header)
 					// e.rowCount: number of rows requested
@@ -664,6 +676,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					<button id="history-btn" class="toolbar-btn" title="Query History (↑/↓ to navigate)">History</button>
 					<button id="run-query" class="toolbar-btn toolbar-btn-primary" title="Run SQL query">Run</button>
 					<button id="reset-query" class="toolbar-btn" title="Reset to original data">Reset</button>
+					<button id="save-result-btn" class="toolbar-btn hidden" title="Save query results as a new CSV file">Save CSV</button>
 					<div class="toolbar-divider"></div>
 					<button id="goto-row-btn" class="toolbar-btn" title="Go to row by number">Go to Row</button>
 					<button id="profile-btn" class="toolbar-btn" title="Toggle column profile panel">Profile</button>
