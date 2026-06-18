@@ -1961,39 +1961,6 @@ function buildFilterRow() {
     thead.appendChild(tr);
 }
 
-// Lightweight body-only re-render used by filter operations.
-// Never touches #header-table, so focused filter inputs keep their focus
-// and horizontal scroll position is preserved naturally.
-function applyFilterToBody() {
-    if (!table || !virtualSpacer) { return; }
-
-    const savedScrollLeft = tableContainer ? tableContainer.scrollLeft : 0;
-
-    // Reuse the existing colgroup — column widths don't change during filtering
-    const existingColgroup = table.querySelector('colgroup');
-    table.innerHTML = '';
-    if (existingColgroup) { table.appendChild(existingColgroup); }
-    table.appendChild(document.createElement('tbody'));
-
-    const dataRowCount = currentDisplayData.length - 1;
-    virtualSpacer.style.height = spacerHeight(dataRowCount) + 'px';
-
-    const frozenArr = [...frozenCols].sort((a, b) => a - b);
-    if (frozenArr.length > 0) {
-        const frozenWidths = frozenArr.map(i => columnWidths[i]);
-        const frozenTotalWidth = frozenWidths.reduce((a, b) => a + b, 0);
-        buildFrozenOverlay(currentDisplayData, frozenArr, frozenWidths, frozenTotalWidth, dataRowCount);
-    }
-
-    updateVirtualTable();
-
-    // Restore horizontal scroll — clearing table.innerHTML can momentarily collapse width
-    if (tableContainer && savedScrollLeft) {
-        tableContainer.scrollLeft = savedScrollLeft;
-        if (headerContainer) { headerContainer.scrollLeft = savedScrollLeft; }
-    }
-}
-
 function applyFilters() {
     if (!originalRawData || originalRawData.length === 0) { return; }
     const activeFilters = Object.entries(columnFilters).filter(([, v]) => v.trim() !== '');
@@ -2013,7 +1980,7 @@ function applyFilters() {
     if (sortState.col >= 0 && sortState.dir !== 'none') {
         currentDisplayData = applySortToData(currentDisplayData, sortState.col, sortState.dir);
     }
-    applyFilterToBody();
+    renderTable(currentDisplayData, []);
     updateFilterBtnState();
 }
 
@@ -2023,7 +1990,7 @@ function clearAllFilters() {
     if (sortState.col >= 0 && sortState.dir !== 'none') {
         currentDisplayData = applySortToData(currentDisplayData, sortState.col, sortState.dir);
     }
-    applyFilterToBody();
+    renderTable(currentDisplayData, []);
     if (filtersActive) { buildFilterRow(); } // reset input values
     updateFilterBtnState();
 }
@@ -2601,9 +2568,8 @@ function createColGroup(widths) {
 // RENDER TABLE — with type badges, sort headers, frozen columns
 // =============================================================================
 
-async function renderTable(data, errors, { preserveScroll = false } = {}) {
+async function renderTable(data, errors) {
     if (!table || !virtualSpacer) return;
-    const savedScrollLeft = preserveScroll && tableContainer ? tableContainer.scrollLeft : 0;
 
     if (errors.length > 0) {
         const errorMessages = errors.map(e => typeof e === 'string' ? e : e.message);
@@ -2624,19 +2590,7 @@ async function renderTable(data, errors, { preserveScroll = false } = {}) {
     // Detach the filter row before wiping the header so we can reattach it
     // afterwards without rebuilding — this preserves focus during keystroke filtering.
     const existingFilterTr = headerTable ? headerTable.querySelector('#filter-tr') : null;
-    let focusedFilterColIndex = -1;
-    let focusedFilterSelStart = 0;
-    let focusedFilterSelEnd = 0;
-    if (existingFilterTr) {
-        existingFilterTr.querySelectorAll('.filter-input').forEach(inp => {
-            if (document.activeElement === inp) {
-                focusedFilterColIndex = Number(inp.dataset.colIndex);
-                focusedFilterSelStart = inp.selectionStart;
-                focusedFilterSelEnd = inp.selectionEnd;
-            }
-        });
-        existingFilterTr.remove();
-    }
+    if (existingFilterTr) { existingFilterTr.remove(); }
 
     if (headerTable) headerTable.innerHTML = '';
     table.innerHTML = '';
@@ -2840,29 +2794,12 @@ async function renderTable(data, errors, { preserveScroll = false } = {}) {
         const thead = headerTable ? headerTable.querySelector('thead') : null;
         if (thead) {
             if (existingFilterTr) {
+                // Reattach the existing row — inputs, values and focus intact
                 thead.appendChild(existingFilterTr);
-                // Restore focus in a microtask — synchronous focus() after appendChild
-                // doesn't reliably win against the browser's blur housekeeping.
-                if (focusedFilterColIndex >= 0) {
-                    const ss = focusedFilterSelStart, se = focusedFilterSelEnd;
-                    const colIdx = focusedFilterColIndex;
-                    Promise.resolve().then(() => {
-                        const target = existingFilterTr.querySelector(`.filter-input[data-col-index="${colIdx}"]`);
-                        if (target) {
-                            target.focus();
-                            target.setSelectionRange(ss, se);
-                        }
-                    });
-                }
             } else {
                 buildFilterRow();
             }
         }
-    }
-
-    if (preserveScroll && tableContainer && savedScrollLeft) {
-        tableContainer.scrollLeft = savedScrollLeft;
-        if (headerContainer) { headerContainer.scrollLeft = savedScrollLeft; }
     }
 
     clearTimeout(slowLoadTimer);

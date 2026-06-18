@@ -679,7 +679,6 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					<button id="save-result-btn" class="toolbar-btn hidden" title="Save query results as a new CSV file">Save CSV</button>
 					<div class="toolbar-divider"></div>
 					<button id="goto-row-btn" class="toolbar-btn" title="Go to row by number">Go to Row</button>
-					<button id="filter-btn" class="toolbar-btn" title="Toggle column filters">Filter</button>
 					<button id="profile-btn" class="toolbar-btn" title="Toggle column profile panel">Profile</button>
 					<button id="dupes-btn" class="toolbar-btn" title="Find duplicate rows">Duplicates</button>
 					<div class="toolbar-divider"></div>
