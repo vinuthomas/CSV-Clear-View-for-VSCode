@@ -21,3 +21,12 @@ node_modules/**
 .opencode.json
 AGENTS.md
 tests/**
+.cursor/**
+.cursorrules
+.windsurfrules
+.gemini/**
+.kiro/**
+.qoder/**
+CLAUDE.md
+GEMINI.md
+QODER.md
