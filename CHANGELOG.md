@@ -2,6 +2,16 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.0.15] - 2026-07-03
+
+### Added
+
+- **Column filters re-enabled:** The **Filter** toolbar button is back, letting you show a per-column filter row and narrow rows by substring match. It had been hidden since 1.0.9-era builds due to a focus/scroll bug (see Fixed below).
+
+### Fixed
+
+- **Filter input lost focus and scroll position on every keystroke:** Typing into a column filter box re-rendered the whole table on each character, which blurred the input and reset horizontal scroll — making it impossible to type more than one character without re-clicking the field. The filter row's scroll position and the focused input's cursor position are now preserved across re-renders.
+
 ## [1.0.14] - 2026-06-11
 
 ### Added
