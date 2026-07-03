@@ -74,6 +74,7 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 - **SQL Queries:** Run full SQL SELECT statements on your CSV data (powered by AlaSQL)
   - Example: `SELECT * FROM ? WHERE [Price] > 100 ORDER BY [Date] DESC`
   - Query history with bash-style ↑/↓ navigation (stores up to 50 queries)
+- **Column Filters:** Click **Filter** to show a per-column filter row — type in any column's box to instantly narrow rows by case-insensitive substring match. Press **Esc** to clear all filters.
 - **Column Statistics:** Shift+click any column header for instant stats
   - Numeric: min, max, mean, median, std dev, percentiles, **inline histogram**
   - Date: earliest, latest
@@ -129,8 +130,9 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 4. **Jump to any row** - Click **Go to Row** and type a row number to navigate instantly
 5. **Explore statistics** - Shift+click any column header for detailed stats or click **Profile** for a full data summary
 6. **Sort and freeze** - Click column headers to sort, right-click to freeze panes
-7. **Edit cells** - Double-click any cell to edit in-place with undo/redo support
-8. **Handle large files** - For 20MB+ files, choose **Head**, **Tail**, or **Plain Text** mode when prompted
+7. **Filter rows** - Click **Filter** to show a per-column filter row and narrow results by substring match
+8. **Edit cells** - Double-click any cell to edit in-place with undo/redo support
+9. **Handle large files** - For 20MB+ files, choose **Head**, **Tail**, or **Plain Text** mode when prompted
 
 ## Configuration
 

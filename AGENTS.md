@@ -203,7 +203,12 @@ code --install-extension csv-clearview-x.x.x.vsix
    - The feature list is current and complete
    - Keywords are optimized for marketplace discoverability
    - Text is compelling for potential users
-3. **Version Bump:** Update the version number in package.json
+   - **Any new user-facing feature included in the release is documented here** — check the changelog entry against the README's feature list before tagging the release
+3. **Version Bump:** Update the version number in package.json following semver by change type:
+   - **Minor (1.X.0):** the release includes any new user-facing feature or re-enabled feature, even alongside bug fixes
+   - **Patch (1.0.X):** the release is bug fixes / internal changes only, no new feature
+   - **Major (X.0.0):** breaking changes — only when the user explicitly calls for it
+   - When a release mixes a feature with bug fixes, the feature decides: bump minor, not patch.
 4. **Build and Package:** Compile and package the extension:
    ```bash
    npm run compile
