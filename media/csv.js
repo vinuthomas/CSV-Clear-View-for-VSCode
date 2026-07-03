@@ -1980,7 +1980,32 @@ function applyFilters() {
     if (sortState.col >= 0 && sortState.dir !== 'none') {
         currentDisplayData = applySortToData(currentDisplayData, sortState.col, sortState.dir);
     }
+
+    // renderTable rebuilds the header — which detaches and reattaches the filter
+    // row's DOM node, blurring whichever input the user is typing in — and can
+    // reset horizontal scroll. Capture both beforehand and restore them right
+    // after; renderTable has no internal await so the DOM is already rebuilt by
+    // the time the call below returns.
+    const savedScrollLeft = tableContainer ? tableContainer.scrollLeft : 0;
+    const activeInput = document.activeElement && document.activeElement.classList.contains('filter-input')
+        ? document.activeElement : null;
+    const focusedColIndex = activeInput ? activeInput.dataset.colIndex : null;
+    const focusedSelStart = activeInput ? activeInput.selectionStart : null;
+    const focusedSelEnd = activeInput ? activeInput.selectionEnd : null;
+
     renderTable(currentDisplayData, []);
+
+    if (tableContainer && savedScrollLeft) {
+        tableContainer.scrollLeft = savedScrollLeft;
+        if (headerContainer) { headerContainer.scrollLeft = savedScrollLeft; }
+    }
+    if (focusedColIndex !== null && headerTable) {
+        const target = headerTable.querySelector(`.filter-input[data-col-index="${focusedColIndex}"]`);
+        if (target) {
+            target.focus();
+            target.setSelectionRange(focusedSelStart, focusedSelEnd);
+        }
+    }
     updateFilterBtnState();
 }
 
@@ -1990,7 +2015,12 @@ function clearAllFilters() {
     if (sortState.col >= 0 && sortState.dir !== 'none') {
         currentDisplayData = applySortToData(currentDisplayData, sortState.col, sortState.dir);
     }
+    const savedScrollLeft = tableContainer ? tableContainer.scrollLeft : 0;
     renderTable(currentDisplayData, []);
+    if (tableContainer && savedScrollLeft) {
+        tableContainer.scrollLeft = savedScrollLeft;
+        if (headerContainer) { headerContainer.scrollLeft = savedScrollLeft; }
+    }
     if (filtersActive) { buildFilterRow(); } // reset input values
     updateFilterBtnState();
 }
