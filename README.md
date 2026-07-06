@@ -80,7 +80,9 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
   - Date: earliest, latest
   - String: length stats, frequency distribution
   - All: null count, distinct values, top-5 most common values
-- **Save SQL Results:** After running a query, click **Save CSV** to export the filtered/aggregated result as a new CSV file via a native save dialog
+- **Export:** Click **Export** to save your data via a native save dialog
+  - **Full File:** export the entire file to JSON, Markdown table, or HTML table
+  - **Current View:** export whatever's currently displayed — filtered rows, sorted order, or SQL query/aggregation results — to CSV, JSON, Markdown, or HTML
 - **Data Type Inference:** Automatic detection of integers, floats, dates, booleans, and strings with visual badges
 - **Schema Summary Panel:** Click **Profile** for a complete data dictionary showing type, nulls, distinct count, and ranges for every column
 
@@ -184,9 +186,14 @@ CSV ClearView automatically detects the delimiter but you can override it using 
 
 See the [CHANGELOG](changelog.md) for detailed release notes.
 
-### Latest Release (v1.0.14)
+### Latest Release (v1.1.0)
+- **New: Export** — Click the new **Export** toolbar button to save your data as JSON, Markdown, or HTML. Export the **Full File**, or just the **Current View** (whatever's filtered, sorted, or returned by a SQL query) as CSV, JSON, Markdown, or HTML. Replaces the old query-only Save CSV button.
+
+### Recent Highlights (v1.0.15)
+- **Column filters re-enabled** — The **Filter** toolbar button is back, letting you show a per-column filter row and narrow rows by substring match
+
+### Recent Highlights (v1.0.14)
 - **New: Column Histogram** — Shift+click any numeric column header to see an instant distribution histogram in the stats popover, alongside min/max/mean/median and percentiles
-- **New: Save SQL Results** — After running a SQL query, click the new **Save CSV** toolbar button to export the result as a new CSV file via a native save dialog
 
 ### Recent Highlights (v1.0.13)
 - **10 correctness bug fixes** — CSV parsing, cell editing on large files, RFC-4180 quote handling in chunked mode, whitespace coercion in SQL, and more

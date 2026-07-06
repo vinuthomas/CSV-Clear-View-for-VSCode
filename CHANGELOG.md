@@ -2,6 +2,16 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.1.0] - 2026-07-06
+
+### Added
+
+- **Export toolbar button:** Replaces the old query-only **Save CSV** button. Opens a modal with two export scopes: **Full File** (JSON, Markdown table, or HTML table) and **Current View** (CSV, JSON, Markdown, or HTML) — the current view honors whatever filters, sort order, or SQL query results are currently displayed, while the full-file export always exports the complete, unfiltered data.
+
+### Changed
+
+- **Export format buttons now show a visible outline:** The JSON/Markdown/HTML/CSV buttons in the Export modal have a themed 1px border (matching the filter input styling) so they read clearly as buttons; the existing hover highlight is unchanged, with the border additionally brightening on hover.
+
 ## [1.0.15] - 2026-07-03
 
 ### Added

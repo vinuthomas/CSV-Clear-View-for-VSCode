@@ -32,7 +32,6 @@ let columnTypes = [];           // 'integer' | 'float' | 'date' | 'boolean' | 's
 let sortState = { col: -1, dir: 'none' }; // col: index, dir: 'asc'|'desc'|'none'
 let frozenCols = new Set();     // set of frozen column indices
 let activePopoverCol = -1;      // which column's stats popover is open (-1 = none)
-let isQueryResult = false;      // true when the table is showing SQL query results
 
 // --- Column Filter State ---
 let columnFilters = {};         // colIndex -> filter string (case-insensitive contains)
@@ -119,7 +118,9 @@ const gotoRowCancel = document.getElementById('goto-row-cancel');
 const filterBtn = document.getElementById('filter-btn');
 const filterRowContainer = document.getElementById('filter-row-container');
 const dupesBtn = document.getElementById('dupes-btn');
-const saveResultBtn = document.getElementById('save-result-btn');
+const exportBtn = document.getElementById('export-btn');
+const exportModal = document.getElementById('export-modal');
+const exportModalCloseBtn = document.getElementById('export-modal-close');
 const chartTip = document.getElementById('chart-tip');
 const dupesBanner = document.getElementById('dupes-banner');
 
@@ -1311,8 +1312,6 @@ window.addEventListener('message', event => {
                         sortState = { col: -1, dir: 'none' };
                         await renderTable(newData, []);
                         errorContainer.classList.add('hidden');
-                        isQueryResult = true;
-                        if (saveResultBtn) { saveResultBtn.classList.remove('hidden'); }
                     }
                 } catch (e) {
                     errorContainer.textContent = "Query Error: " + e.message;
@@ -2372,8 +2371,6 @@ function resetQuery() {
     historyIndex = -1;
     historyDraft = '';
     closeHistoryList();
-    isQueryResult = false;
-    if (saveResultBtn) { saveResultBtn.classList.add('hidden'); }
     showLoader();
     sortState = { col: -1, dir: 'none' };
     setTimeout(async () => {
@@ -2397,13 +2394,122 @@ function serializeToCSV(data) {
     ).join('\n');
 }
 
-if (saveResultBtn) {
-    saveResultBtn.addEventListener('click', () => {
-        if (!isQueryResult || !currentDisplayData || currentDisplayData.length === 0) { return; }
-        const csv = serializeToCSV(currentDisplayData);
-        vscode.postMessage({ type: 'saveQueryResult', csv });
+// =============================================================================
+// EXPORT
+// =============================================================================
+
+function dataToJSON(data) {
+    if (!data || data.length === 0) { return '[]'; }
+    const headers = data[0];
+    const rows = data.slice(1).map(row => {
+        const obj = {};
+        headers.forEach((h, i) => {
+            obj[h || `Column ${i + 1}`] = row[i] ?? '';
+        });
+        return obj;
+    });
+    return JSON.stringify(rows, null, 2);
+}
+
+function escapeMarkdownCell(value) {
+    const s = value == null ? '' : String(value);
+    return s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+}
+
+function dataToMarkdownTable(data) {
+    if (!data || data.length === 0) { return ''; }
+    const headers = data[0];
+    const lines = [
+        '| ' + headers.map(escapeMarkdownCell).join(' | ') + ' |',
+        '| ' + headers.map(() => '---').join(' | ') + ' |'
+    ];
+    for (let i = 1; i < data.length; i++) {
+        lines.push('| ' + data[i].map(escapeMarkdownCell).join(' | ') + ' |');
+    }
+    return lines.join('\n');
+}
+
+function dataToHTMLTable(data) {
+    const headers = data && data.length > 0 ? data[0] : [];
+    const headHtml = '<tr>' + headers.map(h => `<th>${escapeHtml(h)}</th>`).join('') + '</tr>';
+    const bodyHtml = (data || []).slice(1).map(row =>
+        '<tr>' + row.map(c => `<td>${escapeHtml(c)}</td>`).join('') + '</tr>'
+    ).join('\n');
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Exported Data</title>
+<style>
+  body { font-family: sans-serif; padding: 16px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+  th { background: #f0f0f0; }
+  tr:nth-child(even) { background: #fafafa; }
+</style>
+</head>
+<body>
+<table>
+<thead>
+${headHtml}
+</thead>
+<tbody>
+${bodyHtml}
+</tbody>
+</table>
+</body>
+</html>
+`;
+}
+
+function openExportModal() {
+    if (exportModal) { exportModal.classList.remove('hidden'); }
+}
+
+function closeExportModal() {
+    if (exportModal) { exportModal.classList.add('hidden'); }
+}
+
+if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+        if (!exportModal) { return; }
+        if (exportModal.classList.contains('hidden')) { openExportModal(); } else { closeExportModal(); }
     });
 }
+if (exportModalCloseBtn) {
+    exportModalCloseBtn.addEventListener('click', closeExportModal);
+}
+document.addEventListener('click', (e) => {
+    if (exportModal && !exportModal.classList.contains('hidden')) {
+        if (!exportModal.contains(e.target) && e.target !== exportBtn) {
+            closeExportModal();
+        }
+    }
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && exportModal && !exportModal.classList.contains('hidden')) {
+        closeExportModal();
+    }
+});
+
+document.querySelectorAll('.export-format-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const scope = btn.dataset.scope; // 'full' | 'view'
+        const format = btn.dataset.format; // 'csv' | 'json' | 'markdown' | 'html'
+        const data = scope === 'full' ? originalRawData : currentDisplayData;
+        if (!data || data.length === 0) { return; }
+
+        let content;
+        switch (format) {
+            case 'json': content = dataToJSON(data); break;
+            case 'markdown': content = dataToMarkdownTable(data); break;
+            case 'html': content = dataToHTMLTable(data); break;
+            case 'csv': default: content = serializeToCSV(data); break;
+        }
+        vscode.postMessage({ type: 'exportData', format, scope, content });
+        closeExportModal();
+    });
+});
 
 async function dataToObjects(data) {
     if (data.length < 2) return [];

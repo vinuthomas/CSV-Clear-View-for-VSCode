@@ -1451,6 +1451,95 @@ async function runTests() {
     }
 
     // --------------------------------------------------------
+    console.log('\n📤 19b. Export serializers (dataToJSON / dataToMarkdownTable / dataToHTMLTable)');
+    // --------------------------------------------------------
+
+    {
+        // Mirrors dataToJSON in csv.js
+        function dataToJSON(data) {
+            if (!data || data.length === 0) { return '[]'; }
+            const headers = data[0];
+            const rows = data.slice(1).map(row => {
+                const obj = {};
+                headers.forEach((h, i) => {
+                    obj[h || `Column ${i + 1}`] = row[i] ?? '';
+                });
+                return obj;
+            });
+            return JSON.stringify(rows, null, 2);
+        }
+
+        // Mirrors escapeMarkdownCell + dataToMarkdownTable in csv.js
+        function escapeMarkdownCell(value) {
+            const s = value == null ? '' : String(value);
+            return s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+        }
+        function dataToMarkdownTable(data) {
+            if (!data || data.length === 0) { return ''; }
+            const headers = data[0];
+            const lines = [
+                '| ' + headers.map(escapeMarkdownCell).join(' | ') + ' |',
+                '| ' + headers.map(() => '---').join(' | ') + ' |'
+            ];
+            for (let i = 1; i < data.length; i++) {
+                lines.push('| ' + data[i].map(escapeMarkdownCell).join(' | ') + ' |');
+            }
+            return lines.join('\n');
+        }
+
+        // dataToHTMLTable — reuses the module-level escapeHtml (line 42), which
+        // mirrors csv.js's own escapeHtml used by the real implementation.
+        function dataToHTMLTable(data) {
+            const headers = data && data.length > 0 ? data[0] : [];
+            const headHtml = '<tr>' + headers.map(h => `<th>${escapeHtml(h)}</th>`).join('') + '</tr>';
+            const bodyHtml = (data || []).slice(1).map(row =>
+                '<tr>' + row.map(c => `<td>${escapeHtml(c)}</td>`).join('') + '</tr>'
+            ).join('\n');
+            return `<table><thead>${headHtml}</thead><tbody>${bodyHtml}</tbody></table>`;
+        }
+
+        // dataToJSON
+        assertEqual(
+            JSON.parse(dataToJSON([['A', 'B'], ['1', '2']])),
+            [{ A: '1', B: '2' }],
+            'dataToJSON: basic header + row → array of objects'
+        );
+        assertEqual(dataToJSON([]), '[]', 'dataToJSON: empty data → empty array');
+        assertEqual(
+            JSON.parse(dataToJSON([['A'], [null]])),
+            [{ A: '' }],
+            'dataToJSON: null cell → empty string'
+        );
+
+        // dataToMarkdownTable
+        assertEqual(
+            dataToMarkdownTable([['A', 'B'], ['1', '2']]),
+            '| A | B |\n| --- | --- |\n| 1 | 2 |',
+            'dataToMarkdownTable: basic header + row'
+        );
+        assert(
+            dataToMarkdownTable([['A'], ['a|b']]).includes('a\\|b'),
+            'dataToMarkdownTable: pipe in cell escaped'
+        );
+        assert(
+            dataToMarkdownTable([['A'], ['line1\nline2']]).includes('line1<br>line2'),
+            'dataToMarkdownTable: newline in cell converted to <br>'
+        );
+        assertEqual(dataToMarkdownTable([]), '', 'dataToMarkdownTable: empty data → empty string');
+
+        // dataToHTMLTable
+        assert(
+            dataToHTMLTable([['A'], ['<script>']]).includes('&lt;script&gt;'),
+            'dataToHTMLTable: HTML-unsafe cell content escaped'
+        );
+        assertEqual(
+            dataToHTMLTable([]),
+            '<table><thead><tr></tr></thead><tbody></tbody></table>',
+            'dataToHTMLTable: empty data → empty table shell'
+        );
+    }
+
+    // --------------------------------------------------------
     console.log('\n📊 20. Histogram bucket computation (computeColStats)');
     // --------------------------------------------------------
 
@@ -1612,30 +1701,36 @@ async function runTests() {
     }
 
     // --------------------------------------------------------
-    console.log('\n🔧 21. saveQueryResult handler validation');
+    console.log('\n🔧 21. exportData handler validation');
     // --------------------------------------------------------
 
     {
-        // Mirrors the validation logic in csvEditor.ts saveQueryResult case
-        function validateSaveQueryResult(e) {
-            if (typeof e.csv !== 'string') { return { valid: false, reason: 'invalid' }; }
+        // Mirrors the validation logic in csvEditor.ts exportData case
+        const ALLOWED_FORMATS = { csv: 'csv', json: 'json', markdown: 'md', html: 'html' };
+        function validateExportData(e) {
+            const formatInfo = typeof e.format === 'string' ? ALLOWED_FORMATS[e.format] : undefined;
+            if (!formatInfo || typeof e.content !== 'string') { return { valid: false, reason: 'invalid' }; }
             return { valid: true };
         }
 
-        assert(validateSaveQueryResult({ csv: 'A,B\n1,2' }).valid,
-            'saveQueryResult: valid string csv accepted');
-        assert(!validateSaveQueryResult({ csv: 123 }).valid,
-            'saveQueryResult: numeric csv rejected');
-        assert(!validateSaveQueryResult({ csv: null }).valid,
-            'saveQueryResult: null csv rejected');
-        assert(!validateSaveQueryResult({ csv: undefined }).valid,
-            'saveQueryResult: undefined csv rejected');
-        assert(!validateSaveQueryResult({}).valid,
-            'saveQueryResult: missing csv field rejected');
-        assert(!validateSaveQueryResult({ csv: ['A','B'] }).valid,
-            'saveQueryResult: array csv rejected');
-        assert(validateSaveQueryResult({ csv: '' }).valid,
-            'saveQueryResult: empty string csv accepted (edge case — empty result)');
+        assert(validateExportData({ format: 'csv', content: 'A,B\n1,2' }).valid,
+            'exportData: valid csv export accepted');
+        assert(validateExportData({ format: 'json', content: '[]' }).valid,
+            'exportData: valid json export accepted');
+        assert(validateExportData({ format: 'markdown', content: '| A |' }).valid,
+            'exportData: valid markdown export accepted');
+        assert(validateExportData({ format: 'html', content: '<table></table>' }).valid,
+            'exportData: valid html export accepted');
+        assert(!validateExportData({ format: 'exe', content: 'data' }).valid,
+            'exportData: unsupported format rejected');
+        assert(!validateExportData({ format: 'csv', content: 123 }).valid,
+            'exportData: numeric content rejected');
+        assert(!validateExportData({ format: 'csv', content: null }).valid,
+            'exportData: null content rejected');
+        assert(!validateExportData({ content: 'data' }).valid,
+            'exportData: missing format rejected');
+        assert(validateExportData({ format: 'csv', content: '' }).valid,
+            'exportData: empty string content accepted (edge case — empty result)');
     }
 
     // --------------------------------------------------------
@@ -1651,14 +1746,18 @@ async function runTests() {
         // serializeToCSV
         assert(src.includes('function serializeToCSV'), 'serializeToCSV function exists in csv.js');
         assert(src.includes("replace(/\"/g, '\"\"')"), 'serializeToCSV uses RFC-4180 double-quote escaping');
-        assert(src.includes("type: 'saveQueryResult'"), 'Webview posts saveQueryResult message to host');
+        assert(src.includes("type: 'exportData'"), 'Webview posts exportData message to host');
 
-        // Save result button
-        assert(src.includes('saveResultBtn'), 'saveResultBtn DOM ref exists in csv.js');
-        assert(src.includes('isQueryResult'), 'isQueryResult state variable exists in csv.js');
-        assert(src.includes("save-result-btn"), 'save-result-btn referenced in csv.js');
-        assert(extSrc.includes("save-result-btn"), 'save-result-btn button in HTML template');
-        assert(extSrc.includes("case 'saveQueryResult'"), 'saveQueryResult handler in csvEditor.ts');
+        // Export feature — full file (JSON/Markdown/HTML) and current view (CSV/JSON/Markdown/HTML)
+        assert(src.includes('exportBtn'), 'exportBtn DOM ref exists in csv.js');
+        assert(src.includes('exportModal'), 'exportModal DOM ref exists in csv.js');
+        assert(src.includes('function dataToJSON'), 'dataToJSON function exists in csv.js');
+        assert(src.includes('function dataToMarkdownTable'), 'dataToMarkdownTable function exists in csv.js');
+        assert(src.includes('function dataToHTMLTable'), 'dataToHTMLTable function exists in csv.js');
+        assert(src.includes('export-format-btn'), 'export-format-btn class referenced in csv.js');
+        assert(extSrc.includes('id="export-btn"'), 'export-btn button in HTML template');
+        assert(extSrc.includes('id="export-modal"'), 'export-modal in HTML template');
+        assert(extSrc.includes("case 'exportData'"), 'exportData handler in csvEditor.ts');
 
         // Histogram in schema panel
         assert(src.includes('function toggleSchemaHistogram'), 'toggleSchemaHistogram function exists');

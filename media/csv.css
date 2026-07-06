@@ -1144,6 +1144,75 @@ body.vscode-light .type-string   { color: #546e7a; background: rgba(84,110,122,0
     opacity: 1;
 }
 
+.export-modal-inner {
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-focusBorder);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border-radius: 2px;
+    pointer-events: all;
+    min-width: 320px;
+}
+
+.export-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+    color: var(--vscode-editor-foreground);
+}
+
+#export-modal-close {
+    background: transparent;
+    border: none;
+    color: var(--vscode-editor-foreground);
+    cursor: pointer;
+    padding: 2px 6px;
+    opacity: 0.7;
+}
+
+#export-modal-close:hover {
+    opacity: 1;
+}
+
+.export-section-title {
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-editor-foreground);
+    opacity: 0.85;
+    margin-bottom: 6px;
+}
+
+.export-hint {
+    font-size: calc(var(--vscode-font-size) - 2px);
+    opacity: 0.7;
+    font-weight: normal;
+}
+
+.export-btn-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.export-format-btn {
+    padding: 3px 12px;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid var(--vscode-input-border);
+    cursor: pointer;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+.export-format-btn:hover {
+    background: var(--vscode-button-hoverBackground);
+    color: var(--vscode-button-foreground);
+    border-color: var(--vscode-focusBorder);
+}
+
 /* Highlight animation for the jumped-to row */
 @keyframes gotoRowFlash {
     0%   { background-color: var(--vscode-editor-findMatchHighlightBackground, rgba(255,215,0,0.4)); }

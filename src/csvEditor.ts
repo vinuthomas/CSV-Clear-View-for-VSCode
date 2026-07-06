@@ -364,15 +364,32 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				return;
 			}
 
-			case 'saveQueryResult': {
-					if (typeof e.csv !== 'string') { return; }
+			case 'exportData': {
+					const allowedFormats: Record<string, { ext: string; filterName: string }> = {
+						csv: { ext: 'csv', filterName: 'CSV Files' },
+						json: { ext: 'json', filterName: 'JSON Files' },
+						markdown: { ext: 'md', filterName: 'Markdown Files' },
+						html: { ext: 'html', filterName: 'HTML Files' }
+					};
+					const formatInfo = typeof e.format === 'string' ? allowedFormats[e.format] : undefined;
+					if (!formatInfo || typeof e.content !== 'string') {
+						vscode.window.showErrorMessage('CSV ClearView: Invalid export request.');
+						return;
+					}
+					// Guard against implausibly large payloads (200MB)
+					if (e.content.length > 200 * 1024 * 1024) {
+						vscode.window.showErrorMessage('CSV ClearView: Export payload too large.');
+						return;
+					}
+					const baseName = document.uri.fsPath.split(/[\\/]/).pop()?.replace(/\.[^./\\]+$/, '') || 'export';
+					const suffix = e.scope === 'view' ? '-view' : '';
 					const saveUri = await vscode.window.showSaveDialog({
-						defaultUri: vscode.Uri.file('query-result.csv'),
-						filters: { 'CSV Files': ['csv'] }
+						defaultUri: vscode.Uri.file(`${baseName}${suffix}.${formatInfo.ext}`),
+						filters: { [formatInfo.filterName]: [formatInfo.ext] }
 					});
 					if (!saveUri) { return; }
-					await vscode.workspace.fs.writeFile(saveUri, Buffer.from(e.csv, 'utf8'));
-					vscode.window.showInformationMessage(`Saved: ${saveUri.fsPath}`);
+					await vscode.workspace.fs.writeFile(saveUri, Buffer.from(e.content, 'utf8'));
+					vscode.window.showInformationMessage(`Exported: ${saveUri.fsPath}`);
 					return;
 				}
 
@@ -676,7 +693,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					<button id="history-btn" class="toolbar-btn" title="Query History (↑/↓ to navigate)">History</button>
 					<button id="run-query" class="toolbar-btn toolbar-btn-primary" title="Run SQL query">Run</button>
 					<button id="reset-query" class="toolbar-btn" title="Reset to original data">Reset</button>
-					<button id="save-result-btn" class="toolbar-btn hidden" title="Save query results as a new CSV file">Save CSV</button>
+					<button id="export-btn" class="toolbar-btn" title="Export the full file or the current view">Export</button>
 					<div class="toolbar-divider"></div>
 					<button id="goto-row-btn" class="toolbar-btn" title="Go to row by number">Go to Row</button>
 					<button id="filter-btn" class="toolbar-btn" title="Toggle column filters">Filter</button>
@@ -705,6 +722,31 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				</div>
 				<div id="stats-popover" class="stats-popover hidden"></div>
 				<div id="chart-tip" class="chart-tip hidden"></div>
+			<div id="export-modal" class="goto-row-modal hidden">
+				<div class="export-modal-inner">
+					<div class="export-modal-header">
+						<span>Export Data</span>
+						<button id="export-modal-close" title="Close">✕</button>
+					</div>
+					<div class="export-section">
+						<div class="export-section-title">Full File</div>
+						<div class="export-btn-row">
+							<button class="export-format-btn" data-scope="full" data-format="json">JSON</button>
+							<button class="export-format-btn" data-scope="full" data-format="markdown">Markdown</button>
+							<button class="export-format-btn" data-scope="full" data-format="html">HTML</button>
+						</div>
+					</div>
+					<div class="export-section">
+						<div class="export-section-title">Current View <span class="export-hint">(filters, sort &amp; query results applied)</span></div>
+						<div class="export-btn-row">
+							<button class="export-format-btn" data-scope="view" data-format="csv">CSV</button>
+							<button class="export-format-btn" data-scope="view" data-format="json">JSON</button>
+							<button class="export-format-btn" data-scope="view" data-format="markdown">Markdown</button>
+							<button class="export-format-btn" data-scope="view" data-format="html">HTML</button>
+						</div>
+					</div>
+				</div>
+			</div>
 			<div id="goto-row-modal" class="goto-row-modal hidden">
 				<div class="goto-row-inner">
 					<label for="goto-row-input">Go to row:</label>
