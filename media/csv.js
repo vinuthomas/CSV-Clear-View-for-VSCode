@@ -41,6 +41,12 @@ let filtersActive = false;      // true when filter row is visible
 let dupesMode = false;          // true when duplicate rows are highlighted
 let dupesOnlyMode = false;      // true when table is filtered to show only dupes with line numbers
 
+// --- Header Mode State ---
+// When false, the file has no header row: a synthetic "Column 1..N" header is
+// injected at data[0] so all downstream code (render, SQL, filters, export)
+// keeps its data[0]-is-header invariant. Initialized from config on 'update'.
+let hasHeaders = true;
+
 // Convert a logical row index (0-based data rows, i.e. excluding header) to
 // a scrollTop pixel value within the capped spacer.
 function rowToScrollTop(rowIndex, dataRowCount) {
@@ -123,6 +129,9 @@ const exportModal = document.getElementById('export-modal');
 const exportModalCloseBtn = document.getElementById('export-modal-close');
 const chartTip = document.getElementById('chart-tip');
 const dupesBanner = document.getElementById('dupes-banner');
+const rowCountBadge = document.getElementById('row-count-badge');
+const rawViewBtn = document.getElementById('raw-view-btn');
+const headersBtn = document.getElementById('headers-btn');
 
 // --- Constants ---
 const sqlKeywords = ['SELECT', 'FROM', 'WHERE', 'ORDER BY', 'GROUP BY', 'LIMIT', 'JOIN', 'ON', 'AS', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'LIKE', 'IN', 'AND', 'OR', 'NOT', 'NULL', 'IS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'];
@@ -197,6 +206,37 @@ function updateDelimiterBadge(delim) {
     delimiterDisplay.textContent = 'Delim: ' + label;
     delimiterDisplay.classList.remove('hidden');
     delimiterDisplay.title = 'Detected delimiter: ' + (label) + '\nClick to override';
+}
+
+/**
+ * Refresh the row/column count badge in the toolbar.
+ * Shows "N rows × M cols" normally, or "X of Y rows (Z hidden) × M cols"
+ * when a filter, query or dupes view has reduced the visible set.
+ * Counts exclude the header row.
+ */
+function updateRowCountBadge() {
+    if (!rowCountBadge) { return; }
+    // The toolbar is hidden in chunked mode; the warning banner shows totals there.
+    if (isChunkedMode) {
+        rowCountBadge.classList.add('hidden');
+        return;
+    }
+    if (!originalRawData || originalRawData.length === 0) {
+        rowCountBadge.classList.add('hidden');
+        return;
+    }
+    const totalDataRows = Math.max(0, originalRawData.length - 1);
+    const shownDataRows = Math.max(0, currentDisplayData.length - 1);
+    const cols = ((currentDisplayData[0] || originalRawData[0]) || []).length;
+    let text;
+    if (shownDataRows < totalDataRows) {
+        const hidden = totalDataRows - shownDataRows;
+        text = `${shownDataRows.toLocaleString()} of ${totalDataRows.toLocaleString()} rows (${hidden.toLocaleString()} hidden) × ${cols} cols`;
+    } else {
+        text = `${shownDataRows.toLocaleString()} rows × ${cols} cols`;
+    }
+    rowCountBadge.textContent = text;
+    rowCountBadge.classList.remove('hidden');
 }
 
 // Delimiter override dropdown
@@ -1109,6 +1149,141 @@ function switchToPlainTextMode() {
 }
 
 // =============================================================================
+// HEADER MODE TOGGLE
+// =============================================================================
+
+/**
+ * Build a synthetic header row ("Column 1".."Column N") sized to the widest
+ * row in the parsed data, for files that have no header row.
+ */
+function syntheticHeader(data) {
+    let width = 0;
+    for (const row of data) {
+        if (row.length > width) { width = row.length; }
+    }
+    return Array.from({ length: width }, (_, i) => `Column ${i + 1}`);
+}
+
+function updateHeadersBtnState() {
+    if (!headersBtn) { return; }
+    headersBtn.classList.toggle('headers-btn-active', hasHeaders);
+    headersBtn.title = hasHeaders
+        ? 'First row is treated as a header — click to treat it as data'
+        : 'First row is treated as data — click to treat it as a header';
+}
+
+if (headersBtn) {
+    headersBtn.addEventListener('click', () => {
+        if (isChunkedMode) { return; } // toolbar is hidden in chunked mode anyway
+        hasHeaders = !hasHeaders;
+        updateHeadersBtnState();
+        showLoader();
+        setTimeout(async () => {
+            try {
+                await updateContent(currentText, currentConfig);
+            } finally {
+                hideLoader();
+            }
+        }, 50);
+    });
+}
+
+// =============================================================================
+// RAW FILE VIEW TOGGLE
+// =============================================================================
+
+// True while the raw text view is shown instead of the table (toolbar "Raw" button).
+let rawViewActive = false;
+// warningContainer content saved on entering raw view, restored on exit.
+let rawViewSavedBanner = null;
+
+// Controls that operate on the table and are meaningless in the raw view.
+function rawViewDisabledControls() {
+    return [queryInput, runButton, resetButton, historyBtn, exportBtn,
+            gotoRowBtn, filterBtn, profileBtn, dupesBtn, headersBtn].filter(Boolean);
+}
+
+function makeOpenAsTextButton() {
+    const btn = document.createElement('button');
+    btn.className = 'open-as-text-btn';
+    btn.textContent = 'Open in Text Editor';
+    btn.title = 'Reopen this file with the default text editor to edit it directly';
+    btn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'openAsText' });
+    });
+    return btn;
+}
+
+function enterRawView() {
+    rawViewActive = true;
+    hideStatsPopover();
+    if (schemaPanel) { schemaPanel.classList.add('hidden'); }
+    if (currentConfig.forceTextColumnColoring) {
+        rawTextArea.innerHTML = colorizeCSV(currentText);
+    } else {
+        rawTextArea.textContent = currentText;
+    }
+    rawViewSavedBanner = {
+        html: warningContainer.innerHTML,
+        hidden: warningContainer.classList.contains('hidden')
+    };
+    warningContainer.textContent = 'Raw file view (read-only). Toggle "Table" to return to the grid.';
+    warningContainer.appendChild(makeOpenAsTextButton());
+    warningContainer.classList.remove('hidden');
+    headerContainer.classList.add('hidden');
+    tableContainer.classList.add('hidden');
+    textContainer.classList.remove('hidden');
+    if (errorRuler) { errorRuler.classList.add('hidden'); }
+    rawViewDisabledControls().forEach(el => { el.disabled = true; });
+    if (rawViewBtn) {
+        rawViewBtn.textContent = 'Table';
+        rawViewBtn.classList.add('raw-view-active');
+        rawViewBtn.title = 'Back to table view';
+    }
+}
+
+function exitRawView() {
+    rawViewActive = false;
+    if (rawViewSavedBanner) {
+        warningContainer.innerHTML = rawViewSavedBanner.html;
+        warningContainer.classList.toggle('hidden', rawViewSavedBanner.hidden);
+        rawViewSavedBanner = null;
+    }
+    textContainer.classList.add('hidden');
+    headerContainer.classList.remove('hidden');
+    tableContainer.classList.remove('hidden');
+    if (errorRuler) { errorRuler.classList.remove('hidden'); }
+    rawViewDisabledControls().forEach(el => { el.disabled = false; });
+    if (rawViewBtn) {
+        rawViewBtn.textContent = 'Raw';
+        rawViewBtn.classList.remove('raw-view-active');
+        rawViewBtn.title = 'Toggle between table and raw file view';
+    }
+    // Re-sync the virtual table in case the file changed while hidden.
+    updateVirtualTable();
+}
+
+// Reset raw-view state without touching visibility — used when a fresh
+// 'update' message arrives (its mode branches set visibility themselves).
+function resetRawViewState() {
+    rawViewActive = false;
+    rawViewSavedBanner = null;
+    rawViewDisabledControls().forEach(el => { el.disabled = false; });
+    if (rawViewBtn) {
+        rawViewBtn.textContent = 'Raw';
+        rawViewBtn.classList.remove('raw-view-active');
+        rawViewBtn.title = 'Toggle between table and raw file view';
+    }
+}
+
+if (rawViewBtn) {
+    rawViewBtn.addEventListener('click', () => {
+        if (isChunkedMode) { return; }
+        if (rawViewActive) { exitRawView(); } else { enterRawView(); }
+    });
+}
+
+// =============================================================================
 // MESSAGE HANDLER
 // =============================================================================
 
@@ -1126,6 +1301,11 @@ window.addEventListener('message', event => {
             currentText = message.text;
             // Reset guard — a fresh 'update' message always supersedes any prior render in progress
             isUpdating = false;
+            // Leave raw view — the branches below set visibility for the new mode
+            resetRawViewState();
+            // Header mode comes from the setting on every fresh load
+            hasHeaders = !message.config || message.config.firstRowIsHeader !== false;
+            updateHeadersBtnState();
             showLoader();
             isRenderingInterrupted = false;
             clearTimeout(slowLoadTimer);
@@ -1339,10 +1519,14 @@ async function initChunkedView(text, config) {
     const { data } = await parseCSV(text, detectedDelimiter);
     if (data.length === 0) { return; }
 
-    chunkedHeader = data[0]; // first row is the header
+    // First row is the header — unless the file has none, in which case a
+    // synthetic header is used and every row is data. The extension host
+    // applies the same offset when serving pages (its hasHeaders flag reads
+    // the same firstRowIsHeader setting).
+    chunkedHeader = hasHeaders ? data[0] : syntheticHeader(data);
 
-    // Cache page 0 (data rows from the first chunk, excluding the header row)
-    const page0Rows = data.slice(1); // rows 1..N
+    // Cache page 0 (data rows from the first chunk, excluding any header row)
+    const page0Rows = hasHeaders ? data.slice(1) : data;
     chunkedCache.set(0, page0Rows);
     chunkedLoadedPage = -1; // force re-render
     chunkedLoadedPageHasData = false;
@@ -2226,7 +2410,12 @@ if (dupesBtn) {
 async function updateContent(text, config) {
     currentConfig = config;
     const { data, errors } = await parseCSV(text, detectedDelimiter);
-    
+
+    // No header row in the file: inject a synthetic one so data[0] stays the header.
+    if (!hasHeaders && data.length > 0) {
+        data.unshift(syntheticHeader(data));
+    }
+
     originalRawData = data;
     currentDisplayData = data;
     originalDataObjects = [];
@@ -2496,8 +2685,14 @@ document.querySelectorAll('.export-format-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const scope = btn.dataset.scope; // 'full' | 'view'
         const format = btn.dataset.format; // 'csv' | 'json' | 'markdown' | 'html'
-        const data = scope === 'full' ? originalRawData : currentDisplayData;
+        let data = scope === 'full' ? originalRawData : currentDisplayData;
         if (!data || data.length === 0) { return; }
+        // CSV exports of headerless files must not include the synthetic header.
+        // (JSON/Markdown/HTML keep the synthetic names as keys/headings.)
+        if (!hasHeaders && format === 'csv') {
+            data = data.slice(1);
+            if (data.length === 0) { return; }
+        }
 
         let content;
         switch (format) {
@@ -2648,7 +2843,9 @@ let saveTimeout;
 function debounceSave() {
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
-        const csvContent = dataToCSV(originalRawData, detectedDelimiter);
+        // Never write the synthetic header row back to the file
+        const rows = hasHeaders ? originalRawData : originalRawData.slice(1);
+        const csvContent = dataToCSV(rows, detectedDelimiter);
         vscode.postMessage({
             type: 'edit',
             text: csvContent
@@ -2710,6 +2907,8 @@ async function renderTable(data, errors) {
     if (errors.length > 0) {
         const errorMessages = errors.map(e => typeof e === 'string' ? e : e.message);
         errorContainer.textContent = "CSV Parsing Errors:\n" + errorMessages.slice(0, 10).join('\n') + (errorMessages.length > 10 ? `\n...and ${errorMessages.length - 10} more.` : '');
+        // Let the user inspect the raw line and fix it in a real editor
+        errorContainer.appendChild(makeOpenAsTextButton());
         errorContainer.classList.remove('hidden');
     } else {
         if (errors.length === 0 && !errorContainer.textContent.startsWith("Query Error")) {
@@ -2733,6 +2932,7 @@ async function renderTable(data, errors) {
     
     if (data.length === 0) {
         virtualSpacer.style.height = '0px';
+        updateRowCountBadge();
         return;
     }
 
@@ -2937,6 +3137,8 @@ async function renderTable(data, errors) {
             }
         }
     }
+
+    updateRowCountBadge();
 
     clearTimeout(slowLoadTimer);
     if (slowLoadModal) slowLoadModal.classList.add('hidden');

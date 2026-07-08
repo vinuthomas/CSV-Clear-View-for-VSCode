@@ -2,6 +2,18 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.2.0] - 2026-07-08
+
+### Added
+
+- **Header toggle for headerless files (#15):** A new **Headers** toolbar button toggles whether the first row is treated as a header. When off, generic `Column 1..N` names are generated and the first row is shown as data — so filtering, sorting, column stats, and SQL queries (`WHERE [Column 1] = '…'`) work on files without a header row (e.g. exported logs). The synthetic header is never written back on save and is excluded from CSV exports. The new `csvClearView.firstRowIsHeader` setting (default `true`) sets the default for newly opened files, including huge files in Paged view.
+- **Row & column count badge (#14):** The toolbar now shows a live badge with the total data rows and column count (e.g. `1,234 rows × 12 cols`). When column filters, a SQL query, or the duplicates view reduce the visible set, it switches to `56 of 1,234 rows (1,178 hidden) × 12 cols`.
+- **Raw file view toggle (#13):** A new **Raw** toolbar button flips between the table and the underlying file text without reopening the editor, making it easy to inspect a row flagged with an unexpected extra column. Table-only controls are greyed out while the raw view is active; click **Table** to flip back. Parse-error banners and the raw view both include an **Open in Text Editor** button that reopens the file in VS Code's default text editor so the offending line can be fixed directly.
+
+### Changed
+
+- **Two-row toolbar:** The toolbar is split into a query row (full-width SQL input with History/Run/Reset) and a tools row (Export, Headers, Go to Row, Filter, Profile, Duplicates, Raw, with the delimiter and row-count badges right-aligned). The SQL input now spans nearly the whole editor width instead of competing with ten buttons on one row.
+
 ## [1.1.0] - 2026-07-06
 
 ### Added

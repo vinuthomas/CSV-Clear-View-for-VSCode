@@ -58,6 +58,7 @@ Stop switching between VS Code and Excel. CSV ClearView delivers a **complete da
 - **🎨 Stay oriented** - Color-coded columns, sticky headers, and freeze panes keep you focused
 - **✏️ Edit with confidence** - In-place cell editing with full undo/redo support
 - **🔎 Find duplicates instantly** - One-click duplicate detection with grouped, line-numbered results
+- **📋 Handle headerless files** - Toggle the header row off and filter, sort, and query log exports with generated column names
 - **⚡ Lightning fast** - Virtual rendering keeps even the largest files responsive
 
 Perfect for data analysis, ETL pipeline debugging, machine learning dataset inspection, log file analysis, and database exports.
@@ -95,6 +96,7 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 
 ### 🧭 Navigation
 - **Go to Row:** Jump to any row by number instantly — the target row flashes to confirm navigation
+- **Row & Column Count:** A live toolbar badge shows the total rows × columns — and how many rows are hidden when filters or queries are active
 - **Error markers:** Visual markers in the scrollbar for quick jumping to parsing errors
 
 ### 📊 Large File Support
@@ -106,6 +108,8 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 ### ✏️ Editing & Validation
 - **In-Place Cell Editing:** Double-click any cell to edit with full undo/redo support
 - **CSV Linting:** Automatic detection of rows with inconsistent column counts
+- **Raw File View:** Click **Raw** to flip between the table and the underlying file text — perfect for eyeballing a row with a stray delimiter, then flip back
+- **Open in Text Editor:** Parse errors include a one-click button that reopens the file in VS Code's text editor so you can fix the offending line directly
 - **Native Diagnostics:** Parsing errors surface in VS Code's Problems pane
 
 ### 🔧 Format Flexibility
@@ -113,6 +117,7 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 - **Multi-Format Support:** `.csv`, `.tsv`, `.tab`, `.psv` files open natively
 - **Open Any File:** Use the **"Open with CSV ClearView"** command (right-click Explorer or Command Palette) to open any file — `.txt`, `.dat`, `.log`, etc. — in the CSV editor
 - **Manual Override:** Click the delimiter badge in the toolbar to change parsing
+- **Headerless Files:** Click **Headers** to toggle whether the first row is a header — files without one (e.g. exported logs) get generic `Column 1..N` names so filtering and SQL still work (`csvClearView.firstRowIsHeader` sets the default)
 - **Type-Aware Sorting:** Click column headers to sort with intelligent handling of numbers, dates, and strings
 
 ## Use Cases
@@ -143,6 +148,7 @@ Customize CSV ClearView through VS Code settings:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `csvClearView.stickyHeader` | `true` | Keep header row fixed at top while scrolling |
+| `csvClearView.firstRowIsHeader` | `true` | Treat the first row as a header; when `false`, generic `Column 1..N` names are used and the first row is shown as data |
 | `csvClearView.alternatingRows` | `true` | Enable zebra-stripe row coloring |
 | `csvClearView.safeModeThreshold` | `20` | File size (MB) to trigger large-file mode options |
 | `csvClearView.forceTextColumnColoring` | `false` | Force column coloring in Plain Text mode (may impact performance) |

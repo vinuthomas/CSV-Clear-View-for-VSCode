@@ -104,6 +104,10 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		const safeModeThresholdMB = config.get<number>('safeModeThreshold') || 20;
 		const LARGE_FILE_THRESHOLD = safeModeThresholdMB * 1024 * 1024;
 
+		// Whether the first row is a header (affects chunked-mode row offsets).
+		// Read once at open; the webview toggles its own copy for non-chunked modes.
+		const hasHeaders = config.get<boolean>('firstRowIsHeader') !== false;
+
 		// Row index built lazily for chunked mode
 		let rowIndex: RowIndex | null = null;
 
@@ -209,7 +213,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						forceTextColumnColoring: cfg.get('forceTextColumnColoring'),
 						safeModeThreshold: safeModeThresholdMB,
 						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt'),
-						delimiter: cfg.get('delimiter') || 'auto'
+						delimiter: cfg.get('delimiter') || 'auto',
+						firstRowIsHeader: hasHeaders
 					}
 				});
 
@@ -219,7 +224,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					if (disposed) { return; }
 					webviewPanel.webview.postMessage({
 							type: 'indexReady',
-							totalRows: idx.totalRows - 1 // exclude header
+							totalRows: idx.totalRows - (hasHeaders ? 1 : 0) // exclude header row if present
 						});
 					}).catch(err => {
 						console.error('Error building row index:', err);
@@ -247,13 +252,16 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					const tailStats = await vscode.workspace.fs.stat(document.uri);
 					const currentSize = tailStats.size;
 
-					// Read header (first 10KB)
-					const headerSize = Math.min(currentSize, 10 * 1024);
-					const headerBytes = await this.readRange(document.uri, 0, headerSize);
-					let headerText = Buffer.from(headerBytes).toString('utf8');
-					const firstNewline = headerText.indexOf('\n');
-					if (firstNewline !== -1) {
-						headerText = headerText.substring(0, firstNewline + 1);
+					// Read header (first 10KB) — skipped when the file has no header row
+					let headerText = '';
+					if (hasHeaders) {
+						const headerSize = Math.min(currentSize, 10 * 1024);
+						const headerBytes = await this.readRange(document.uri, 0, headerSize);
+						headerText = Buffer.from(headerBytes).toString('utf8');
+						const firstNewline = headerText.indexOf('\n');
+						if (firstNewline !== -1) {
+							headerText = headerText.substring(0, firstNewline + 1);
+						}
 					}
 
 					// Read tail (last 256KB)
@@ -283,7 +291,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						forceTextColumnColoring: cfg.get('forceTextColumnColoring'),
 						safeModeThreshold: safeModeThresholdMB,
 						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt'),
-						delimiter: cfg.get('delimiter') || 'auto'
+						delimiter: cfg.get('delimiter') || 'auto',
+						firstRowIsHeader: hasHeaders
 					}
 				});
 			} catch (err) {
@@ -393,6 +402,12 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					return;
 				}
 
+				case 'openAsText':
+					// Reopen this file with the default text editor so the user can
+					// fix issues (e.g. a row with a stray delimiter) directly.
+					vscode.commands.executeCommand('vscode.openWith', document.uri, 'default');
+					return;
+
 				case 'requestPage': {
 					// Webview requests a specific page of rows.
 					// e.startRow: 0-based data row index (excludes header)
@@ -404,8 +419,9 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				try {
 					const idx = await ensureIndex();
 					if (disposed) { return; }
-					// Row 0 in the index is the header; data rows start at index 1.
-						const indexStart = startDataRow + 1; // skip header row in index
+					// Row 0 in the index is the header (when the file has one);
+					// data rows start after it.
+						const indexStart = startDataRow + (hasHeaders ? 1 : 0);
 				const text = await this.readRows(idx, indexStart, rowCount);
 					if (disposed) { return; }
 					webviewPanel.webview.postMessage({
@@ -686,21 +702,29 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				<div id="error-ruler" class="error-ruler"></div>
 				<div id="warning-container" class="warning-container hidden"></div>
 				<div id="controls" class="controls">
-					<div class="autocomplete-container">
-						<input type="text" id="sql-query" placeholder="SELECT * FROM ? WHERE [Last Name] = 'Smith'" autocomplete="off" />
-						<div id="history-list" class="history-list hidden"></div>
+					<div class="controls-row controls-row-query">
+						<div class="autocomplete-container">
+							<input type="text" id="sql-query" placeholder="SELECT * FROM ? WHERE [Last Name] = 'Smith'" autocomplete="off" />
+							<div id="history-list" class="history-list hidden"></div>
+						</div>
+						<button id="history-btn" class="toolbar-btn" title="Query History (↑/↓ to navigate)">History</button>
+						<button id="run-query" class="toolbar-btn toolbar-btn-primary" title="Run SQL query">Run</button>
+						<button id="reset-query" class="toolbar-btn" title="Reset to original data">Reset</button>
 					</div>
-					<button id="history-btn" class="toolbar-btn" title="Query History (↑/↓ to navigate)">History</button>
-					<button id="run-query" class="toolbar-btn toolbar-btn-primary" title="Run SQL query">Run</button>
-					<button id="reset-query" class="toolbar-btn" title="Reset to original data">Reset</button>
-					<button id="export-btn" class="toolbar-btn" title="Export the full file or the current view">Export</button>
-					<div class="toolbar-divider"></div>
-					<button id="goto-row-btn" class="toolbar-btn" title="Go to row by number">Go to Row</button>
-					<button id="filter-btn" class="toolbar-btn" title="Toggle column filters">Filter</button>
-					<button id="profile-btn" class="toolbar-btn" title="Toggle column profile panel">Profile</button>
-					<button id="dupes-btn" class="toolbar-btn" title="Find duplicate rows">Duplicates</button>
-					<div class="toolbar-divider"></div>
-					<div id="delimiter-display" class="delimiter-badge hidden" title="Click to change delimiter">Delim: ,</div>
+					<div class="controls-row controls-row-tools">
+						<button id="export-btn" class="toolbar-btn" title="Export the full file or the current view">Export</button>
+						<div class="toolbar-divider"></div>
+						<button id="headers-btn" class="toolbar-btn" title="Toggle whether the first row is treated as a header">Headers</button>
+						<button id="goto-row-btn" class="toolbar-btn" title="Go to row by number">Go to Row</button>
+						<button id="filter-btn" class="toolbar-btn" title="Toggle column filters">Filter</button>
+						<button id="profile-btn" class="toolbar-btn" title="Toggle column profile panel">Profile</button>
+						<button id="dupes-btn" class="toolbar-btn" title="Find duplicate rows">Duplicates</button>
+						<button id="raw-view-btn" class="toolbar-btn" title="Toggle between table and raw file view">Raw</button>
+						<div class="toolbar-right">
+							<div id="delimiter-display" class="delimiter-badge hidden" title="Click to change delimiter">Delim: ,</div>
+							<div id="row-count-badge" class="row-count-badge hidden" title="Rows × columns in the current view"></div>
+						</div>
+					</div>
 				</div>
 				<div id="error-container" class="error-container hidden"></div>
 				<div id="dupes-banner" class="dupes-banner hidden"></div>
