@@ -1472,7 +1472,7 @@ async function runTests() {
         // Mirrors escapeMarkdownCell + dataToMarkdownTable in csv.js
         function escapeMarkdownCell(value) {
             const s = value == null ? '' : String(value);
-            return s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+            return s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
         }
         function dataToMarkdownTable(data) {
             if (!data || data.length === 0) { return ''; }
@@ -1526,6 +1526,14 @@ async function runTests() {
             'dataToMarkdownTable: newline in cell converted to <br>'
         );
         assertEqual(dataToMarkdownTable([]), '', 'dataToMarkdownTable: empty data → empty string');
+        assert(
+            escapeMarkdownCell('a\\|b') === 'a\\\\\\|b',
+            'escapeMarkdownCell: literal backslash-then-pipe fully escaped (CodeQL js/incomplete-sanitization)'
+        );
+        assert(
+            dataToMarkdownTable([['A'], ['C:\\path|file']]).includes('C:\\\\path\\|file'),
+            'dataToMarkdownTable: backslash preceding a pipe does not un-escape the pipe'
+        );
 
         // dataToHTMLTable
         assert(

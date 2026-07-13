@@ -198,7 +198,10 @@ CSV ClearView automatically detects the delimiter but you can override it using 
 
 See the [CHANGELOG](changelog.md) for detailed release notes.
 
-### Latest Release (v1.3.0)
+### Latest Release (v1.3.1)
+- **Fixed: Markdown export pipe escaping** — A cell value with a backslash immediately before a `|` could leave the pipe unescaped in exported Markdown tables, breaking the column structure
+
+### Recent Highlights (v1.3.0)
 - **New: Excel (.xlsx) viewing** — Open `.xlsx` workbooks directly in the same grid used for CSV, with a sheet-tab switcher for multi-sheet files. Read-only for now (no cell editing or save-back to Excel).
 
 ### Recent Highlights (v1.2.0)

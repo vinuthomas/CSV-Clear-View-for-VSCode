@@ -2,6 +2,12 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.3.1] - 2026-07-13
+
+### Fixed
+
+- **Markdown export: incomplete pipe escaping (CodeQL `js/incomplete-sanitization`):** `escapeMarkdownCell` escaped `|` to `\|` without first escaping literal backslashes in the cell value. A value containing a backslash immediately before a pipe (e.g. `C:\path|file`) could combine with the injected escape backslash and leave the pipe unescaped, breaking the exported Markdown table's column structure. Backslashes are now escaped before pipes.
+
 ## [1.3.0] - 2026-07-13
 
 ### Added

@@ -2647,7 +2647,11 @@ function dataToJSON(data) {
 
 function escapeMarkdownCell(value) {
     const s = value == null ? '' : String(value);
-    return s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+    // Escape backslashes first so a literal backslash preceding a pipe
+    // doesn't combine with the pipe-escaping backslash below into `\\|`,
+    // which Markdown reads as an escaped backslash followed by an
+    // unescaped (table-breaking) pipe.
+    return s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
 }
 
 function dataToMarkdownTable(data) {
