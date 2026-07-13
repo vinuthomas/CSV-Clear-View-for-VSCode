@@ -32,6 +32,56 @@ body {
     gap: 6px;
 }
 
+/* Sheet-tab row for multi-sheet Excel workbooks (hidden for plain CSV/TSV files).
+   Deliberately styled unlike the toolbar buttons below it (badge-accent active
+   indicator, tinted strip, leading label) so it reads as a distinct "which
+   sheet am I viewing" control rather than blending into the toolbar. */
+.controls-row-sheets {
+    gap: 2px;
+    flex-wrap: wrap;
+    background-color: var(--vscode-editorGroupHeader-tabsBackground, rgba(128,128,128,0.08));
+    border-radius: 4px;
+    padding: 3px 6px;
+}
+
+.sheet-tabs-label {
+    font-size: 0.72em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--vscode-descriptionForeground);
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.sheet-tab {
+    background-color: var(--vscode-tab-inactiveBackground, rgba(128,128,128,0.12));
+    color: var(--vscode-tab-inactiveForeground, var(--vscode-foreground));
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 4px 12px;
+    font-size: 0.85em;
+    border-radius: 3px 3px 0 0;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    opacity: 0.8;
+    transition: background-color 0.1s, border-color 0.1s, opacity 0.1s;
+}
+
+.sheet-tab:hover {
+    background-color: var(--vscode-tab-hoverBackground, rgba(128,128,128,0.22));
+    opacity: 1;
+}
+
+.sheet-tab-active {
+    background-color: var(--vscode-tab-activeBackground, rgba(128,128,128,0.3));
+    color: var(--vscode-tab-activeForeground, var(--vscode-foreground));
+    border-bottom-color: var(--vscode-badge-background, var(--vscode-focusBorder));
+    font-weight: 600;
+    opacity: 1;
+}
+
 /* Right-aligned badge group at the end of the tools row */
 .toolbar-right {
     margin-left: auto;

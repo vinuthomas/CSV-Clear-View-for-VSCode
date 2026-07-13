@@ -47,6 +47,11 @@ let dupesOnlyMode = false;      // true when table is filtered to show only dupe
 // keeps its data[0]-is-header invariant. Initialized from config on 'update'.
 let hasHeaders = true;
 
+// --- Read-only / multi-sheet (Excel) State ---
+let isReadOnly = false;    // true when editing should be disabled (e.g. Excel source files)
+let currentSheets = null;  // array of sheet names, or null for non-workbook sources
+let currentActiveSheet = null;
+
 // Convert a logical row index (0-based data rows, i.e. excluding header) to
 // a scrollTop pixel value within the capped spacer.
 function rowToScrollTop(rowIndex, dataRowCount) {
@@ -131,6 +136,7 @@ const chartTip = document.getElementById('chart-tip');
 const dupesBanner = document.getElementById('dupes-banner');
 const rowCountBadge = document.getElementById('row-count-badge');
 const rawViewBtn = document.getElementById('raw-view-btn');
+const sheetTabsRow = document.getElementById('sheet-tabs-row');
 const headersBtn = document.getElementById('headers-btn');
 
 // --- Constants ---
@@ -1172,6 +1178,40 @@ function updateHeadersBtnState() {
         : 'First row is treated as data — click to treat it as a header';
 }
 
+// Render (or hide) the sheet-tab row for multi-sheet Excel workbooks.
+function updateSheetTabs(sheets, activeSheet) {
+    if (!sheetTabsRow) { return; }
+    currentSheets = Array.isArray(sheets) && sheets.length > 0 ? sheets : null;
+    currentActiveSheet = activeSheet || null;
+
+    if (!currentSheets) {
+        sheetTabsRow.classList.add('hidden');
+        sheetTabsRow.innerHTML = '';
+        return;
+    }
+
+    sheetTabsRow.innerHTML = '';
+
+    const label = document.createElement('span');
+    label.className = 'sheet-tabs-label';
+    label.textContent = 'Sheet';
+    sheetTabsRow.appendChild(label);
+
+    for (const name of currentSheets) {
+        const tab = document.createElement('button');
+        tab.className = 'sheet-tab' + (name === currentActiveSheet ? ' sheet-tab-active' : '');
+        tab.textContent = name;
+        tab.title = `Switch to sheet "${name}"`;
+        tab.addEventListener('click', () => {
+            if (name === currentActiveSheet) { return; }
+            showLoader();
+            vscode.postMessage({ type: 'switchSheet', sheetName: name });
+        });
+        sheetTabsRow.appendChild(tab);
+    }
+    sheetTabsRow.classList.remove('hidden');
+}
+
 if (headersBtn) {
     headersBtn.addEventListener('click', () => {
         if (isChunkedMode) { return; } // toolbar is hidden in chunked mode anyway
@@ -1306,6 +1346,11 @@ window.addEventListener('message', event => {
             // Header mode comes from the setting on every fresh load
             hasHeaders = !message.config || message.config.firstRowIsHeader !== false;
             updateHeadersBtnState();
+
+            isReadOnly = !!(message.config && message.config.readOnly);
+            if (rawViewBtn) { rawViewBtn.classList.toggle('hidden', isReadOnly); }
+            updateSheetTabs(message.sheets, message.activeSheet);
+
             showLoader();
             isRenderingInterrupted = false;
             clearTimeout(slowLoadTimer);
@@ -1753,7 +1798,7 @@ function navigateHistoryPanel(direction) {
 if (tableContainer) {
     // Double-click to edit
     tableContainer.addEventListener('dblclick', (e) => {
-        if (isChunkedMode) { return; }
+        if (isChunkedMode || isReadOnly) { return; }
         const cell = e.target;
         if ((cell.tagName === 'TD' || cell.tagName === 'TH') && cell.contentEditable !== 'true') {
             cell.contentEditable = 'true';

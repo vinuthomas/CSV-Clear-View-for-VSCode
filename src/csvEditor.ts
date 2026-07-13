@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
+import * as ExcelJS from 'exceljs';
 
 let _alasql: ((query: string, params?: any[]) => any) | null = null;
 function getAlasql(): (query: string, params?: any[]) => any {
@@ -8,6 +9,56 @@ function getAlasql(): (query: string, params?: any[]) => any {
 		_alasql = require('alasql');
 	}
 	return _alasql!;
+}
+
+function isExcelFile(uri: vscode.Uri): boolean {
+	return uri.fsPath.toLowerCase().endsWith('.xlsx');
+}
+
+/** CSV-escape a single field: quote it if it contains a comma, quote, or newline. */
+function csvEscapeField(value: string): string {
+	if (/[",\r\n]/.test(value)) {
+		return `"${value.replace(/"/g, '""')}"`;
+	}
+	return value;
+}
+
+/** Resolve an ExcelJS cell to its display string (formula results, rich text, dates). */
+function excelCellToString(cell: ExcelJS.Cell): string {
+	let value: unknown = cell.value;
+	if (value === null || value === undefined) { return ''; }
+
+	if (typeof value === 'object') {
+		if ('result' in (value as any)) {
+			value = (value as any).result;
+		} else if ('richText' in (value as any)) {
+			value = (value as any).richText.map((run: any) => run.text).join('');
+		} else if ('text' in (value as any)) {
+			value = (value as any).text;
+		} else if (value instanceof Date) {
+			return value.toISOString();
+		} else if ('hyperlink' in (value as any)) {
+			value = (value as any).text ?? (value as any).hyperlink;
+		}
+	}
+
+	if (value === null || value === undefined) { return ''; }
+	if (value instanceof Date) { return value.toISOString(); }
+	return String(value);
+}
+
+/** Convert an ExcelJS worksheet into CSV text, using its declared column count for ragged rows. */
+function worksheetToCsv(worksheet: ExcelJS.Worksheet): string {
+	const lines: string[] = [];
+	worksheet.eachRow({ includeEmpty: true }, row => {
+		const fields: string[] = [];
+		const colCount = Math.max(worksheet.columnCount, row.cellCount);
+		for (let col = 1; col <= colCount; col++) {
+			fields.push(csvEscapeField(excelCellToString(row.getCell(col))));
+		}
+		lines.push(fields.join(','));
+	});
+	return lines.join('\r\n') + (lines.length ? '\r\n' : '');
 }
 
 const CHUNKED_MODE_THRESHOLD = 500 * 1024 * 1024; // 500 MB
@@ -100,6 +151,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		type ViewMode = 'full' | 'head' | 'tail' | 'text' | 'chunked';
 		let viewMode: ViewMode = 'full';
 
+		const isExcel = isExcelFile(document.uri);
+
 		const config = vscode.workspace.getConfiguration('csvClearView');
 		const safeModeThresholdMB = config.get<number>('safeModeThreshold') || 20;
 		const LARGE_FILE_THRESHOLD = safeModeThresholdMB * 1024 * 1024;
@@ -111,13 +164,37 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		// Row index built lazily for chunked mode
 		let rowIndex: RowIndex | null = null;
 
+		// Parsed workbook, cached for the lifetime of the panel (Excel files only).
+		// Re-parsing per sheet-switch or file-change would be wasteful.
+		let workbook: ExcelJS.Workbook | null = null;
+		let activeSheetName: string | null = null;
+		const ensureWorkbook = async (): Promise<ExcelJS.Workbook> => {
+			if (workbook) { return workbook; }
+			const wb = new ExcelJS.Workbook();
+			const bytes = await vscode.workspace.fs.readFile(document.uri);
+			await wb.xlsx.load(Buffer.from(bytes) as any);
+			workbook = wb;
+			return wb;
+		};
+
 		// Becomes true when the panel is closed — prevents postMessage on a dead webview
 		let disposed = false;
 
 		// ----------------------------------------------------------------
 		// Determine view mode for large files
+		//
+		// Excel files skip this entirely: the CSV-specific streaming/preview
+		// modes (chunked/head/tail/text) don't map onto a binary zip/XML
+		// format, so we always fully parse the workbook, just warning first
+		// if it's large enough that parsing may be slow.
 		// ----------------------------------------------------------------
-		if (document.size > LARGE_FILE_THRESHOLD) {
+		if (isExcel) {
+			if (document.size > LARGE_FILE_THRESHOLD) {
+				vscode.window.showWarningMessage(
+					`CSV ClearView: "${document.uri.fsPath.split(/[\\/]/).pop()}" is large (${(document.size / (1024 * 1024)).toFixed(2)} MB) — loading the full workbook may be slow.`
+				);
+			}
+		} else if (document.size > LARGE_FILE_THRESHOLD) {
 			const isHuge = document.size > CHUNKED_MODE_THRESHOLD;
 
 			const options: (vscode.QuickPickItem & { id: ViewMode })[] = [
@@ -186,8 +263,19 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			try {
 				const cfg = vscode.workspace.getConfiguration('csvClearView');
 				let text = '';
+				let excelSheets: string[] | undefined;
+				let excelActiveSheet: string | undefined;
 
-				if (viewMode === 'chunked') {
+				if (isExcel) {
+					const wb = await ensureWorkbook();
+					if (!activeSheetName || !wb.getWorksheet(activeSheetName)) {
+						activeSheetName = wb.worksheets[0]?.name ?? null;
+					}
+					const worksheet = activeSheetName ? wb.getWorksheet(activeSheetName) : undefined;
+					text = worksheet ? worksheetToCsv(worksheet) : '';
+					excelSheets = wb.worksheets.map(ws => ws.name);
+					excelActiveSheet = activeSheetName ?? undefined;
+				} else if (viewMode === 'chunked') {
 					// Fast path: send the first ~512 KB immediately so the webview
 					// can show the header and first rows while the index builds in
 					// the background.
@@ -232,9 +320,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					});
 
 					return;
-				}
-
-				if (viewMode === 'full' || viewMode === 'text') {
+				} else if (viewMode === 'full' || viewMode === 'text') {
 					const uint8Array = await vscode.workspace.fs.readFile(document.uri);
 					text = Buffer.from(uint8Array).toString('utf8');
 				} else if (viewMode === 'head') {
@@ -285,6 +371,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					isLargeFile: isLargeFile,
 					viewMode: viewMode,
 					fileExtension: document.uri.fsPath.split('.').pop()?.toLowerCase() || 'csv',
+					...(excelSheets ? { sheets: excelSheets, activeSheet: excelActiveSheet } : {}),
 					config: {
 						stickyHeader: cfg.get('stickyHeader'),
 						alternatingRows: cfg.get('alternatingRows'),
@@ -292,12 +379,13 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						safeModeThreshold: safeModeThresholdMB,
 						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt'),
 						delimiter: cfg.get('delimiter') || 'auto',
-						firstRowIsHeader: hasHeaders
+						firstRowIsHeader: hasHeaders,
+						readOnly: isExcel
 					}
 				});
 			} catch (err) {
 				console.error('Error updating webview:', err);
-				vscode.window.showErrorMessage('Error loading CSV file contents.');
+				vscode.window.showErrorMessage(isExcel ? 'Error loading Excel file contents.' : 'Error loading CSV file contents.');
 			}
 		};
 
@@ -307,8 +395,9 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		// Handle file changes
 		const watcher = vscode.workspace.createFileSystemWatcher(document.uri.fsPath);
 		const watcherListener = watcher.onDidChange(() => {
-			// Invalidate row index so it is rebuilt on next access
+			// Invalidate row index / cached workbook so they are rebuilt on next access
 			rowIndex = null;
+			workbook = null;
 			updateWebview();
 		});
 
@@ -324,6 +413,10 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		webviewPanel.webview.onDidReceiveMessage(async e => {
 			switch (e.type) {
 				case 'edit':
+					if (isExcel) {
+						console.warn('CSV ClearView: edit ignored — Excel files are read-only');
+						return;
+					}
 					if (viewMode === 'chunked') {
 						console.warn('CSV ClearView: edit ignored — file is in chunked (read-only) mode');
 						return;
@@ -435,6 +528,15 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 							webviewPanel.webview.postMessage({ type: 'queryError', message: `Error loading page: ${err instanceof Error ? err.message : String(err)}` });
 						}
 					}
+					return;
+				}
+
+				case 'switchSheet': {
+					if (!isExcel || typeof e.sheetName !== 'string') { return; }
+					const wb = await ensureWorkbook();
+					if (!wb.getWorksheet(e.sheetName)) { return; }
+					activeSheetName = e.sheetName;
+					updateWebview();
 					return;
 				}
 			}
@@ -702,6 +804,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				<div id="error-ruler" class="error-ruler"></div>
 				<div id="warning-container" class="warning-container hidden"></div>
 				<div id="controls" class="controls">
+					<div id="sheet-tabs-row" class="controls-row controls-row-sheets hidden"></div>
 					<div class="controls-row controls-row-query">
 						<div class="autocomplete-container">
 							<input type="text" id="sql-query" placeholder="SELECT * FROM ? WHERE [Last Name] = 'Smith'" autocomplete="off" />

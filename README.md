@@ -48,6 +48,10 @@ You can also install the extension manually by downloading the compiled `.vsix` 
 
 *Shift+click any numeric column header to see an instant distribution histogram alongside min, max, mean, median, and percentile stats — no external tools needed.*
 
+![Excel workbook open in read-only mode with a sheet-tab switcher](screenshots/Open%20XLSX%20file%20in%20readonly%20with%20sheets.png)
+
+*Open `.xlsx` files directly — no more converting to CSV first. Multi-sheet workbooks get a sheet-tab switcher right in the toolbar so you can flip between sheets instantly.*
+
 ## Why CSV ClearView?
 
 Stop switching between VS Code and Excel. CSV ClearView delivers a **complete data exploration experience** without leaving your editor:
@@ -113,6 +117,7 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 - **Native Diagnostics:** Parsing errors surface in VS Code's Problems pane
 
 ### 🔧 Format Flexibility
+- **Excel (.xlsx) Viewing:** Open `.xlsx` workbooks directly — each sheet renders through the same colored grid, SQL query, filter, profile, and export tools as CSV. Multi-sheet workbooks get a **sheet-tab switcher** in the toolbar. Currently read-only (no cell editing or save-back to Excel).
 - **Auto-Delimiter Detection:** Automatically recognizes comma, tab, pipe, and semicolon delimiters
 - **Multi-Format Support:** `.csv`, `.tsv`, `.tab`, `.psv` files open natively
 - **Open Any File:** Use the **"Open with CSV ClearView"** command (right-click Explorer or Command Palette) to open any file — `.txt`, `.dat`, `.log`, etc. — in the CSV editor
@@ -185,6 +190,7 @@ SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
 | `.csv` | Auto-detected | Usually comma, but intelligently detects tab, pipe, semicolon |
 | `.tsv`, `.tab` | Tab | Tab-separated values |
 | `.psv` | Pipe (`\|`) | Pipe-separated values |
+| `.xlsx` | N/A | Excel workbook — read-only, with a sheet-tab switcher for multi-sheet files |
 
 CSV ClearView automatically detects the delimiter but you can override it using the toolbar badge.
 
@@ -192,7 +198,16 @@ CSV ClearView automatically detects the delimiter but you can override it using 
 
 See the [CHANGELOG](changelog.md) for detailed release notes.
 
-### Latest Release (v1.1.0)
+### Latest Release (v1.3.0)
+- **New: Excel (.xlsx) viewing** — Open `.xlsx` workbooks directly in the same grid used for CSV, with a sheet-tab switcher for multi-sheet files. Read-only for now (no cell editing or save-back to Excel).
+
+### Recent Highlights (v1.2.0)
+- **New: Headers toggle** — A **Headers** toolbar button toggles whether the first row is treated as a header, so headerless files (e.g. exported logs) get generic `Column 1..N` names and can still be filtered, sorted, and queried
+- **New: Row & column count badge** — The toolbar shows a live `rows × cols` badge, including how many rows are hidden when filters or a query are active
+- **New: Raw file view** — A **Raw** toolbar button flips between the table and the underlying file text without reopening the editor
+- **Two-row toolbar** — Query bar and tool buttons are now split across two rows so the SQL input has room to breathe
+
+### Recent Highlights (v1.1.0)
 - **New: Export** — Click the new **Export** toolbar button to save your data as JSON, Markdown, or HTML. Export the **Full File**, or just the **Current View** (whatever's filtered, sorted, or returned by a SQL query) as CSV, JSON, Markdown, or HTML. Replaces the old query-only Save CSV button.
 
 ### Recent Highlights (v1.0.15)
@@ -232,7 +247,7 @@ npm run compile
 node_modules/.bin/vsce package
 
 # Install into your VS Code
-code --install-extension csv-clearview-1.0.7.vsix
+code --install-extension csv-clearview-1.3.0.vsix
 ```
 
 ### Debugging
@@ -242,7 +257,7 @@ code --install-extension csv-clearview-1.0.7.vsix
 
 ## Keywords
 
-CSV, TSV, viewer, editor, table, grid, spreadsheet, data analysis, SQL queries, data profiling, statistics, large files, virtual scrolling, duplicate detection, delimiter detection, data science, ETL, pipe-separated, tab-separated, data visualization, column sorting, data validation, go to row, row navigation
+CSV, TSV, viewer, editor, table, grid, spreadsheet, Excel, xlsx, data analysis, SQL queries, data profiling, statistics, large files, virtual scrolling, duplicate detection, delimiter detection, data science, ETL, pipe-separated, tab-separated, data visualization, column sorting, data validation, go to row, row navigation
 
 ## License
 MIT

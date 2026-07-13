@@ -2,6 +2,12 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.3.0] - 2026-07-13
+
+### Added
+
+- **Excel (.xlsx) viewing (#17):** Open `.xlsx` workbooks directly — no more converting to CSV first. Each worksheet is rendered through the same colored grid, and gets the existing SQL query, column filter, profile, and export tooling for free. Multi-sheet workbooks show a **sheet-tab switcher** in the toolbar (styled with VS Code's own tab tokens so it doesn't blend into the regular toolbar buttons). Read-only for this release — no cell editing or save-back to `.xlsx` yet, and no support for the legacy binary `.xls` format. Parsing is powered by `exceljs`.
+
 ## [1.2.0] - 2026-07-08
 
 ### Added
