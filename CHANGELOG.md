@@ -2,6 +2,12 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.3.2] - 2026-07-28
+
+### Fixed
+
+- **Dependabot security alerts:** Bumped transitive dependencies `fast-uri`, `js-yaml`, `linkify-it`, and `shell-quote` to resolve high-severity DoS/host-confusion advisories (`package-lock.json` only, no source changes).
+
 ## [1.3.1] - 2026-07-13
 
 ### Fixed
