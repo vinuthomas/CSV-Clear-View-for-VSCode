@@ -211,7 +211,12 @@
     "exceljs": "^4.4.0"
   },
   "overrides": {
-    "glob": "^13.0.0",
+    "glob": {
+      ".": "^13.0.0",
+      "minimatch": {
+        "brace-expansion": "^5.0.9"
+      }
+    },
     "uuid": "^11.1.1"
   }
 }
