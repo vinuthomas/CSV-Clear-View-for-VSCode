@@ -2,6 +2,12 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.3.3] - 2026-08-17
+
+### Fixed
+
+- **Dependabot security alerts:** Bumped transitive dependencies `js-yaml`, `fast-uri`, and `undici` to resolve high/medium-severity advisories. Added a scoped `overrides` entry for `brace-expansion` (nested under `glob`'s `minimatch`) to patch the last unfixed DoS advisory without forcing a breaking major bump on the older `minimatch` used by `exceljs`'s zip writer. All affected packages are build/packaging tooling only (`package-lock.json` only, no source changes). The remaining `image-size` alerts are unreachable dead code — behind an `alasql` optional dependency chain (`react-native-fs`) that only loads inside a React Native runtime, never in this extension.
+
 ## [1.3.2] - 2026-07-28
 
 ### Fixed
