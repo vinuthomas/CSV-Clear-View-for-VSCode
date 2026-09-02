@@ -5,6 +5,8 @@ let currentConfig = {};
 let originalDataObjects = []; // Array of Objects for SQL
 let originalRawData = []; // Array of Arrays for Render
 let currentDisplayData = []; // Data currently being shown (full or filtered)
+let findMatches = [];       // [{row, col}] — indices into currentDisplayData
+let findMatchIndex = -1;    // index into findMatches of the current match
 let autocompleteOptions = []; // Shared source for autocomplete
 let currentFocus = -1; // Shared focus state for autocomplete
 let isUpdating = false; // Guard for overlapping updates
@@ -128,6 +130,16 @@ const gotoRowOk = document.getElementById('goto-row-ok');
 const gotoRowCancel = document.getElementById('goto-row-cancel');
 const filterBtn = document.getElementById('filter-btn');
 const filterRowContainer = document.getElementById('filter-row-container');
+const findReplaceBtn = document.getElementById('find-replace-btn');
+const findReplaceBar = document.getElementById('find-replace-bar');
+const findInput = document.getElementById('find-input');
+const findMatchCount = document.getElementById('find-match-count');
+const findPrevBtn = document.getElementById('find-prev-btn');
+const findNextBtn = document.getElementById('find-next-btn');
+const replaceInput = document.getElementById('replace-input');
+const replaceBtn = document.getElementById('replace-btn');
+const replaceAllBtn = document.getElementById('replace-all-btn');
+const findReplaceCloseBtn = document.getElementById('find-replace-close');
 const dupesBtn = document.getElementById('dupes-btn');
 const exportBtn = document.getElementById('export-btn');
 const exportModal = document.getElementById('export-modal');
@@ -2113,6 +2125,181 @@ document.addEventListener('click', (e) => {
 });
 
 // =============================================================================
+// FIND & REPLACE
+// =============================================================================
+
+function isFindReplaceAvailable() {
+    return !isChunkedMode && !isReadOnly;
+}
+
+function openFindReplaceBar() {
+    if (!findReplaceBar || !isFindReplaceAvailable()) { return; }
+    findReplaceBar.classList.remove('hidden');
+    if (findInput) {
+        findInput.focus();
+        findInput.select();
+        computeFindMatches(findInput.value);
+    }
+}
+
+function closeFindReplaceBar() {
+    if (!findReplaceBar) { return; }
+    findReplaceBar.classList.add('hidden');
+    findMatches = [];
+    findMatchIndex = -1;
+}
+
+function updateFindMatchCountUI() {
+    if (!findMatchCount) { return; }
+    if (findMatches.length === 0) {
+        findMatchCount.textContent = '0 / 0';
+    } else {
+        findMatchCount.textContent = `${findMatchIndex + 1} / ${findMatches.length}`;
+    }
+}
+
+/** Scan currentDisplayData (rows 1..end, skipping the header row) for a case-insensitive substring match. */
+function computeFindMatches(query) {
+    findMatches = [];
+    findMatchIndex = -1;
+
+    if (!query) {
+        updateFindMatchCountUI();
+        return;
+    }
+
+    const needle = query.toLowerCase();
+    for (let row = 1; row < currentDisplayData.length; row++) {
+        const dataRow = currentDisplayData[row];
+        if (!dataRow) { continue; }
+        for (let col = 0; col < dataRow.length; col++) {
+            const cell = dataRow[col];
+            if (cell !== undefined && cell !== null && String(cell).toLowerCase().includes(needle)) {
+                findMatches.push({ row, col });
+            }
+        }
+    }
+
+    if (findMatches.length > 0) {
+        findMatchIndex = 0;
+    }
+    updateFindMatchCountUI();
+    if (findMatchIndex !== -1) {
+        gotoFindMatch(findMatchIndex);
+    }
+}
+
+/** Flash the specific cell at (dataRowIndex, colIndex) — dataRowIndex is 0-based (excluding header). */
+function highlightDataCell(dataRowIndex, colIndex) {
+    const scrollTop = tableContainer.scrollTop;
+    const rowCount = currentDisplayData.length - 1;
+    const startRow = scrollTopToRow(scrollTop, rowCount);
+    const buffer = 10;
+    const renderStart = Math.max(1, startRow - buffer);
+    const absoluteIndex = dataRowIndex + 1; // +1 for header
+    const relativeIndex = absoluteIndex - renderStart;
+    const tbody = table ? table.querySelector('tbody') : null;
+    if (tbody && tbody.rows[relativeIndex] && tbody.rows[relativeIndex].cells[colIndex]) {
+        const cell = tbody.rows[relativeIndex].cells[colIndex];
+        cell.classList.add('find-cell-highlight');
+        setTimeout(() => cell.classList.remove('find-cell-highlight'), 1500);
+    }
+}
+
+function gotoFindMatch(index) {
+    if (findMatches.length === 0) { return; }
+    findMatchIndex = ((index % findMatches.length) + findMatches.length) % findMatches.length;
+    const match = findMatches[findMatchIndex];
+    scrollToDataRow(match.row - 1); // -1 for header, to make it 0-based
+    setTimeout(() => highlightDataCell(match.row - 1, match.col), 60);
+    updateFindMatchCountUI();
+}
+
+function findNextMatch() {
+    if (findMatches.length === 0) { return; }
+    gotoFindMatch(findMatchIndex + 1);
+}
+
+function findPrevMatch() {
+    if (findMatches.length === 0) { return; }
+    gotoFindMatch(findMatchIndex - 1);
+}
+
+function replaceCurrentMatch() {
+    if (findMatches.length === 0 || !isFindReplaceAvailable()) { return; }
+    const { row, col } = findMatches[findMatchIndex];
+    const replacement = replaceInput ? replaceInput.value : '';
+    if (!currentDisplayData[row]) { return; }
+    currentDisplayData[row][col] = replacement;
+    debounceSave();
+    renderTable(currentDisplayData, []);
+}
+
+function replaceAllMatches() {
+    if (findMatches.length === 0 || !isFindReplaceAvailable()) { return; }
+    const replacement = replaceInput ? replaceInput.value : '';
+    findMatches.forEach(({ row, col }) => {
+        if (currentDisplayData[row]) {
+            currentDisplayData[row][col] = replacement;
+        }
+    });
+    debounceSave();
+    renderTable(currentDisplayData, []);
+}
+
+let findInputTimeout;
+if (findInput) {
+    findInput.addEventListener('input', () => {
+        clearTimeout(findInputTimeout);
+        findInputTimeout = setTimeout(() => computeFindMatches(findInput.value), 300);
+    });
+    findInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (e.shiftKey) { findPrevMatch(); } else { findNextMatch(); }
+        } else if (e.key === 'Escape') {
+            closeFindReplaceBar();
+        }
+    });
+}
+if (findReplaceBtn) {
+    findReplaceBtn.addEventListener('click', () => {
+        if (findReplaceBar.classList.contains('hidden')) {
+            openFindReplaceBar();
+        } else {
+            closeFindReplaceBar();
+        }
+    });
+}
+if (findPrevBtn) { findPrevBtn.addEventListener('click', findPrevMatch); }
+if (findNextBtn) { findNextBtn.addEventListener('click', findNextMatch); }
+if (replaceBtn) { replaceBtn.addEventListener('click', replaceCurrentMatch); }
+if (replaceAllBtn) { replaceAllBtn.addEventListener('click', replaceAllMatches); }
+if (findReplaceCloseBtn) { findReplaceCloseBtn.addEventListener('click', closeFindReplaceBar); }
+if (replaceInput) {
+    replaceInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            replaceCurrentMatch();
+        } else if (e.key === 'Escape') {
+            closeFindReplaceBar();
+        }
+    });
+}
+
+document.addEventListener('keydown', (e) => {
+    const isFindShortcut = (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f';
+    if (isFindShortcut && isFindReplaceAvailable()) {
+        e.preventDefault();
+        openFindReplaceBar();
+        return;
+    }
+    if (e.key === 'Escape' && findReplaceBar && !findReplaceBar.classList.contains('hidden')) {
+        closeFindReplaceBar();
+    }
+});
+
+// =============================================================================
 // COLUMN FILTERS
 // =============================================================================
 
@@ -3188,6 +3375,10 @@ async function renderTable(data, errors) {
     }
 
     updateRowCountBadge();
+
+    if (findReplaceBar && !findReplaceBar.classList.contains('hidden')) {
+        computeFindMatches(findInput ? findInput.value : '');
+    }
 
     clearTimeout(slowLoadTimer);
     if (slowLoadModal) slowLoadModal.classList.add('hidden');

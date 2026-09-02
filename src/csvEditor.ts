@@ -820,6 +820,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						<button id="headers-btn" class="toolbar-btn" title="Toggle whether the first row is treated as a header">Headers</button>
 						<button id="goto-row-btn" class="toolbar-btn" title="Go to row by number">Go to Row</button>
 						<button id="filter-btn" class="toolbar-btn" title="Toggle column filters">Filter</button>
+					<button id="find-replace-btn" class="toolbar-btn" title="Find &amp; Replace (Ctrl/Cmd+F)">Find</button>
 						<button id="profile-btn" class="toolbar-btn" title="Toggle column profile panel">Profile</button>
 						<button id="dupes-btn" class="toolbar-btn" title="Find duplicate rows">Duplicates</button>
 						<button id="raw-view-btn" class="toolbar-btn" title="Toggle between table and raw file view">Raw</button>
@@ -881,6 +882,17 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					<button id="goto-row-ok">Go</button>
 					<button id="goto-row-cancel">✕</button>
 				</div>
+			</div>
+			<div id="find-replace-bar" class="find-replace-bar hidden">
+				<input type="text" id="find-input" placeholder="Find…" autocomplete="off" />
+				<span id="find-match-count" class="find-match-count">0 / 0</span>
+				<button id="find-prev-btn" class="find-nav-btn" title="Previous match (Shift+Enter)">↑</button>
+				<button id="find-next-btn" class="find-nav-btn" title="Next match (Enter)">↓</button>
+				<div class="toolbar-divider"></div>
+				<input type="text" id="replace-input" placeholder="Replace with…" autocomplete="off" />
+				<button id="replace-btn" title="Replace current match">Replace</button>
+				<button id="replace-all-btn" title="Replace all matches">Replace All</button>
+				<button id="find-replace-close" title="Close (Esc)">✕</button>
 			</div>
 			<div id="text-container" class="text-container hidden">
 					<pre id="raw-text"></pre>

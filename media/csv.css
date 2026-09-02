@@ -1336,6 +1336,70 @@ tr.goto-row-highlight td {
 }
 
 /* =============================================================================
+   FIND & REPLACE
+   ============================================================================= */
+
+.find-replace-bar {
+    position: fixed;
+    top: 8px;
+    right: 12px;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-focusBorder);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    padding: 6px 8px;
+    border-radius: 2px;
+}
+
+#find-input,
+#replace-input {
+    width: 140px;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    padding: 3px 6px;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+#find-input:focus,
+#replace-input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+}
+
+.find-match-count {
+    font-size: calc(var(--vscode-font-size) - 2px);
+    opacity: 0.7;
+    white-space: nowrap;
+    min-width: 44px;
+    text-align: center;
+}
+
+.find-nav-btn {
+    padding: 3px 8px;
+}
+
+#find-replace-close {
+    background: transparent;
+    border: none;
+    color: var(--vscode-editor-foreground);
+    cursor: pointer;
+    padding: 3px 6px;
+    opacity: 0.7;
+}
+
+#find-replace-close:hover {
+    opacity: 1;
+}
+
+td.find-cell-highlight {
+    animation: gotoRowFlash 1.5s ease-out forwards;
+}
+
+/* =============================================================================
    COLUMN FILTERS
    ============================================================================= */
 
