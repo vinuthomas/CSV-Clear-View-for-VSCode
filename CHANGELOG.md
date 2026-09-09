@@ -2,7 +2,7 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
-## [Unreleased]
+## [1.4.0] - 2026-09-09
 
 ### Added
 
