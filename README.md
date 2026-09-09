@@ -11,7 +11,9 @@
 </tr>
 </table>
 
-**Transform your CSV workflow with a powerful, spreadsheet-like editor built for data engineers, analysts, and scientists.** CSV ClearView brings enterprise-grade CSV viewing and editing to VS Code with color-coded columns, in-editor SQL queries, advanced data profiling, duplicate detection, and seamless handling of files up to 500MB+.
+**The CSV editor that doesn't give up on your biggest files.** Most CSV tooling for VS Code quietly stops working somewhere between 20MB and 50MB — highlighting switches off, the grid stops rendering, or you're told to open the file somewhere else. CSV ClearView is built the other way around: virtual scrolling, chunked parsing, and head/tail sampling mean a **500MB+ file opens and stays responsive**, with real SQL, full column profiling, and duplicate detection working on it the whole time.
+
+Built for data engineers, analysts, and scientists who would rather not leave the editor.
 
 ## Installation
 
@@ -54,16 +56,24 @@ You can also install the extension manually by downloading the compiled `.vsix` 
 
 ## Why CSV ClearView?
 
-Stop switching between VS Code and Excel. CSV ClearView delivers a **complete data exploration experience** without leaving your editor:
+Stop switching between VS Code, Excel, and a Python notebook. CSV ClearView delivers a **complete data exploration experience** without leaving your editor — and keeps delivering it at sizes where other tooling backs out.
 
-- **📊 Work with massive files** - Handle 500MB+ CSV files with virtual scrolling and instant head/tail sampling
-- **🔍 Query your data instantly** - Run SQL SELECT queries directly on your CSV without external tools
-- **📈 Understand your data** - Built-in statistics, type inference, and data profiling for every column
-- **🎨 Stay oriented** - Color-coded columns, sticky headers, and freeze panes keep you focused
+### What sets it apart
+
+- **🗻 No size cliff** - No 20MB warning, no 50MB cut-off, no "open this elsewhere". Virtual rendering and smart chunking keep 500MB+ files scrolling smoothly, and every feature — SQL, filters, profiling, duplicates — keeps working at that size.
+- **🔍 Real SQL, not a lookalike** - A genuine in-memory SQL engine runs full `SELECT` statements with `WHERE`, `GROUP BY`, aggregates, and joins. Not a SQL-flavoured expression syntax — the SQL you already know.
+- **📈 Profiling without a notebook** - Inferred types, null counts, distinct values, min/max ranges, and distribution histograms are one click away. No Python, no pandas, no kernel to start.
+- **🔎 Duplicate detection built in** - One click finds every duplicate row in the file, groups them together, and shows the original line number of each so you can go straight to it in the source.
+- **♻️ Non-destructive by default** - Filters, queries, sorting, and duplicate views change what you see, never what's on disk. Your file is untouched until you explicitly edit or export.
+- **🧰 One tool, not three** - Colour-coded grid, SQL, profiling, linting, raw-text view, and `.xlsx` reading in a single extension — no stacking several to get a full workflow.
+
+### Everything else you get
+
 - **✏️ Edit with confidence** - In-place cell editing with full undo/redo support
-- **🔎 Find duplicates instantly** - One-click duplicate detection with grouped, line-numbered results
+- **🔎 Find & Replace** - Search and replace across the entire grid
+- **🎨 Stay oriented** - Color-coded columns, sticky headers, and freeze panes keep you focused
 - **📋 Handle headerless files** - Toggle the header row off and filter, sort, and query log exports with generated column names
-- **⚡ Lightning fast** - Virtual rendering keeps even the largest files responsive
+- **🧪 Catch bad rows early** - Inconsistent column counts and unclosed quotes surface in the Problems pane with one-click jump-to-line
 
 Perfect for data analysis, ETL pipeline debugging, machine learning dataset inspection, log file analysis, and database exports.
 
@@ -119,6 +129,8 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 ### 🔧 Format Flexibility
 - **Excel (.xlsx) Viewing:** Open `.xlsx` workbooks directly — each sheet renders through the same colored grid, SQL query, filter, profile, and export tools as CSV. Multi-sheet workbooks get a **sheet-tab switcher** in the toolbar. Currently read-only (no cell editing or save-back to Excel).
 - **Auto-Delimiter Detection:** Automatically recognizes comma, tab, pipe, and semicolon delimiters
+- **Multi-Character Delimiters:** Files separated by `||`, `::`, `<SEP>` or any other string parse correctly — pick **Custom…** from the delimiter badge. Fully editable and saved back with the same separator
+- **Regex Delimiters:** Split on a pattern such as `\s+` or `[,;]` for whitespace-aligned logs and mixed-separator exports, with a live column-count preview before you commit. Read-only, since a pattern has no single separator to write back
 - **Multi-Format Support:** `.csv`, `.tsv`, `.tab`, `.psv` files open natively
 - **Open Any File:** Use the **"Open with CSV ClearView"** command (right-click Explorer or Command Palette) to open any file — `.txt`, `.dat`, `.log`, etc. — in the CSV editor
 - **Manual Override:** Click the delimiter badge in the toolbar to change parsing
@@ -157,7 +169,8 @@ Customize CSV ClearView through VS Code settings:
 | `csvClearView.alternatingRows` | `true` | Enable zebra-stripe row coloring |
 | `csvClearView.safeModeThreshold` | `20` | File size (MB) to trigger large-file mode options |
 | `csvClearView.forceTextColumnColoring` | `false` | Force column coloring in Plain Text mode (may impact performance) |
-| `csvClearView.delimiter` | `auto` | Delimiter: `auto`, `,`, `\t`, `\|`, or `;` |
+| `csvClearView.delimiter` | `auto` | Delimiter: `auto`, a single character (`,`, `\t`, `\|`, `;`), a multi-character string (`\|\|`, `::`), or a regex when `delimiterIsRegex` is on |
+| `csvClearView.delimiterIsRegex` | `false` | Treat `delimiter` as a regular expression. Files parsed this way are read-only |
 
 ## SQL Query Guide
 

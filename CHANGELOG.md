@@ -2,6 +2,21 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Multi-character delimiters:** Files separated by `||`, `::`, `<SEP>` or any other multi-character string now parse correctly. Choose **Custom…** from the delimiter badge in the toolbar, or set `csvClearView.delimiter` to the string. Multi-character delimiters are fully editable and round-trip on save.
+- **Regex delimiters:** Enable `csvClearView.delimiterIsRegex` (or tick **Regular expression** in the Custom… dialog) to split on a pattern such as `\s+` or `[,;]` — useful for whitespace-aligned log exports and mixed-separator files. The dialog shows a live column count for the first 20 lines before you apply. Regex mode is **read-only**: a pattern matches many different separators, so edited rows cannot be written back unambiguously.
+
+### Changed
+
+- `csvClearView.delimiter` is no longer restricted to a fixed list of five characters and accepts any string. Existing settings are unaffected.
+
+### Fixed
+
+- Custom delimiter patterns are validated before use: patterns that can match an empty string, contain nested quantifiers, or exceed 64 characters are rejected with an explanation rather than hanging the editor on a large file.
+
 ## [1.3.3] - 2026-08-17
 
 ### Fixed

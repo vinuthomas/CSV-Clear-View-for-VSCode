@@ -2,7 +2,7 @@
   "name": "csv-clearview",
   "displayName": "CSV ClearView",
   "publisher": "vinuthomas",
-  "description": "A clear and powerful CSV viewer with colored columns, sticky headers, and SQL query capabilities.",
+  "description": "Open 500MB+ CSV files without a size cliff — colored columns, real SQL queries, column profiling, and duplicate detection in one editor.",
   "version": "1.3.3",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -34,7 +34,11 @@
     "grid",
     "spreadsheet",
     "data",
-    "statistics"
+    "statistics",
+    "large files",
+    "profiling",
+    "duplicates",
+    "data analysis"
   ],
   "activationEvents": [
     "onLanguage:csv",
@@ -169,21 +173,21 @@
         "csvClearView.delimiter": {
           "type": "string",
           "default": "auto",
-          "enum": [
+          "examples": [
             "auto",
             ",",
             "\t",
             "|",
-            ";"
+            ";",
+            "||",
+            "::"
           ],
-          "enumDescriptions": [
-            "Auto-detect delimiter from file content (recommended)",
-            "Comma (,) — standard CSV",
-            "Tab (\\t) — TSV files",
-            "Pipe (|) — PSV files",
-            "Semicolon (;) — common in European locales"
-          ],
-          "description": "Column delimiter to use when parsing delimited files. 'auto' detects from the file content."
+          "markdownDescription": "Column delimiter to use when parsing delimited files.\n\n- `auto` — detect from the file content (recommended)\n- A single character such as `,`, `\\t`, `|`, or `;`\n- A multi-character string such as `||` or `::`\n- A regular expression, when `#csvClearView.delimiterIsRegex#` is enabled\n\nCan also be set per file from the delimiter badge in the toolbar."
+        },
+        "csvClearView.delimiterIsRegex": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Treat `#csvClearView.delimiter#` as a regular expression rather than a literal string.\n\nFiles parsed with a regex delimiter are **read-only**: a pattern matches many different separators, so edited rows cannot be written back unambiguously. Patterns that can match an empty string, or that contain nested quantifiers, are rejected."
         }
       }
     }
@@ -194,7 +198,7 @@
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
     "test-compile": "tsc -p ./",
-    "test": "node tests/security.test.js && node tests/excel.test.js",
+    "test": "node tests/security.test.js && node tests/excel.test.js && node tests/delimiter.test.js",
     "benchmark": "node --expose-gc benchmark/run.js"
   },
   "devDependencies": {

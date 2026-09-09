@@ -302,6 +302,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						safeModeThreshold: safeModeThresholdMB,
 						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt'),
 						delimiter: cfg.get('delimiter') || 'auto',
+						delimiterIsRegex: cfg.get('delimiterIsRegex') === true,
 						firstRowIsHeader: hasHeaders
 					}
 				});
@@ -379,6 +380,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						safeModeThreshold: safeModeThresholdMB,
 						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt'),
 						delimiter: cfg.get('delimiter') || 'auto',
+						delimiterIsRegex: cfg.get('delimiterIsRegex') === true,
 						firstRowIsHeader: hasHeaders,
 						readOnly: isExcel
 					}
