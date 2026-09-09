@@ -5,7 +5,7 @@ Automation Claude Code runs for this repo, wired up in `../settings.json`.
 | Hook | Event | What it does |
 | --- | --- | --- |
 | `block-vsix.mjs` | PreToolUse (Edit\|Write) | Refuses direct edits to `.vsix` build artifacts |
-| `verify.mjs` | PostToolUse (Edit\|Write) | Runs `npm run test-compile` then `npm test` |
+| `verify.mjs` | PostToolUse (Edit\|Write) | Type-checks and runs tests, for source files only |
 | `graph.mjs` | PostToolUse + SessionStart | Updates / reports the `code-review-graph` index |
 
 ## Why these are node scripts, not shell one-liners
@@ -23,6 +23,29 @@ not survive that:
 
 The settings use the exec form (`"command": "node"` plus `"args"`), so nothing
 passes through a shell parser on any platform.
+
+## What triggers `verify.mjs`
+
+The hook is gated so that editing a screenshot or a Markdown file costs nothing
+(~26ms to decide and exit) while a real code change still gets checked.
+
+| Edited path | Type-check | Tests |
+| --- | --- | --- |
+| `src/**/*.ts`, `tsconfig.json` | yes | yes |
+| `media/*.js`, `media/*.css` | no | yes |
+| `tests/*.js`, `webpack.config.js` | no | yes |
+| `package.json`, `.vscodeignore`, `samples/valid_data.csv` | no | yes |
+| anything else (docs, screenshots, other samples, these hooks) | no | no |
+
+The non-obvious entries are deliberate: the test suite reads `media/csv.css`,
+`.vscodeignore`, `package.json` and `samples/valid_data.csv` directly and
+asserts against their contents, so those are **not** documentation and cannot
+be skipped. **If you add a test that reads a new file, add it to `TESTED` in
+`verify.mjs`** — otherwise editing that file will silently skip the test that
+guards it.
+
+When the payload carries no usable path, the hook runs everything rather than
+guess. Better a wasted second than a missed regression.
 
 ## Conventions
 
