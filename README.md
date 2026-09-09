@@ -54,6 +54,10 @@ You can also install the extension manually by downloading the compiled `.vsix` 
 
 *Open `.xlsx` files directly — no more converting to CSV first. Multi-sheet workbooks get a sheet-tab switcher right in the toolbar so you can flip between sheets instantly.*
 
+![Custom and regex delimiter dialog parsing an aligned log file](screenshots/Custom%20and%20Regex%20Delimiters.png)
+
+*Not everything is comma-separated. Set any delimiter you like — a multi-character string such as `||`, or a regular expression — and watch the column count update live before you apply. Here a space-aligned application log is split into clean `timestamp / level / service / message` columns with `[\s]{2,}`. Give it a name and it joins the picker for every file you open.*
+
 ## Why CSV ClearView?
 
 Stop switching between VS Code, Excel, and a Python notebook. CSV ClearView delivers a **complete data exploration experience** without leaving your editor — and keeps delivering it at sizes where other tooling backs out.
@@ -66,6 +70,7 @@ Stop switching between VS Code, Excel, and a Python notebook. CSV ClearView deli
 - **🔎 Duplicate detection built in** - One click finds every duplicate row in the file, groups them together, and shows the original line number of each so you can go straight to it in the source.
 - **♻️ Non-destructive by default** - Filters, queries, sorting, and duplicate views change what you see, never what's on disk. Your file is untouched until you explicitly edit or export.
 - **🧰 One tool, not three** - Colour-coded grid, SQL, profiling, linting, raw-text view, and `.xlsx` reading in a single extension — no stacking several to get a full workflow.
+- **🔣 Any delimiter, not just commas** - Multi-character separators like `||` or `::`, or a full regular expression for space-aligned logs and mixed-separator exports. Name the ones you use and they stay in the picker.
 
 ### Everything else you get
 
@@ -144,8 +149,9 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 ✅ **Data Engineers** - Debug ETL pipelines, validate transformations, inspect data quality  
 ✅ **Data Scientists** - Quick dataset exploration, feature analysis, ML data validation  
 ✅ **Analysts** - Ad-hoc SQL queries, statistical summaries, large report inspection  
-✅ **Developers** - Log file analysis, database export review, test data generation  
-✅ **DBAs** - Query result inspection, data migration validation, schema analysis
+✅ **Developers** - Log file analysis with regex delimiters, database export review, test data generation  
+✅ **DBAs** - Query result inspection, data migration validation, schema analysis  
+✅ **SREs / Platform** - Turn space-aligned log exports, `ps`/`df` dumps, and legacy pipe-delimited feeds into a sortable, queryable grid
 
 ## Quick Start
 
@@ -158,7 +164,8 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 6. **Sort and freeze** - Click column headers to sort, right-click to freeze panes
 7. **Filter rows** - Click **Filter** to show a per-column filter row and narrow results by substring match
 8. **Edit cells** - Double-click any cell to edit in-place with undo/redo support
-9. **Handle large files** - For 20MB+ files, choose **Head**, **Tail**, or **Plain Text** mode when prompted
+9. **Parse anything** - Click the **Delim:** badge → **Custom…** to split on `||`, `::`, or a regex like `[\s]{2,}` for aligned logs — then name it to keep it
+10. **Handle large files** - For 20MB+ files, choose **Head**, **Tail**, or **Plain Text** mode when prompted
 
 ## Configuration
 
@@ -174,6 +181,85 @@ Customize CSV ClearView through VS Code settings:
 | `csvClearView.delimiter` | `auto` | Delimiter: `auto`, a single character (`,`, `\t`, `\|`, `;`), a multi-character string (`\|\|`, `::`), or a regex when `delimiterIsRegex` is on |
 | `csvClearView.delimiterIsRegex` | `false` | Treat `delimiter` as a regular expression. Files parsed this way are read-only |
 | `csvClearView.savedDelimiters` | `[]` | Named delimiters shown in the picker — `{ "name", "value", "isRegex" }`. Managed from the toolbar, or edited here directly |
+
+## Delimiters & Log Parsing
+
+Plenty of useful files aren't comma-separated. Click the **Delim:** badge in the
+toolbar to change how the file is split — the picker offers the usual suspects
+plus **Custom…** for anything else.
+
+### Multi-character delimiters
+
+Legacy exports and hand-rolled feeds often use a separator that is more than one
+character, precisely so it can't collide with the data:
+
+```
+order_id||customer||product||qty
+1001||Ada Lovelace||Analytical Engine||1
+```
+
+Enter `||` in **Custom…** and you get four clean columns. A single `|` inside a
+value won't split it. Multi-character delimiters are fully editable — edits save
+back with the same separator.
+
+### Regex delimiters
+
+Tick **Regular expression** to split on a pattern instead of a fixed string.
+The dialog shows a live column count for the first 20 lines, so you can tell
+whether the pattern is right *before* applying it.
+
+| Pattern | Splits on | Good for |
+| --- | --- | --- |
+| `[\s]{2,}` | Two or more spaces | Space-aligned logs, `ps`/`df`/`netstat` output |
+| `\s*\\|\s*` | A pipe with optional padding | `mysql`/`psql` table output |
+| `[,;]` | Either a comma or a semicolon | Exports with mixed separators |
+| `\t+` | One or more tabs | Ragged tab-aligned reports |
+
+**Log parsing example.** A typical aligned application log:
+
+```
+timestamp             level    service        message
+2026-09-09T10:14:02   INFO     auth-service   user login succeeded
+2026-09-09T10:15:31   ERROR    payment-api    upstream timeout after 30s
+```
+
+Apply `[\s]{2,}` and it becomes a four-column grid — then sort by `level`, filter
+to one service, or run SQL over it:
+
+```sql
+SELECT [service], COUNT(*) AS errors
+FROM ? WHERE [level] = 'ERROR'
+GROUP BY [service] ORDER BY errors DESC
+```
+
+> **Use ` {2,}`, not `\s+`, for aligned columns.** `\s+` matches *every* run of
+> whitespace, including the single spaces inside `user login succeeded` — that
+> field would split into three more columns. The preview warns you when a pattern
+> produces a ragged split.
+
+Regex mode is **read-only**: a pattern matches many different separators, so
+there is no single string to write edited rows back with. Sorting, filtering,
+SQL, profiling, and export all still work.
+
+### Saving delimiters you use often
+
+Type a name in the **Custom…** dialog and the button becomes **Save & apply** —
+the delimiter then appears in the picker for every file you open. Use
+**Manage saved…** to apply or delete them. The list lives in your VS Code user
+settings, so it follows your profile across workspaces:
+
+```json
+"csvClearView.savedDelimiters": [
+  { "name": "Legacy feed", "value": "||", "isRegex": false },
+  { "name": "Aligned log", "value": "[\\s]{2,}", "isRegex": true }
+]
+```
+
+### Opening files that aren't `.csv`
+
+Logs rarely end in `.csv`. Right-click any file in the Explorer and choose
+**"Open with CSV ClearView"** to open a `.log`, `.txt`, `.dat`, or extension-less
+file in the grid.
 
 ## SQL Query Guide
 
@@ -207,12 +293,17 @@ SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
 | `.tsv`, `.tab` | Tab | Tab-separated values |
 | `.psv` | Pipe (`\|`) | Pipe-separated values |
 | `.xlsx` | N/A | Excel workbook — read-only, with a sheet-tab switcher for multi-sheet files |
+| `.log`, `.txt`, `.dat`, any | Custom or regex | Open via right-click → **"Open with CSV ClearView"**, then set the delimiter from the toolbar badge |
 
-CSV ClearView automatically detects the delimiter but you can override it using the toolbar badge.
+CSV ClearView auto-detects comma, tab, pipe, and semicolon. Anything else — a multi-character separator like `||`, or a regular expression for aligned logs — is one click away on the delimiter badge. See [Delimiters & Log Parsing](#delimiters--log-parsing).
 
 ## What's New
 
 See the [CHANGELOG](changelog.md) for detailed release notes.
+
+### Unreleased
+- **New: Custom & regex delimiters** — Split on a multi-character separator such as `||`, or on a regular expression such as `[\s]{2,}` for space-aligned log files. Live column-count preview before you apply, with a warning when a pattern splits unevenly
+- **New: Saved delimiters** — Name a delimiter and it stays in the picker for every file you open; manage the list from the toolbar
 
 ### Latest Release (v1.3.1)
 - **Fixed: Markdown export pipe escaping** — A cell value with a backslash immediately before a `|` could leave the pipe unescaped in exported Markdown tables, breaking the column structure
@@ -276,7 +367,7 @@ code --install-extension csv-clearview-1.3.0.vsix
 
 ## Keywords
 
-CSV, TSV, viewer, editor, table, grid, spreadsheet, Excel, xlsx, data analysis, SQL queries, data profiling, statistics, large files, virtual scrolling, duplicate detection, delimiter detection, data science, ETL, pipe-separated, tab-separated, data visualization, column sorting, data validation, go to row, row navigation
+CSV, TSV, viewer, editor, table, grid, spreadsheet, Excel, xlsx, data analysis, SQL queries, data profiling, statistics, large files, virtual scrolling, duplicate detection, delimiter detection, custom delimiters, regex delimiters, log parsing, log file viewer, data science, ETL, pipe-separated, tab-separated, data visualization, column sorting, data validation, go to row, row navigation
 
 ## License
 MIT

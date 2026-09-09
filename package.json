@@ -38,7 +38,10 @@
     "large files",
     "profiling",
     "duplicates",
-    "data analysis"
+    "data analysis",
+    "log parsing",
+    "regex",
+    "delimiters"
   ],
   "activationEvents": [
     "onLanguage:csv",
