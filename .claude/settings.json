@@ -6,8 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo \"$CLAUDE_TOOL_INPUT\" | python3 -c \"import sys,json; f=json.load(sys.stdin).get('file_path',''); exit(1) if f.endswith('.vsix') else exit(0)\" || (echo 'Blocked: .vsix files are build artifacts, do not edit directly' >&2; exit 1)",
-            "timeout": 5
+            "command": "node",
+            "args": [".claude/hooks/block-vsix.mjs"],
+            "timeout": 10
           }
         ]
       }
@@ -18,18 +19,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /Users/vinuthomas/code/CSV-Clear-View-for-VSCode && npm run test-compile 2>&1 | tail -20",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cd /Users/vinuthomas/code/CSV-Clear-View-for-VSCode && npm test 2>&1 | tail -20",
-            "timeout": 30
+            "command": "node",
+            "args": [".claude/hooks/verify.mjs"],
+            "timeout": 120,
+            "statusMessage": "Type-checking and running tests..."
           }
         ]
       },
@@ -38,17 +31,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "code-review-graph update --skip-flows",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph update --skip-flows --repo \"/Users/vinuthomas/code/CSV-Clear-View-for-VSCode\" || true",
+            "command": "node",
+            "args": [".claude/hooks/graph.mjs", "update"],
             "timeout": 30
           }
         ]
@@ -60,18 +44,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "code-review-graph status",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph status --repo \"/Users/vinuthomas/code/CSV-Clear-View-for-VSCode\" || echo 'Not a git repo, skipping'",
-            "timeout": 10
+            "command": "node",
+            "args": [".claude/hooks/graph.mjs", "status"],
+            "timeout": 15
           }
         ]
       }
