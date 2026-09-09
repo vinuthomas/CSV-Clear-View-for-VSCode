@@ -32,6 +32,7 @@ const MAX_SPACER_PX = 10_000_000;
 let detectedDelimiter = ',';    // auto-detected or user-overridden delimiter (literal string or regex source)
 let delimiterIsRegex = false;   // true when detectedDelimiter is a regular expression source
 let delimiterIsUserOverride = false; // true once the user picks a delimiter, so reloads keep it
+let savedDelimiters = [];       // [{ name, value, isRegex }] persisted in settings
 let columnTypes = [];           // 'integer' | 'float' | 'date' | 'boolean' | 'string' per column
 let sortState = { col: -1, dir: 'none' }; // col: index, dir: 'asc'|'desc'|'none'
 let frozenCols = new Set();     // set of frozen column indices
@@ -235,6 +236,7 @@ const DELIM_SENTINELS = ['\u0000', '\u0001', '\u0002', '\u0003', '\u0004', '\u00
 
 // Longest pattern we will accept. Bounds both the ReDoS surface and the UI.
 const MAX_DELIMITER_LENGTH = 64;
+const MAX_DELIMITER_NAME_LENGTH = 40;
 
 /** Pick a sentinel that does not already occur in the text, or null if all are taken. */
 function pickDelimiterSentinel(text) {
@@ -427,6 +429,37 @@ if (delimiterDisplay) {
 }
 
 /**
+ * Position a popup under `anchorEl`, kept inside the viewport.
+ * The delimiter badge sits at the right-hand end of the toolbar, so a popup
+ * left-aligned to it runs off-screen in a narrow editor and gets clipped.
+ * Flips above the anchor when there is more room there than below.
+ */
+function positionPopupUnder(popup, anchorEl) {
+    const GAP = 4;
+    const MARGIN = 8;
+    const rect = anchorEl.getBoundingClientRect();
+
+    // Measure only after the element is in the DOM and its width is settled.
+    const width = popup.offsetWidth;
+    const height = popup.offsetHeight;
+
+    let left = rect.left;
+    if (left + width > window.innerWidth - MARGIN) {
+        left = Math.max(MARGIN, window.innerWidth - width - MARGIN);
+    }
+    left = Math.max(MARGIN, left);
+
+    let top = rect.bottom + GAP;
+    const spaceBelow = window.innerHeight - rect.bottom - GAP;
+    if (height > spaceBelow && rect.top - GAP > spaceBelow) {
+        top = Math.max(MARGIN, rect.top - height - GAP);
+    }
+
+    popup.style.left = left + 'px';
+    popup.style.top = top + 'px';
+}
+
+/**
  * Switch the active delimiter and re-parse the file.
  * Regex delimiters force read-only mode: a pattern describes a set of possible
  * separators, so there is no single string to re-join edited fields with.
@@ -451,6 +484,95 @@ function applyDelimiter(delim, isRegex) {
 function updateReadOnlyForDelimiter() {
     isReadOnly = sourceIsReadOnly || delimiterIsLossy();
     if (rawViewBtn) { rawViewBtn.classList.toggle('hidden', isReadOnly); }
+}
+
+/** List saved delimiters with apply/delete actions. */
+function showManageDelimitersDialog() {
+    document.querySelectorAll('.delimiter-custom, .delimiter-manage').forEach(el => el.remove());
+
+    const box = document.createElement('div');
+    box.className = 'delimiter-picker delimiter-manage';
+
+    const label = document.createElement('div');
+    label.className = 'delimiter-custom-label';
+    label.textContent = 'Saved delimiters';
+    box.appendChild(label);
+
+    const list = document.createElement('div');
+    list.className = 'delimiter-manage-list';
+
+    function renderRows() {
+        list.textContent = '';
+        if (!savedDelimiters.length) {
+            const empty = document.createElement('div');
+            empty.className = 'delimiter-custom-preview';
+            empty.textContent = 'No saved delimiters yet. Name one in the Custom… dialog to save it.';
+            list.appendChild(empty);
+            return;
+        }
+        savedDelimiters.forEach(saved => {
+            const row = document.createElement('div');
+            row.className = 'delimiter-manage-row';
+
+            const text = document.createElement('div');
+            text.className = 'delimiter-manage-text';
+            const nameEl = document.createElement('div');
+            nameEl.className = 'delimiter-saved-name';
+            nameEl.textContent = saved.name;
+            const valueEl = document.createElement('div');
+            valueEl.className = 'delimiter-saved-value';
+            valueEl.textContent = saved.isRegex ? '/' + saved.value + '/  (regex, read-only)' : saved.value;
+            text.appendChild(nameEl);
+            text.appendChild(valueEl);
+
+            const useBtn = document.createElement('button');
+            useBtn.className = 'delimiter-manage-use';
+            useBtn.textContent = 'Use';
+            useBtn.title = 'Apply this delimiter to the current file';
+            useBtn.addEventListener('click', () => {
+                box.remove();
+                applyDelimiter(saved.value, !!saved.isRegex);
+            });
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'delimiter-manage-delete';
+            delBtn.textContent = '\u00d7';
+            delBtn.title = 'Delete "' + saved.name + '"';
+            delBtn.setAttribute('aria-label', 'Delete ' + saved.name);
+            delBtn.addEventListener('click', () => {
+                // Optimistic removal; the host echoes the authoritative list back.
+                savedDelimiters = savedDelimiters.filter(d => d.name !== saved.name);
+                vscode.postMessage({ type: 'deleteDelimiter', name: saved.name });
+                renderRows();
+                positionPopupUnder(box, delimiterDisplay);
+            });
+
+            row.appendChild(text);
+            row.appendChild(useBtn);
+            row.appendChild(delBtn);
+            list.appendChild(row);
+        });
+    }
+
+    renderRows();
+    box.appendChild(list);
+
+    const hint = document.createElement('div');
+    hint.className = 'delimiter-custom-preview';
+    hint.textContent = 'Saved delimiters are stored in your VS Code settings and are available in every file.';
+    box.appendChild(hint);
+
+    document.body.appendChild(box);
+    positionPopupUnder(box, delimiterDisplay);
+
+    setTimeout(() => {
+        document.addEventListener('click', function closeManage(ev) {
+            if (!box.contains(ev.target)) {
+                box.remove();
+                document.removeEventListener('click', closeManage);
+            }
+        });
+    }, 0);
 }
 
 /** Prompt for a multi-character or regex delimiter, with a live column-count preview. */
@@ -482,6 +604,16 @@ function showCustomDelimiterDialog() {
     const preview = document.createElement('div');
     preview.className = 'delimiter-custom-preview';
 
+    // Optional name — filling it in saves the delimiter to the picker for reuse.
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'delimiter-custom-input delimiter-custom-name';
+    nameInput.maxLength = MAX_DELIMITER_NAME_LENGTH;
+    nameInput.placeholder = 'Name (optional) — saves it to the list';
+
+    const buttons = document.createElement('div');
+    buttons.className = 'delimiter-custom-buttons';
+
     const apply = document.createElement('button');
     apply.className = 'delimiter-custom-apply';
     apply.textContent = 'Apply';
@@ -491,7 +623,7 @@ function showCustomDelimiterDialog() {
         const pattern = input.value;
         if (!pattern) {
             preview.textContent = 'Enter one or more characters.';
-            preview.classList.remove('delimiter-custom-error');
+            preview.classList.remove('delimiter-custom-error', 'delimiter-custom-warn');
             valid = false;
             apply.disabled = true;
             return;
@@ -518,24 +650,50 @@ function showCustomDelimiterDialog() {
         }
         const counts = normalized.text.split('\n').map(l => l.split(normalized.delim).length);
         const max = counts.length ? Math.max.apply(null, counts) : 0;
-        preview.classList.remove('delimiter-custom-error');
-        preview.textContent = max > 1
-            ? max + ' columns detected in the first ' + counts.length + ' lines'
-            : 'No match in the first ' + counts.length + ' lines — the file would stay one column.';
+        const min = counts.length ? Math.min.apply(null, counts) : 0;
+        preview.classList.remove('delimiter-custom-error', 'delimiter-custom-warn');
+        if (max <= 1) {
+            preview.textContent = 'No match in the first ' + counts.length + ' lines — the file would stay one column.';
+        } else if (min !== max) {
+            // A ragged split is almost always the pattern being too greedy — the
+            // classic case is \s+ on an aligned log, where spaces inside the last
+            // field split it further. Say so before the user applies it.
+            preview.textContent = 'Ragged split: ' + min + '–' + max + ' columns across the first '
+                + counts.length + ' lines. The pattern may be matching inside a field'
+                + (regexBox.checked ? ' — try a stricter one such as  {2,}  for aligned columns.' : '.');
+            preview.classList.add('delimiter-custom-warn');
+        } else {
+            preview.textContent = max + ' columns detected in the first ' + counts.length + ' lines';
+        }
         valid = true;
         apply.disabled = false;
+    }
+
+    function refreshApplyLabel() {
+        apply.textContent = nameInput.value.trim() ? 'Save & apply' : 'Apply';
     }
 
     function commit() {
         if (!valid) { return; }
         const pattern = input.value;
         const isRegex = regexBox.checked;
+        const name = nameInput.value.trim();
         box.remove();
+        if (name) {
+            // Persisting happens on the extension host; the picker refreshes when
+            // it echoes the updated list back.
+            vscode.postMessage({ type: 'saveDelimiter', name: name, value: pattern, isRegex: isRegex });
+        }
         applyDelimiter(pattern, isRegex);
     }
 
     input.addEventListener('input', refreshPreview);
     regexBox.addEventListener('change', refreshPreview);
+    nameInput.addEventListener('input', refreshApplyLabel);
+    nameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { e.preventDefault(); box.remove(); }
+    });
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); commit(); }
         if (e.key === 'Escape') { e.preventDefault(); box.remove(); }
@@ -546,13 +704,15 @@ function showCustomDelimiterDialog() {
     box.appendChild(input);
     box.appendChild(regexRow);
     box.appendChild(preview);
-    box.appendChild(apply);
+    box.appendChild(nameInput);
+    buttons.appendChild(apply);
+    box.appendChild(buttons);
 
-    const rect = delimiterDisplay.getBoundingClientRect();
-    box.style.top = (rect.bottom + 4) + 'px';
-    box.style.left = rect.left + 'px';
     document.body.appendChild(box);
     refreshPreview();
+    refreshApplyLabel();
+    // Position after the preview text is in place, so the measured height is real.
+    positionPopupUnder(box, delimiterDisplay);
     input.focus();
     input.select();
 
@@ -601,10 +761,41 @@ function showDelimiterPicker() {
         picker.appendChild(item);
     });
 
+    // Saved (named) delimiters
+    if (savedDelimiters.length) {
+        const sep = document.createElement('div');
+        sep.className = 'delimiter-picker-heading';
+        sep.textContent = 'Saved';
+        picker.appendChild(sep);
+
+        savedDelimiters.forEach(saved => {
+            const item = document.createElement('div');
+            item.className = 'delimiter-picker-item delimiter-picker-saved';
+            if (saved.value === detectedDelimiter && !!saved.isRegex === delimiterIsRegex) {
+                item.classList.add('delimiter-picker-active');
+            }
+            const nameEl = document.createElement('span');
+            nameEl.className = 'delimiter-saved-name';
+            nameEl.textContent = saved.name;
+            const valueEl = document.createElement('span');
+            valueEl.className = 'delimiter-saved-value';
+            valueEl.textContent = saved.isRegex ? '/' + saved.value + '/' : saved.value;
+            item.appendChild(nameEl);
+            item.appendChild(valueEl);
+            item.title = (saved.isRegex ? 'Regex: ' : 'Delimiter: ') + saved.value;
+            item.addEventListener('click', () => {
+                picker.remove();
+                applyDelimiter(saved.value, !!saved.isRegex);
+            });
+            picker.appendChild(item);
+        });
+    }
+
     // Custom multi-character / regex delimiter
     const customItem = document.createElement('div');
-    customItem.className = 'delimiter-picker-item';
-    if (delimiterIsRegex || detectedDelimiter.length > 1) {
+    customItem.className = 'delimiter-picker-item delimiter-picker-action';
+    if ((delimiterIsRegex || detectedDelimiter.length > 1)
+        && !savedDelimiters.some(d => d.value === detectedDelimiter && !!d.isRegex === delimiterIsRegex)) {
         customItem.classList.add('delimiter-picker-active');
     }
     customItem.textContent = 'Custom…';
@@ -614,10 +805,19 @@ function showDelimiterPicker() {
     });
     picker.appendChild(customItem);
 
-    const rect = delimiterDisplay.getBoundingClientRect();
-    picker.style.top = (rect.bottom + 4) + 'px';
-    picker.style.left = rect.left + 'px';
+    if (savedDelimiters.length) {
+        const manageItem = document.createElement('div');
+        manageItem.className = 'delimiter-picker-item delimiter-picker-action';
+        manageItem.textContent = 'Manage saved…';
+        manageItem.addEventListener('click', () => {
+            picker.remove();
+            showManageDelimitersDialog();
+        });
+        picker.appendChild(manageItem);
+    }
+
     document.body.appendChild(picker);
+    positionPopupUnder(picker, delimiterDisplay);
 
     // Close on outside click
     setTimeout(() => {
@@ -1653,6 +1853,17 @@ window.addEventListener('message', event => {
     }
     const message = event.data;
     switch (message.type) {
+        case 'savedDelimiters':
+            // Authoritative list echoed back after a save or delete.
+            if (Array.isArray(message.savedDelimiters)) {
+                savedDelimiters = message.savedDelimiters;
+                // Keep an open Manage dialog in step with the persisted list.
+                if (document.querySelector('.delimiter-manage')) {
+                    showManageDelimitersDialog();
+                }
+            }
+            return;
+
         case 'update':
             currentText = message.text;
             // Reset guard — a fresh 'update' message always supersedes any prior render in progress
@@ -1664,6 +1875,9 @@ window.addEventListener('message', event => {
             updateHeadersBtnState();
 
             sourceIsReadOnly = !!(message.config && message.config.readOnly);
+            if (message.config && Array.isArray(message.config.savedDelimiters)) {
+                savedDelimiters = message.config.savedDelimiters;
+            }
             updateSheetTabs(message.sheets, message.activeSheet);
 
             showLoader();

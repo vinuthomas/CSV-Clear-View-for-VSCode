@@ -7,7 +7,9 @@ All notable changes to the "CSV ClearView" extension will be documented in this 
 ### Added
 
 - **Multi-character delimiters:** Files separated by `||`, `::`, `<SEP>` or any other multi-character string now parse correctly. Choose **Custom…** from the delimiter badge in the toolbar, or set `csvClearView.delimiter` to the string. Multi-character delimiters are fully editable and round-trip on save.
-- **Regex delimiters:** Enable `csvClearView.delimiterIsRegex` (or tick **Regular expression** in the Custom… dialog) to split on a pattern such as `\s+` or `[,;]` — useful for whitespace-aligned log exports and mixed-separator files. The dialog shows a live column count for the first 20 lines before you apply. Regex mode is **read-only**: a pattern matches many different separators, so edited rows cannot be written back unambiguously.
+- **Regex delimiters:** Enable `csvClearView.delimiterIsRegex` (or tick **Regular expression** in the Custom… dialog) to split on a pattern such as ` {2,}` or `[,;]` — useful for column-aligned log exports and mixed-separator files. The dialog shows a live column count for the first 20 lines before you apply, and warns when the pattern produces a ragged split (usually a sign it is matching inside a field — `\s+` on an aligned log splits every space, not just the column gaps). Regex mode is **read-only**: a pattern matches many different separators, so edited rows cannot be written back unambiguously.
+
+- **Saved delimiters:** Name a custom delimiter in the **Custom…** dialog and it is saved to the delimiter picker for every file you open. **Manage saved…** lists them with apply and delete actions. Stored in `csvClearView.savedDelimiters` in your user settings, so the list follows your VS Code profile.
 
 ### Changed
 
@@ -15,6 +17,7 @@ All notable changes to the "CSV ClearView" extension will be documented in this 
 
 ### Fixed
 
+- The delimiter picker and Custom… dialog are clamped to the viewport. The delimiter badge is right-aligned in the toolbar, so in a narrow editor both popups previously ran off the right edge and were clipped; long validation messages now wrap instead of being cut off.
 - Custom delimiter patterns are validated before use: patterns that can match an empty string, contain nested quantifiers, or exceed 64 characters are rejected with an explanation rather than hanging the editor on a large file.
 
 ## [1.3.3] - 2026-08-17

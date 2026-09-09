@@ -188,6 +188,34 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Treat `#csvClearView.delimiter#` as a regular expression rather than a literal string.\n\nFiles parsed with a regex delimiter are **read-only**: a pattern matches many different separators, so edited rows cannot be written back unambiguously. Patterns that can match an empty string, or that contain nested quantifiers, are rejected."
+        },
+        "csvClearView.savedDelimiters": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Named delimiters you have saved, shown in the delimiter picker in the toolbar.\n\nManaged from **Custom…** and **Manage saved…** on the delimiter badge, but can also be edited here directly.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "value"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Label shown in the delimiter picker, e.g. \"Double pipe\"."
+              },
+              "value": {
+                "type": "string",
+                "description": "The delimiter string, or a regular expression when isRegex is true."
+              },
+              "isRegex": {
+                "type": "boolean",
+                "default": false,
+                "description": "Treat value as a regular expression. Files parsed this way are read-only."
+              }
+            }
+          }
         }
       }
     }

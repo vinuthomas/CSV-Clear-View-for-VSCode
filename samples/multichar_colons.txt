@@ -1,0 +1,6 @@
+host::service::status::latency_ms
+web-01::nginx::healthy::12
+web-02::nginx::degraded::340
+db-01::postgres::healthy::4
+db-02::postgres::down::0
+cache-01::redis::healthy::1

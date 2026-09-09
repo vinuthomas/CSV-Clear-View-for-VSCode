@@ -1,0 +1,5 @@
+id||description||notes
+1||"contains||the delimiter"||plain note
+2||simple value||"quoted, with comma"
+3||"multi
+line value"||trailing

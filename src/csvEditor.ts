@@ -23,6 +23,57 @@ function csvEscapeField(value: string): string {
 	return value;
 }
 
+/** A user-defined, named delimiter persisted in settings. */
+interface SavedDelimiter {
+	name: string;
+	value: string;
+	isRegex: boolean;
+}
+
+/** Most saved delimiters a user can keep — bounds both the picker and the settings blob. */
+const MAX_SAVED_DELIMITERS = 50;
+const MAX_DELIMITER_NAME_LENGTH = 40;
+const MAX_DELIMITER_VALUE_LENGTH = 64;
+
+/**
+ * Read saved delimiters from settings, discarding anything malformed.
+ * The setting is user-editable JSON, so it cannot be trusted to match the schema.
+ */
+function readSavedDelimiters(cfg: vscode.WorkspaceConfiguration): SavedDelimiter[] {
+	const raw = cfg.get<unknown>('savedDelimiters');
+	if (!Array.isArray(raw)) { return []; }
+	const out: SavedDelimiter[] = [];
+	const seen = new Set<string>();
+	for (const entry of raw) {
+		if (!entry || typeof entry !== 'object') { continue; }
+		const e = entry as Record<string, unknown>;
+		const name = typeof e.name === 'string' ? e.name.trim() : '';
+		const value = typeof e.value === 'string' ? e.value : '';
+		if (!name || !value) { continue; }
+		if (name.length > MAX_DELIMITER_NAME_LENGTH || value.length > MAX_DELIMITER_VALUE_LENGTH) { continue; }
+		const key = name.toLowerCase();
+		if (seen.has(key)) { continue; }
+		const isRegex = e.isRegex === true;
+		// A stored regex must still compile, or the picker would offer a broken entry.
+		if (isRegex) {
+			try { new RegExp(value); } catch { continue; }
+		}
+		seen.add(key);
+		out.push({ name, value, isRegex });
+		if (out.length >= MAX_SAVED_DELIMITERS) { break; }
+	}
+	return out;
+}
+
+/** Persist the saved-delimiter list to the user's global settings. */
+async function writeSavedDelimiters(list: SavedDelimiter[]): Promise<void> {
+	await vscode.workspace.getConfiguration('csvClearView').update(
+		'savedDelimiters',
+		list.slice(0, MAX_SAVED_DELIMITERS),
+		vscode.ConfigurationTarget.Global
+	);
+}
+
 /** Resolve an ExcelJS cell to its display string (formula results, rich text, dates). */
 function excelCellToString(cell: ExcelJS.Cell): string {
 	let value: unknown = cell.value;
@@ -303,6 +354,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt'),
 						delimiter: cfg.get('delimiter') || 'auto',
 						delimiterIsRegex: cfg.get('delimiterIsRegex') === true,
+						savedDelimiters: readSavedDelimiters(cfg),
 						firstRowIsHeader: hasHeaders
 					}
 				});
@@ -381,6 +433,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt'),
 						delimiter: cfg.get('delimiter') || 'auto',
 						delimiterIsRegex: cfg.get('delimiterIsRegex') === true,
+						savedDelimiters: readSavedDelimiters(cfg),
 						firstRowIsHeader: hasHeaders,
 						readOnly: isExcel
 					}
@@ -530,6 +583,55 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 							webviewPanel.webview.postMessage({ type: 'queryError', message: `Error loading page: ${err instanceof Error ? err.message : String(err)}` });
 						}
 					}
+					return;
+				}
+
+				case 'saveDelimiter': {
+					// Persist a named delimiter from the Custom… dialog.
+					const name = typeof e.name === 'string' ? e.name.trim() : '';
+					const value = typeof e.value === 'string' ? e.value : '';
+					const isRegex = e.isRegex === true;
+					if (!name || !value) { return; }
+					if (name.length > MAX_DELIMITER_NAME_LENGTH || value.length > MAX_DELIMITER_VALUE_LENGTH) { return; }
+					if (isRegex) {
+						try { new RegExp(value); } catch { return; }
+					}
+					const current = readSavedDelimiters(vscode.workspace.getConfiguration('csvClearView'));
+					if (current.length >= MAX_SAVED_DELIMITERS
+						&& !current.some(d => d.name.toLowerCase() === name.toLowerCase())) {
+						vscode.window.showWarningMessage(
+							`CSV ClearView: you can save at most ${MAX_SAVED_DELIMITERS} delimiters.`);
+						return;
+					}
+					// Saving under an existing name replaces that entry in place.
+					const next = current.filter(d => d.name.toLowerCase() !== name.toLowerCase());
+					next.push({ name, value, isRegex });
+					next.sort((a, b) => a.name.localeCompare(b.name));
+					try {
+						await writeSavedDelimiters(next);
+					} catch (err) {
+						vscode.window.showErrorMessage(
+							`CSV ClearView: could not save delimiter — ${err instanceof Error ? err.message : String(err)}`);
+						return;
+					}
+					webviewPanel.webview.postMessage({ type: 'savedDelimiters', savedDelimiters: next });
+					return;
+				}
+
+				case 'deleteDelimiter': {
+					const name = typeof e.name === 'string' ? e.name.trim() : '';
+					if (!name) { return; }
+					const current = readSavedDelimiters(vscode.workspace.getConfiguration('csvClearView'));
+					const next = current.filter(d => d.name.toLowerCase() !== name.toLowerCase());
+					if (next.length === current.length) { return; }
+					try {
+						await writeSavedDelimiters(next);
+					} catch (err) {
+						vscode.window.showErrorMessage(
+							`CSV ClearView: could not delete delimiter — ${err instanceof Error ? err.message : String(err)}`);
+						return;
+					}
+					webviewPanel.webview.postMessage({ type: 'savedDelimiters', savedDelimiters: next });
 					return;
 				}
 

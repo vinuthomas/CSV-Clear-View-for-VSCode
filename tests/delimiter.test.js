@@ -215,6 +215,35 @@ function dataToCSV(data, delimiter) {
     }).join(delim)).join('\n');
 }
 
+// Mirrored from src/csvEditor.ts — the savedDelimiters setting is user-editable
+// JSON, so it cannot be trusted to match the contributed schema.
+const MAX_SAVED_DELIMITERS = 50;
+const MAX_DELIMITER_NAME_LENGTH = 40;
+const MAX_DELIMITER_VALUE_LENGTH = 64;
+
+function readSavedDelimiters(raw) {
+    if (!Array.isArray(raw)) { return []; }
+    const out = [];
+    const seen = new Set();
+    for (const entry of raw) {
+        if (!entry || typeof entry !== 'object') { continue; }
+        const name = typeof entry.name === 'string' ? entry.name.trim() : '';
+        const value = typeof entry.value === 'string' ? entry.value : '';
+        if (!name || !value) { continue; }
+        if (name.length > MAX_DELIMITER_NAME_LENGTH || value.length > MAX_DELIMITER_VALUE_LENGTH) { continue; }
+        const key = name.toLowerCase();
+        if (seen.has(key)) { continue; }
+        const isRegex = entry.isRegex === true;
+        if (isRegex) {
+            try { new RegExp(value); } catch { continue; }
+        }
+        seen.add(key);
+        out.push({ name, value, isRegex });
+        if (out.length >= MAX_SAVED_DELIMITERS) { break; }
+    }
+    return out;
+}
+
 // ============================================================
 
 async function runTests() {
@@ -278,6 +307,16 @@ async function runTests() {
     const crlfRegex = await parseCSV('a b\r\nc d', '\\s+', true);
     assertEqual(crlfRegex.data, [['a', 'b'], ['c', 'd']], 'Regex delimiter handles CRLF row boundaries');
 
+    // A column-aligned log: the last field contains single spaces, so \s+ is too
+    // greedy and splits it, while a two-or-more-spaces pattern gets it right.
+    const aligned = 'ts    level   message\n1     INFO    user login ok\n2     ERROR   upstream timed out';
+    const greedy = await parseCSV(aligned, '\\s+', true);
+    assert(greedy.data.some(r => r.length !== 3),
+        '\\s+ over-splits an aligned log (single spaces inside the last field)');
+    const strict = await parseCSV(aligned, ' {2,}', true);
+    assertEqual(strict.data, [['ts', 'level', 'message'], ['1', 'INFO', 'user login ok'], ['2', 'ERROR', 'upstream timed out']],
+        ' {2,} splits an aligned log on column gaps only');
+
     console.log('\n4. Rejected patterns (guards against hanging on large files)');
 
     assert(compileDelimiterRegex('a*').error === 'Pattern must not match an empty string.',
@@ -317,7 +356,44 @@ async function runTests() {
     const rtQuoted = await parseCSV('a||"b||c"', '||', false);
     assertEqual(dataToCSV(rtQuoted.data, '||'), 'a||"b||c"', 'A field containing the delimiter is re-quoted on write');
 
-    console.log('\n7. Source parity with media/csv.js');
+    console.log('\n7. Saved (named) delimiters');
+
+    assertEqual(readSavedDelimiters([{ name: 'Double pipe', value: '||' }]),
+        [{ name: 'Double pipe', value: '||', isRegex: false }],
+        'A well-formed entry survives with isRegex defaulted to false');
+
+    assertEqual(readSavedDelimiters([{ name: 'Aligned', value: ' {2,}', isRegex: true }]),
+        [{ name: 'Aligned', value: ' {2,}', isRegex: true }],
+        'A valid regex entry is kept');
+
+    assertEqual(readSavedDelimiters('not an array'), [], 'A non-array setting yields an empty list');
+    assertEqual(readSavedDelimiters([null, 42, 'x']), [], 'Non-object entries are discarded');
+    assertEqual(readSavedDelimiters([{ name: '', value: '||' }]), [], 'An unnamed entry is discarded');
+    assertEqual(readSavedDelimiters([{ name: 'x', value: '' }]), [], 'A valueless entry is discarded');
+    assertEqual(readSavedDelimiters([{ name: '   ', value: '||' }]), [], 'A whitespace-only name is discarded');
+    assertEqual(readSavedDelimiters([{ name: 'Bad', value: '(', isRegex: true }]), [],
+        'An entry whose regex does not compile is discarded');
+    assertEqual(readSavedDelimiters([{ name: 'x'.repeat(41), value: '||' }]), [],
+        'An over-long name is discarded');
+    assertEqual(readSavedDelimiters([{ name: 'ok', value: 'x'.repeat(65) }]), [],
+        'An over-long value is discarded');
+
+    const dupes = readSavedDelimiters([
+        { name: 'Pipes', value: '||' },
+        { name: 'pipes', value: '::' },
+    ]);
+    assertEqual(dupes, [{ name: 'Pipes', value: '||', isRegex: false }],
+        'Names are de-duplicated case-insensitively, first wins');
+
+    const many = readSavedDelimiters(
+        Array.from({ length: 60 }, (_, i) => ({ name: 'd' + i, value: '||' })));
+    assert(many.length === MAX_SAVED_DELIMITERS, 'The saved list is capped at ' + MAX_SAVED_DELIMITERS);
+
+    // A trimmed name is what gets stored, so the picker and delete-by-name agree.
+    assertEqual(readSavedDelimiters([{ name: '  Padded  ', value: '||' }]),
+        [{ name: 'Padded', value: '||', isRegex: false }], 'Names are trimmed before storage');
+
+    console.log('\n8. Source parity with media/csv.js');
 
     const src = fs.readFileSync(path.join(__dirname, '..', 'media', 'csv.js'), 'utf8');
     const extSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'csvEditor.ts'), 'utf8');
@@ -327,6 +403,11 @@ async function runTests() {
     assert(src.includes('function compileDelimiterRegex'), 'compileDelimiterRegex exists in csv.js');
     assert(src.includes('function replaceDelimiterOutsideQuotes'), 'replaceDelimiterOutsideQuotes exists in csv.js');
     assert(src.includes('function delimiterIsLossy'), 'delimiterIsLossy exists in csv.js');
+    assert(src.includes('function positionPopupUnder'), 'positionPopupUnder exists in csv.js');
+    // Both popups must clamp to the viewport — the delimiter badge is right-aligned
+    // in the toolbar, so a left-aligned popup is clipped in a narrow editor.
+    assert(!/picker\.style\.left = rect\.left/.test(src), 'Delimiter picker no longer hard-codes its left edge');
+    assert(!/box\.style\.left = rect\.left/.test(src), 'Custom dialog no longer hard-codes its left edge');
     assert(src.includes('MAX_DELIMITER_LENGTH = ' + MAX_DELIMITER_LENGTH),
         'MAX_DELIMITER_LENGTH matches the value under test');
     assert(src.includes('async function parseCSV(text, delimiter, isRegex)'),
@@ -345,6 +426,21 @@ async function runTests() {
     assert(!!props['csvClearView.delimiterIsRegex'], 'delimiterIsRegex setting is contributed');
     assert(!props['csvClearView.delimiter'].enum,
         'delimiter setting is no longer restricted to an enum');
+    assert(!!props['csvClearView.savedDelimiters'], 'savedDelimiters setting is contributed');
+    assert(props['csvClearView.savedDelimiters'].type === 'array', 'savedDelimiters is an array setting');
+    assert(src.includes('function showManageDelimitersDialog'), 'Manage dialog exists in csv.js');
+    assert(src.includes("type: 'saveDelimiter'"), 'csv.js posts saveDelimiter to the host');
+    assert(src.includes("type: 'deleteDelimiter'"), 'csv.js posts deleteDelimiter to the host');
+    assert(extSrc.includes("case 'saveDelimiter'"), 'csvEditor.ts handles saveDelimiter');
+    assert(extSrc.includes("case 'deleteDelimiter'"), 'csvEditor.ts handles deleteDelimiter');
+    assert(extSrc.includes('function readSavedDelimiters'), 'csvEditor.ts sanitises the stored list');
+    assert(extSrc.includes('ConfigurationTarget.Global'), 'Saved delimiters persist to global settings');
+
+    const css = fs.readFileSync(path.join(__dirname, '..', 'media', 'csv.css'), 'utf8');
+    assert(/\.delimiter-custom\s*\{[^}]*max-width:\s*calc\(100vw/.test(css),
+        'Custom delimiter dialog is capped to the viewport width');
+    assert(/\.delimiter-custom-preview\s*\{[^}]*overflow-wrap/.test(css),
+        'Validation messages wrap instead of clipping');
 
     console.log('\n' + '='.repeat(50));
     console.log(`Results: ${passed} passed, ${failed} failed`);

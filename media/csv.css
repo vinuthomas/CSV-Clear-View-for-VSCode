@@ -315,12 +315,14 @@ button:hover {
 .delimiter-picker {
     position: fixed;
     z-index: 500;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
     background-color: var(--vscode-editor-background);
     border: 1px solid var(--vscode-input-border);
     border-radius: 3px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     min-width: 160px;
-    overflow: hidden;
 }
 
 .delimiter-picker-item {
@@ -348,7 +350,9 @@ button:hover {
 
 /* --- Custom (multi-character / regex) delimiter dialog --- */
 .delimiter-custom {
-    min-width: 260px;
+    width: 300px;
+    max-width: calc(100vw - 16px);
+    box-sizing: border-box;
     padding: 10px 12px;
     display: flex;
     flex-direction: column;
@@ -393,10 +397,16 @@ button:hover {
     color: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
     min-height: 1.2em;
     line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .delimiter-custom-preview.delimiter-custom-error {
     color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.delimiter-custom-preview.delimiter-custom-warn {
+    color: var(--vscode-editorWarning-foreground, #cca700);
 }
 
 .delimiter-custom-apply {
@@ -417,6 +427,126 @@ button:hover {
 .delimiter-custom-apply:disabled {
     opacity: 0.5;
     cursor: default;
+}
+
+/* --- Saved (named) delimiters --- */
+.delimiter-picker-heading {
+    padding: 6px 14px 3px;
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
+    opacity: 0.8;
+    border-top: 1px solid var(--vscode-editorGroup-border);
+}
+
+.delimiter-picker-saved {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.delimiter-saved-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.delimiter-saved-value {
+    font-size: 0.85em;
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+.delimiter-picker-action {
+    font-style: italic;
+}
+
+/* --- Manage saved delimiters --- */
+.delimiter-manage {
+    width: 320px;
+    max-width: calc(100vw - 16px);
+    box-sizing: border-box;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.delimiter-manage-list {
+    display: flex;
+    flex-direction: column;
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.delimiter-manage-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--vscode-editorGroup-border);
+}
+
+.delimiter-manage-row:last-child {
+    border-bottom: none;
+}
+
+.delimiter-manage-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.delimiter-manage-text .delimiter-saved-value {
+    font-family: var(--vscode-editor-font-family);
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.delimiter-manage-use {
+    padding: 3px 10px;
+    font-size: 0.8em;
+    cursor: pointer;
+    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+    background-color: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+    border: none;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.delimiter-manage-use:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+}
+
+.delimiter-manage-delete {
+    width: 22px;
+    height: 22px;
+    line-height: 1;
+    font-size: 1.1em;
+    cursor: pointer;
+    color: var(--vscode-editor-foreground);
+    background: none;
+    border: none;
+    border-radius: 2px;
+    opacity: 0.65;
+    flex-shrink: 0;
+}
+
+.delimiter-manage-delete:hover {
+    opacity: 1;
+    color: var(--vscode-errorForeground, #f14c4c);
+    background-color: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,0.2));
+}
+
+.delimiter-custom-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.delimiter-custom-name {
+    margin-top: 2px;
 }
 
 /* A non-standard delimiter is worth flagging in the toolbar. */

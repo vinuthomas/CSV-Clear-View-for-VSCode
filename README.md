@@ -130,7 +130,9 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 - **Excel (.xlsx) Viewing:** Open `.xlsx` workbooks directly — each sheet renders through the same colored grid, SQL query, filter, profile, and export tools as CSV. Multi-sheet workbooks get a **sheet-tab switcher** in the toolbar. Currently read-only (no cell editing or save-back to Excel).
 - **Auto-Delimiter Detection:** Automatically recognizes comma, tab, pipe, and semicolon delimiters
 - **Multi-Character Delimiters:** Files separated by `||`, `::`, `<SEP>` or any other string parse correctly — pick **Custom…** from the delimiter badge. Fully editable and saved back with the same separator
-- **Regex Delimiters:** Split on a pattern such as `\s+` or `[,;]` for whitespace-aligned logs and mixed-separator exports, with a live column-count preview before you commit. Read-only, since a pattern has no single separator to write back
+- **Regex Delimiters:** Split on a pattern such as ` {2,}` or `[,;]` for column-aligned logs and mixed-separator exports, with a live column-count preview that warns you when a pattern splits unevenly. Read-only, since a pattern has no single separator to write back
+  - For space-aligned columns use ` {2,}` (two or more spaces) rather than `\s+` — `\s+` splits on *every* space, including spaces inside a message or description field
+- **Saved Delimiters:** Give a custom delimiter a name and it joins the picker for every file you open. Manage the list — apply or delete — from **Manage saved…** on the delimiter badge. Stored in your VS Code settings, so it follows your profile across workspaces
 - **Multi-Format Support:** `.csv`, `.tsv`, `.tab`, `.psv` files open natively
 - **Open Any File:** Use the **"Open with CSV ClearView"** command (right-click Explorer or Command Palette) to open any file — `.txt`, `.dat`, `.log`, etc. — in the CSV editor
 - **Manual Override:** Click the delimiter badge in the toolbar to change parsing
@@ -171,6 +173,7 @@ Customize CSV ClearView through VS Code settings:
 | `csvClearView.forceTextColumnColoring` | `false` | Force column coloring in Plain Text mode (may impact performance) |
 | `csvClearView.delimiter` | `auto` | Delimiter: `auto`, a single character (`,`, `\t`, `\|`, `;`), a multi-character string (`\|\|`, `::`), or a regex when `delimiterIsRegex` is on |
 | `csvClearView.delimiterIsRegex` | `false` | Treat `delimiter` as a regular expression. Files parsed this way are read-only |
+| `csvClearView.savedDelimiters` | `[]` | Named delimiters shown in the picker — `{ "name", "value", "isRegex" }`. Managed from the toolbar, or edited here directly |
 
 ## SQL Query Guide
 
