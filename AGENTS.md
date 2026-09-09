@@ -181,6 +181,12 @@ The extension communicates with the webview via `postMessage`:
 - Type inference samples max 1,000 rows (not entire file)
 - Row index checkpoints prevent O(n) memory usage for massive files
 
+## Backlog
+
+Planned-but-unstarted work lives in `TODO.md` at the project root, including the
+full implementation plan for Parquet support. Add new planned features there
+rather than leaving them only in commit messages or issues.
+
 ## Release Management Guidelines
 
 ### ⚠️ CRITICAL: Release Approval Required

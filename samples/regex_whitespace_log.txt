@@ -1,0 +1,6 @@
+timestamp             level    service        message
+2026-09-09T10:14:02   INFO     auth-service   user login succeeded
+2026-09-09T10:14:07   WARN     auth-service   token nearing expiry
+2026-09-09T10:15:31   ERROR    payment-api    upstream timeout after 30s
+2026-09-09T10:15:33   INFO     payment-api    retry scheduled
+2026-09-09T10:16:00   DEBUG    scheduler      queue depth 42

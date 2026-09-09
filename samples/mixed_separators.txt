@@ -1,0 +1,5 @@
+region,country;city,population
+EMEA,France;Paris,2148000
+EMEA,Germany;Berlin,3645000
+APAC,Japan;Tokyo,13960000
+AMER,Brazil;Sao Paulo,12330000
