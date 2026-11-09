@@ -2,6 +2,12 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.4.1] - 2026-11-09
+
+### Fixed
+
+- **Dependabot security alerts:** Resolved all open alerts by updating transitive dependencies `undici` (7.30.2), `fast-uri` (3.1.9), `qs` (6.17.1), `markdown-it` (14.3.3) and `@azure/msal-node` (7.2.1, via `@azure/identity`). Raised the `glob` override to `^14.0.2` and added a scoped `minimatch ^11.0.1` override under `@vscode/vsce` to patch the glob and minimatch advisories without touching the older `minimatch` used by `exceljs`. All affected packages are build/packaging tooling or unreachable from the extension at runtime (`package-lock.json` and `package.json` overrides only, no source changes).
+
 ## [1.4.0] - 2026-09-09
 
 ### Added
