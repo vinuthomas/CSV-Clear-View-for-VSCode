@@ -3,7 +3,7 @@
   "displayName": "CSV ClearView",
   "publisher": "vinuthomas",
   "description": "Open 500MB+ CSV files without a size cliff — colored columns, real SQL queries, column profiling, and duplicate detection in one editor.",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
@@ -247,11 +247,14 @@
   },
   "overrides": {
     "glob": {
-      ".": "^13.0.0",
+      ".": "^14.0.2",
       "minimatch": {
         "brace-expansion": "^5.0.9"
       }
     },
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "@vscode/vsce": {
+      "minimatch": "^11.0.1"
+    }
   }
 }
