@@ -308,40 +308,18 @@ See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
 - **New: Custom & regex delimiters** — Split on a multi-character separator such as `||`, or on a regular expression such as `[\s]{2,}` for space-aligned log files. Live column-count preview before you apply, with a warning when a pattern splits unevenly
 - **New: Saved delimiters** — Name a delimiter and it stays in the picker for every file you open; manage the list from the toolbar
 
-### Recent Highlights (v1.3.1)
-- **Fixed: Markdown export pipe escaping** — A cell value with a backslash immediately before a `|` could leave the pipe unescaped in exported Markdown tables, breaking the column structure
+### Recent Highlights (v1.3.0–v1.3.1)
+- **New: Excel (.xlsx) viewing** (v1.3.0) — Open `.xlsx` workbooks directly in the same grid used for CSV, with a sheet-tab switcher for multi-sheet files. Read-only for now (no cell editing or save-back to Excel).
+- **Fixed: Markdown export pipe escaping** (v1.3.1) — A cell value with a backslash immediately before a `|` could leave the pipe unescaped in exported Markdown tables, breaking the column structure
 
-### Recent Highlights (v1.3.0)
-- **New: Excel (.xlsx) viewing** — Open `.xlsx` workbooks directly in the same grid used for CSV, with a sheet-tab switcher for multi-sheet files. Read-only for now (no cell editing or save-back to Excel).
-
-### Recent Highlights (v1.2.0)
-- **New: Headers toggle** — A **Headers** toolbar button toggles whether the first row is treated as a header, so headerless files (e.g. exported logs) get generic `Column 1..N` names and can still be filtered, sorted, and queried
-- **New: Row & column count badge** — The toolbar shows a live `rows × cols` badge, including how many rows are hidden when filters or a query are active
-- **New: Raw file view** — A **Raw** toolbar button flips between the table and the underlying file text without reopening the editor
-- **Two-row toolbar** — Query bar and tool buttons are now split across two rows so the SQL input has room to breathe
-
-### Recent Highlights (v1.1.0)
-- **New: Export** — Click the new **Export** toolbar button to save your data as JSON, Markdown, or HTML. Export the **Full File**, or just the **Current View** (whatever's filtered, sorted, or returned by a SQL query) as CSV, JSON, Markdown, or HTML. Replaces the old query-only Save CSV button.
-
-### Recent Highlights (v1.0.15)
-- **Column filters re-enabled** — The **Filter** toolbar button is back, letting you show a per-column filter row and narrow rows by substring match
-
-### Recent Highlights (v1.0.14)
-- **New: Column Histogram** — Shift+click any numeric column header to see an instant distribution histogram in the stats popover, alongside min/max/mean/median and percentiles
-
-### Recent Highlights (v1.0.13)
-- **10 correctness bug fixes** — CSV parsing, cell editing on large files, RFC-4180 quote handling in chunked mode, whitespace coercion in SQL, and more
-
-### Earlier (v1.0.7–v1.0.8)
-- **New: Open with CSV ClearView command** — Open any file (`.txt`, `.dat`, `.log`, etc.) in the CSV editor via right-click or Command Palette
-- **New: Duplicate Row Detection** — One-click scan finds all duplicate rows, highlights them in amber, and groups them with original CSV line numbers
-- **New: Go to Row** — Jump to any row by number with a single keystroke
-
-### Earlier (v1.0.3–v1.0.6)
-- Moved SQL execution to the extension host — removed `unsafe-eval` from Content Security Policy
-- Fixed SQL aggregation functions (AVG, SUM, MIN, MAX) on numeric CSV columns
-- Better SQL error messages for common mistakes (double quotes, etc.)
-- Dependency and security updates
+### Earlier Highlights (v1.0.3–v1.2.0)
+- **Headers toggle** (v1.2.0) — A **Headers** toolbar button toggles whether the first row is treated as a header, so headerless files (e.g. exported logs) get generic `Column 1..N` names and can still be filtered, sorted, and queried
+- **Row & column count badge, Raw file view, two-row toolbar** (v1.2.0) — Live `rows × cols` badge (including hidden-row counts), a **Raw** button to flip between table and file text, and a toolbar split across two rows
+- **Export** (v1.1.0) — Save the **Full File** or the **Current View** (filtered, sorted, or SQL result) as CSV, JSON, Markdown, or HTML
+- **Column filters and histograms** (v1.0.14–v1.0.15) — Per-column substring filters, plus Shift+click on a numeric header for a distribution histogram alongside min/max/mean/median and percentiles
+- **10 correctness bug fixes** (v1.0.13) — CSV parsing, cell editing on large files, RFC-4180 quote handling in chunked mode, whitespace coercion in SQL, and more
+- **Open with CSV ClearView, Duplicate Row Detection, Go to Row** (v1.0.7–v1.0.8) — Open any file type in the CSV editor, find and group duplicate rows, and jump to a row by number
+- **SQL hardening** (v1.0.3–v1.0.6) — SQL moved to the extension host (removed `unsafe-eval` from the CSP), fixed AVG/SUM/MIN/MAX on numeric columns, and clearer SQL error messages
 
 ## Development
 
