@@ -299,13 +299,16 @@ CSV ClearView auto-detects comma, tab, pipe, and semicolon. Anything else — a 
 
 ## What's New
 
-See the [CHANGELOG](changelog.md) for detailed release notes.
+See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
 
-### Unreleased
+### Latest Release (v1.4.1)
+- **Fixed: Dependabot security alerts** — Updated transitive build/packaging dependencies to resolve all open advisories (no source changes)
+
+### Recent Highlights (v1.4.0)
 - **New: Custom & regex delimiters** — Split on a multi-character separator such as `||`, or on a regular expression such as `[\s]{2,}` for space-aligned log files. Live column-count preview before you apply, with a warning when a pattern splits unevenly
 - **New: Saved delimiters** — Name a delimiter and it stays in the picker for every file you open; manage the list from the toolbar
 
-### Latest Release (v1.3.1)
+### Recent Highlights (v1.3.1)
 - **Fixed: Markdown export pipe escaping** — A cell value with a backslash immediately before a `|` could leave the pipe unescaped in exported Markdown tables, breaking the column structure
 
 ### Recent Highlights (v1.3.0)
