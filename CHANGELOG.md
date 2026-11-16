@@ -11,7 +11,13 @@ All notable changes to the "CSV ClearView" extension will be documented in this 
 ### Changed
 
 - **Marketplace listing:** New display name (`CSV ClearView: CSV Viewer & Editor with SQL`), description, and search keywords so the extension shows up for searches like "csv viewer", "csv editor", "large csv", and "excel viewer".
-- **README:** Restructured around a comparison table, FAQ, and a shorter quick start. Corrected the large-file description: files up to 500MB get every feature, and larger files open in Paged View, where SQL and editing are off. Development instructions moved to `CONTRIBUTING.md`, and screenshots were renamed to descriptive file names.
+- **Slow-load prompt offers Paged View:** When a full load is taking a while, the prompt now offers **Paged View** (browse the file as a table right away, at any size) alongside **Plain Text** and **Continue**. Switching cancels the in-progress load so it can't redraw over the paged table later. Not shown for Excel workbooks.
+- **README:** Restructured around a comparison table, FAQ, and a shorter quick start. Corrected the large-file description: files up to 500MB open fully in the grid, SQL works up to about 150–175MB (see below), and files over 500MB open in Paged View, where SQL and editing are off. Development instructions moved to `CONTRIBUTING.md`, and screenshots were renamed to descriptive file names.
+
+### Fixed
+
+- **SQL on large files crashed the editor:** Running a query on a very large file (for example 500MB) turned the editor panel grey. A query sends the whole dataset to the extension host as a single message, about 2.25× the file size, and building it ran past V8's ~512MB string limit and the webview's memory. SQL now checks an estimate of the message size first and shows a clear message instead. The limit is the smaller of 400MB (safely under V8's ceiling) and 20% of physical memory ÷ 4.5 (the measured memory cost across processes), which works out to about 160MB of CSV on an 8GB machine and about 175MB on 16GB or more. Query results are checked the same way, so `SELECT *` with no `WHERE` on a big file is stopped instead of crashing on the way back.
+- **Slow-load prompt had no styling:** The prompt's layout, border and button colors were set with inline `style` attributes, which the webview's Content Security Policy blocks, so they never applied. They now live in the stylesheet.
 
 ## [1.4.1] - 2026-11-09
 

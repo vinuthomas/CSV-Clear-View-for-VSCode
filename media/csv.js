@@ -3,6 +3,9 @@ const vscode = acquireVsCodeApi();
 // --- State ---
 let currentConfig = {};
 let originalDataObjects = []; // Array of Objects for SQL
+// Largest SQL message (bytes of JSON) to send to the extension host. The host
+// computes it from physical memory (src/sqlLimits.ts); this is a safe fallback.
+let sqlPayloadLimit = 32 * 1024 * 1024;
 let originalRawData = []; // Array of Arrays for Render
 let currentDisplayData = []; // Data currently being shown (full or filtered)
 let findMatches = [];       // [{row, col}] — indices into currentDisplayData
@@ -10,6 +13,7 @@ let findMatchIndex = -1;    // index into findMatches of the current match
 let autocompleteOptions = []; // Shared source for autocomplete
 let currentFocus = -1; // Shared focus state for autocomplete
 let isUpdating = false; // Guard for overlapping updates
+let loadGeneration = 0; // Bumped on every new load; an in-flight load with an older value abandons itself
 let pendingUpdateTimeout = null; // Tracks the scheduled render so a newer message can cancel it
 
 // --- Query History State ---
@@ -121,6 +125,7 @@ const errorRuler = document.getElementById('error-ruler');
 const slowLoadModal = document.getElementById('slow-load-modal');
 const switchToTextBtn = document.getElementById('switch-to-text');
 const continueWaitingBtn = document.getElementById('continue-waiting');
+const switchToPagedBtn = document.getElementById('switch-to-paged');
 const profileBtn = document.getElementById('profile-btn');
 const schemaPanel = document.getElementById('schema-panel');
 const schemaPanelBody = document.getElementById('schema-panel-body');
@@ -1640,6 +1645,18 @@ if (tableContainer) layoutObserver.observe(tableContainer, { attributes: true, a
 if (textContainer) layoutObserver.observe(textContainer, { attributes: true, attributeFilter: ['class'] });
 
 // Modal handlers
+if (switchToPagedBtn) {
+    switchToPagedBtn.addEventListener('click', () => {
+        isRenderingInterrupted = true;
+        if (slowLoadModal) slowLoadModal.classList.add('hidden');
+        // Cancel the in-flight full parse now rather than when the host replies.
+        loadGeneration++;
+        isUpdating = false;
+        showLoader();
+        vscode.postMessage({ type: 'switchToPagedView' });
+    });
+}
+
 if (switchToTextBtn) {
     switchToTextBtn.addEventListener('click', () => {
         isRenderingInterrupted = true;
@@ -1868,6 +1885,7 @@ window.addEventListener('message', event => {
             currentText = message.text;
             // Reset guard — a fresh 'update' message always supersedes any prior render in progress
             isUpdating = false;
+            loadGeneration++;
             // Leave raw view — the branches below set visibility for the new mode
             resetRawViewState();
             // Header mode comes from the setting on every fresh load
@@ -1875,6 +1893,9 @@ window.addEventListener('message', event => {
             updateHeadersBtnState();
 
             sourceIsReadOnly = !!(message.config && message.config.readOnly);
+            if (message.config && typeof message.config.sqlPayloadLimit === 'number' && message.config.sqlPayloadLimit > 0) {
+                sqlPayloadLimit = message.config.sqlPayloadLimit;
+            }
             if (message.config && Array.isArray(message.config.savedDelimiters)) {
                 savedDelimiters = message.config.savedDelimiters;
             }
@@ -1905,6 +1926,12 @@ window.addEventListener('message', event => {
             }
             updateDelimiterBadge(detectedDelimiter);
             updateReadOnlyForDelimiter();
+
+            // Paged View streams rows from the file on disk — not available for
+            // Excel workbooks, which are converted in memory.
+            if (switchToPagedBtn) {
+                switchToPagedBtn.classList.toggle('hidden', !!(message.config && message.config.readOnly));
+            }
 
             if (message.config.showSlowLoadPrompt && message.viewMode !== 'chunked') {
                 slowLoadTimer = setTimeout(() => {
@@ -2013,6 +2040,7 @@ window.addEventListener('message', event => {
                     pendingUpdateTimeout = null;
                     if (isUpdating) return;
                     isUpdating = true;
+                    const gen = loadGeneration;
 
                     // Preserve scroll position
                     const savedScrollTop = tableContainer.scrollTop;
@@ -2021,6 +2049,8 @@ window.addEventListener('message', event => {
                     try {
                         if (message.viewMode !== 'text') {
                             await updateContent(message.text, message.config);
+                            // Superseded by a newer load — it owns the view and the loader now.
+                            if (gen !== loadGeneration) { return; }
 
                             // Restore scroll position
                             tableContainer.scrollTop = savedScrollTop;
@@ -2033,8 +2063,10 @@ window.addEventListener('message', event => {
                         errorContainer.textContent = "Error loading CSV: " + e.message;
                         errorContainer.classList.remove('hidden');
                     } finally {
-                        isUpdating = false;
-                        hideLoader();
+                        if (gen === loadGeneration) {
+                            isUpdating = false;
+                            hideLoader();
+                        }
                     }
                 }, 50);
             }
@@ -3172,7 +3204,12 @@ if (dupesBtn) {
 
 async function updateContent(text, config) {
     currentConfig = config;
-    const { data, errors } = await parseCSV(text, detectedDelimiter);
+    // A newer load (e.g. switching to Paged View from the slow-load prompt)
+    // supersedes this one: stop parsing and leave the state alone.
+    const gen = loadGeneration;
+    const parsed = await parseCSV(text, detectedDelimiter, undefined, () => gen !== loadGeneration);
+    if (parsed.cancelled || gen !== loadGeneration) { return; }
+    const { data, errors } = parsed;
 
     // No header row in the file: inject a synthetic one so data[0] stays the header.
     if (!hasHeaders && data.length > 0) {
@@ -3304,6 +3341,20 @@ function runQuery() {
     setTimeout(async () => {
         try {
             if (originalDataObjects.length === 0 && originalRawData.length > 0) {
+                // The whole dataset is sent to the extension host in one message.
+                // Past the limit that message can't be built (V8 string ceiling)
+                // or exhausts memory, crashing the webview — so refuse up front.
+                const payloadBytes = estimateSqlPayloadBytes(originalRawData);
+                if (payloadBytes > sqlPayloadLimit) {
+                    const mb = (n) => Math.round(n / (1024 * 1024)) + 'MB';
+                    errorContainer.textContent =
+                        `Query Error: This file is too large for SQL — a query needs about ${mb(payloadBytes)} of data, ` +
+                        `and the limit on this machine is ${mb(sqlPayloadLimit)}. ` +
+                        `Use Filter to narrow rows, or reopen the file with Show Head / Show Tail to query a sample.`;
+                    errorContainer.classList.remove('hidden');
+                    hideLoader();
+                    return;
+                }
                 originalDataObjects = await dataToObjects(originalRawData);
             }
 
@@ -3499,6 +3550,31 @@ async function dataToObjects(data) {
     return objects;
 }
 
+/**
+ * Estimate the JSON size of the SQL message that dataToObjects + postMessage
+ * would produce, from an evenly spaced sample of rows — milliseconds even for
+ * millions of rows, and without building the objects.
+ */
+function estimateSqlPayloadBytes(data, sampleSize) {
+    if (!data || data.length < 2) return 0;
+    const headers = data[0];
+    const rowCount = data.length - 1;
+    const step = Math.max(1, Math.floor(rowCount / (sampleSize || 1000)));
+    let sampled = 0;
+    let bytes = 0;
+    for (let i = 1; i < data.length; i += step) {
+        const row = data[i];
+        const obj = {};
+        for (let j = 0; j < headers.length; j++) {
+            const val = row[j];
+            obj[headers[j]] = (val != null && val.trim() !== '' && !isNaN(Number(val.trim()))) ? Number(val.trim()) : val;
+        }
+        bytes += JSON.stringify(obj).length + 1;
+        sampled++;
+    }
+    return Math.ceil((bytes / sampled) * rowCount);
+}
+
 function objectsToData(objects) {
     if (objects.length === 0) return [];
     const headers = Object.keys(objects[0]);
@@ -3514,7 +3590,9 @@ function objectsToData(objects) {
 // CSV PARSER — now accepts a delimiter parameter
 // =============================================================================
 
-async function parseCSV(text, delimiter, isRegex) {
+// isCancelled (optional): checked at each yield point; when it returns true the
+// parse stops early and resolves to { data: [], errors: [], cancelled: true }.
+async function parseCSV(text, delimiter, isRegex, isCancelled) {
     let delim = delimiter || detectedDelimiter || ',';
     const useRegex = (isRegex === undefined) ? delimiterIsRegex : isRegex;
 
@@ -3541,6 +3619,9 @@ async function parseCSV(text, delimiter, isRegex) {
 
         if (i % 500000 === 0 && i > 0) {
             await new Promise(resolve => setTimeout(resolve, 0));
+            if (isCancelled && isCancelled()) {
+                return { data: [], errors: [], cancelled: true };
+            }
         }
 
         if (inQuotes) {

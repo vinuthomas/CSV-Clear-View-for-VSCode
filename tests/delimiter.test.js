@@ -410,7 +410,7 @@ async function runTests() {
     assert(!/box\.style\.left = rect\.left/.test(src), 'Custom dialog no longer hard-codes its left edge');
     assert(src.includes('MAX_DELIMITER_LENGTH = ' + MAX_DELIMITER_LENGTH),
         'MAX_DELIMITER_LENGTH matches the value under test');
-    assert(src.includes('async function parseCSV(text, delimiter, isRegex)'),
+    assert(/async function parseCSV\(text, delimiter, isRegex[,)]/.test(src),
         'parseCSV accepts the isRegex argument');
 
     // The lossy-delimiter write guard must stay in place.

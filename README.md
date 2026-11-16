@@ -11,7 +11,7 @@
 </tr>
 </table>
 
-**View, query, and profile CSV files without leaving VS Code — including the big ones.** CSV ClearView opens `.csv`, `.tsv`, `.psv`, and Excel `.xlsx` files in a fast, color-coded grid with real SQL, column statistics, and a duplicate finder built in. Files up to 500MB get every feature; anything larger opens in a paged view you can scroll end to end, at any size.
+**View, query, and profile CSV files without leaving VS Code — including the big ones.** CSV ClearView opens `.csv`, `.tsv`, `.psv`, and Excel `.xlsx` files in a fast, color-coded grid with real SQL, column statistics, and a duplicate finder built in. Files up to 500MB open fully in the grid, SQL works on files up to about 150–175MB depending on your machine's memory, and anything larger than 500MB opens in a paged view you can scroll end to end, at any size.
 
 Built for data engineers, analysts, and developers who would rather not open Excel or start a Python notebook just to look at a file.
 
@@ -19,7 +19,7 @@ Built for data engineers, analysts, and developers who would rather not open Exc
 
 ## Why CSV ClearView?
 
-- **🗻 Built for large CSV files** — Virtual scrolling and chunked parsing keep files up to 500MB fully interactive: SQL, filters, profiling, and duplicates all work. Past 500MB, Paged View streams rows on demand so even multi-GB files open and scroll.
+- **🗻 Built for large CSV files** — Virtual scrolling and chunked parsing open files up to 500MB fully in the grid. Past 500MB, Paged View streams rows on demand so even multi-GB files open and scroll. See [Large File Support](#-large-file-support) for what works at each size.
 - **🔍 Real SQL, not a lookalike** — Run full `SELECT` statements with `WHERE`, `GROUP BY`, aggregates, and `ORDER BY` against your CSV. The SQL you already know, no new query language to learn.
 - **📈 Column profiling without a notebook** — Inferred types, null counts, distinct values, min/max, percentiles, and histograms are one click away. No Python, no pandas, no kernel.
 - **🔎 Duplicate row finder** — One click finds every duplicate row, groups matches together, and shows each row's original line number.
@@ -49,7 +49,7 @@ A quick, honest look at the most popular ways to work with CSV files in VS Code.
 | Find & group duplicate rows | ❌ | ❌ | drop duplicates | ✅ |
 | Excel `.xlsx` viewing | ❌ | ❌ | ✅ | ✅ (read-only) |
 | Needs Python installed | No | No | **Yes** | No |
-| Large files | features off above 50MB | not designed for large files | memory-bound (pandas) | full features to 500MB, paged view beyond |
+| Large files | features off above 50MB | not designed for large files | memory-bound (pandas) | full grid to 500MB (SQL to ~150–175MB), paged view beyond |
 
 > Checked November 2026 against each extension's Marketplace README. All three are excellent tools — Rainbow CSV is great for lightweight highlighting in the text editor, and Data Wrangler is the right pick if you want generated pandas code. CSV ClearView focuses on exploring and querying big files with zero setup.
 
@@ -114,7 +114,9 @@ A quick, honest look at the most popular ways to work with CSV files in VS Code.
 ### 📊 Large File Support
 - **Virtual Scrolling:** Only visible rows are rendered, so large grids stay responsive
 - **You choose how to open it:** Files over 20MB (configurable) ask how to open them — **Open Full File**, **Paged View**, **Show Head** / **Show Tail** (first or last 1,000 rows), or **Plain Text**
-- **Full features up to 500MB:** Open the full file and SQL, filters, profiling, and duplicate detection all work on every row
+- **Full grid up to 500MB:** Choose **Open Full File** and every row is loaded into the grid
+- **SQL up to about 150–175MB:** A query sends the whole dataset to VS Code's extension host, which needs roughly 2× the file size in one message plus several times that in memory. The limit is set from your machine's memory — about 160MB of CSV on an 8GB machine, about 175MB on 16GB or more. Past it, the query bar tells you instead of running out of memory; use **Filter**, or **Show Head** / **Show Tail** to query a sample. A query that *returns* too many rows (for example `SELECT *` with no `WHERE`) is stopped the same way
+- **Switch mid-load:** If a full load is taking a while, the prompt offers **Paged View** or **Plain Text** so you're never stuck waiting
 - **Paged View for anything bigger:** Files over 500MB stream rows on demand from a row index, so multi-GB files open and scroll. Paged View is for browsing — SQL and editing are turned off in this mode
 - **Smart Chunking:** Files are processed in chunks to keep VS Code responsive
 
@@ -147,10 +149,10 @@ A quick, honest look at the most popular ways to work with CSV files in VS Code.
 ## FAQ
 
 ### How do I open a large CSV file in VS Code?
-Install CSV ClearView and open the file. Files over 20MB ask how you'd like to open them: load the full file into the grid (all features, up to 500MB), browse it in **Paged View** (any size), preview the first or last 1,000 rows, or open it as plain text. By comparison, text-editor highlighters such as Rainbow CSV are switched off by VS Code for files above 50MB.
+Install CSV ClearView and open the file. Files over 20MB ask how you'd like to open them: load the full file into the grid (up to 500MB; SQL up to about 150–175MB), browse it in **Paged View** (any size), preview the first or last 1,000 rows, or open it as plain text. By comparison, text-editor highlighters such as Rainbow CSV are switched off by VS Code for files above 50MB.
 
 ### How do I run SQL queries on a CSV file in VS Code?
-Open the CSV in CSV ClearView and type a query in the SQL bar at the top of the grid. Use `?` as the table name and brackets for column names: `SELECT [Region], SUM([Sales]) FROM ? GROUP BY [Region]`. Only `SELECT` statements are allowed, so a query can never change your file. See the [SQL Query Guide](#sql-query-guide).
+Open the CSV in CSV ClearView and type a query in the SQL bar at the top of the grid. Use `?` as the table name and brackets for column names: `SELECT [Region], SUM([Sales]) FROM ? GROUP BY [Region]`. Only `SELECT` statements are allowed, so a query can never change your file. SQL works on files up to about 150–175MB, depending on your machine's memory. See the [SQL Query Guide](#sql-query-guide).
 
 ### Can I view Excel `.xlsx` files in VS Code?
 Yes. `.xlsx` files open in the same grid as CSV files, with a sheet-tab switcher for multi-sheet workbooks. SQL, filters, profiling, and export all work. Excel files are read-only for now.
@@ -307,7 +309,9 @@ See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
 
 ### Latest Release (v1.5.0)
 - **New: Rating prompt** — After sustained use (10+ opens over 3+ days), a one-time notification asks whether you'd like to rate CSV ClearView. "Later" defers it; "Don't ask again" ends it for good
-- **Improved: Marketplace listing and README** — Clearer name and description, a comparison table, an FAQ, and an accurate description of large-file behaviour (every feature up to 500MB; Paged View beyond)
+- **Fixed: SQL on large files crashing the editor** — Querying a very large file (for example 500MB) turned the editor grey. SQL now has a size limit based on your machine's memory and shows a clear message past it, and oversized results are stopped the same way
+- **New: Paged View from the slow-load prompt** — When a full load is taking a while, switch straight to Paged View to browse the file as a table at any size
+- **Improved: Marketplace listing and README** — Clearer name and description, a comparison table, an FAQ, and an accurate description of large-file behaviour
 
 ### Recent Highlights (v1.4.0–v1.4.1)
 - **New: Custom & regex delimiters** (v1.4.0) — Split on a multi-character separator such as `||`, or on a regular expression such as `[\s]{2,}` for space-aligned log files. Live column-count preview before you apply, with a warning when a pattern splits unevenly

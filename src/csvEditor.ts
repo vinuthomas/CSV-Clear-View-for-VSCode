@@ -2,7 +2,9 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as ExcelJS from 'exceljs';
+import * as os from 'os';
 import { maybePromptForReview } from './reviewPrompt';
+import { computeSqlPayloadLimit, estimateJsonBytes, formatMB } from './sqlLimits';
 
 let _alasql: ((query: string, params?: any[]) => any) | null = null;
 function getAlasql(): (query: string, params?: any[]) => any {
@@ -115,6 +117,8 @@ function worksheetToCsv(worksheet: ExcelJS.Worksheet): string {
 
 const CHUNKED_MODE_THRESHOLD = 500 * 1024 * 1024; // 500 MB
 const CHUNK_ROWS = 500; // rows per page delivered to the webview
+// Largest SQL request/result message this machine should attempt (see sqlLimits.ts).
+const SQL_PAYLOAD_LIMIT = computeSqlPayloadLimit(os.totalmem());
 
 /**
  * Define a custom document for CSV files.
@@ -440,7 +444,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						delimiterIsRegex: cfg.get('delimiterIsRegex') === true,
 						savedDelimiters: readSavedDelimiters(cfg),
 						firstRowIsHeader: hasHeaders,
-						readOnly: isExcel
+						readOnly: isExcel,
+						sqlPayloadLimit: SQL_PAYLOAD_LIMIT
 					}
 				});
 			} catch (err) {
@@ -519,6 +524,18 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				}
 				try {
 					const result = getAlasql()(e.query, [e.data]);
+					// The result travels back as one message, so it hits the same
+					// size ceiling as the request (e.g. SELECT * with no WHERE).
+					if (Array.isArray(result)) {
+						const resultBytes = estimateJsonBytes(result);
+						if (resultBytes > SQL_PAYLOAD_LIMIT) {
+							webviewPanel.webview.postMessage({
+								type: 'queryError',
+								message: `The query returned ${result.length.toLocaleString()} rows (about ${formatMB(resultBytes)}), more than can be displayed (limit ${formatMB(SQL_PAYLOAD_LIMIT)} on this machine). Add a WHERE clause or LIMIT to narrow it.`
+							});
+							return;
+						}
+					}
 					webviewPanel.webview.postMessage({ type: 'queryResult', result });
 				} catch (err: any) {
 					webviewPanel.webview.postMessage({ type: 'queryError', message: err.message || String(err) });
@@ -637,6 +654,15 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						return;
 					}
 					webviewPanel.webview.postMessage({ type: 'savedDelimiters', savedDelimiters: next });
+					return;
+				}
+
+				case 'switchToPagedView': {
+					// From the slow-load prompt: abandon the full in-memory load and
+					// stream the file a page at a time instead (works at any size).
+					if (isExcel || viewMode === 'chunked') { return; }
+					viewMode = 'chunked';
+					await updateWebview();
 					return;
 				}
 
@@ -901,12 +927,13 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				</div>
 
 				<div id="slow-load-modal" class="loader-overlay hidden">
-					<div class="loader-container" style="background: var(--vscode-editor-background); border: 1px solid var(--vscode-widget-border); padding: 20px; width: 300px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
-						<div class="loader-text" style="opacity: 1; margin-bottom: 15px; font-weight: bold;">Rendering is taking a while...</div>
-						<div class="loader-text" style="opacity: 0.8; margin-bottom: 20px; text-align: center;">This file is very large. Would you like to switch to Plain Text mode for instant viewing?</div>
-						<div style="display: flex; gap: 10px; width: 100%;">
-							<button id="switch-to-text" style="flex: 1;">Plain Text</button>
-							<button id="continue-waiting" style="flex: 1; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);">Continue</button>
+					<div class="loader-container slow-load-dialog" role="dialog" aria-labelledby="slow-load-title">
+						<div id="slow-load-title" class="slow-load-title">Rendering is taking a while...</div>
+						<div class="slow-load-message">This file is very large. Switch to Paged View to browse it right away as a table, or Plain Text to see the raw file.</div>
+						<div class="slow-load-actions">
+							<button id="switch-to-paged">Paged View</button>
+							<button id="switch-to-text" class="secondary">Plain Text</button>
+							<button id="continue-waiting" class="secondary">Continue</button>
 						</div>
 					</div>
 				</div>

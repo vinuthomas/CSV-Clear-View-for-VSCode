@@ -854,6 +854,57 @@ body.vscode-light {
     opacity: 0.8;
 }
 
+/* Slow-load prompt. Styled here, not inline: the webview CSP has no
+   'unsafe-inline' for style-src, so style="" attributes are ignored. */
+.slow-load-dialog {
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    box-sizing: border-box;
+    padding: 20px;
+    gap: 0;
+    background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+    border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+    border-radius: 4px;
+    box-shadow: 0 4px 12px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.5));
+}
+
+.slow-load-title {
+    color: var(--vscode-foreground);
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.slow-load-message {
+    color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+    font-size: 0.9em;
+    line-height: 1.4;
+    text-align: center;
+    margin-bottom: 18px;
+}
+
+.slow-load-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+}
+
+.slow-load-actions button {
+    flex: 1 1 0;
+    min-width: 90px;
+    padding: 6px 12px;
+    border-radius: 2px;
+}
+
+.slow-load-actions button.secondary {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.slow-load-actions button.secondary:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
 /* Warning Banner */
 .warning-container {
     background-color: var(--vscode-inputValidation-warningBackground);
