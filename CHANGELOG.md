@@ -2,6 +2,17 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.5.0] - 2026-11-16
+
+### Added
+
+- **Rating prompt:** After you've opened files in CSV ClearView at least 10 times over 3 or more days, a one-time notification asks whether you'd like to rate the extension. **Later** (or dismissing it) defers the next ask by 25 opens; **Don't ask again** or rating ends it for good. The rating link goes to the VS Code Marketplace in VS Code and to Open VSX in other editors.
+
+### Changed
+
+- **Marketplace listing:** New display name (`CSV ClearView: CSV Viewer & Editor with SQL`), description, and search keywords so the extension shows up for searches like "csv viewer", "csv editor", "large csv", and "excel viewer".
+- **README:** Restructured around a comparison table, FAQ, and a shorter quick start. Corrected the large-file description: files up to 500MB get every feature, and larger files open in Paged View, where SQL and editing are off. Development instructions moved to `CONTRIBUTING.md`, and screenshots were renamed to descriptive file names.
+
 ## [1.4.1] - 2026-11-09
 
 ### Fixed

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as ExcelJS from 'exceljs';
+import { maybePromptForReview } from './reviewPrompt';
 
 let _alasql: ((query: string, params?: any[]) => any) | null = null;
 function getAlasql(): (query: string, params?: any[]) => any {
@@ -198,6 +199,10 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		};
 
 		webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
+
+		// Count the open and, after sustained use, ask once for a rating.
+		// Fire-and-forget: never block or fail opening the file over this.
+		maybePromptForReview(this.context).catch(() => { /* ignore */ });
 
 		type ViewMode = 'full' | 'head' | 'tail' | 'text' | 'chunked';
 		let viewMode: ViewMode = 'full';

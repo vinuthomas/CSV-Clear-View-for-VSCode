@@ -1,9 +1,9 @@
-# CSV ClearView - The Ultimate CSV Editor for VS Code
+# CSV ClearView — CSV Viewer & Editor with SQL for VS Code
 
 <table>
 <tr>
 <td valign="middle"><strong>VS Code Marketplace</strong></td>
-<td valign="middle"><a href="https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview"><img src="https://vsmarketplacebadges.dev/version/VinuThomas.csv-clearview.svg" alt="Version" /></a> <a href="https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview"><img src="https://vsmarketplacebadges.dev/downloads/VinuThomas.csv-clearview.svg" alt="Downloads" /></a></td>
+<td valign="middle"><a href="https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview"><img src="https://vsmarketplacebadges.dev/version/VinuThomas.csv-clearview.svg" alt="Version" /></a> <a href="https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview"><img src="https://vsmarketplacebadges.dev/downloads/VinuThomas.csv-clearview.svg" alt="Downloads" /></a> <a href="https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview&ssr=false#review-details"><img src="https://vsmarketplacebadges.dev/rating-star/VinuThomas.csv-clearview.svg" alt="Rating" /></a></td>
 </tr>
 <tr>
 <td valign="middle"><strong>Open VSX</strong></td>
@@ -11,78 +11,71 @@
 </tr>
 </table>
 
-**The CSV editor that doesn't give up on your biggest files.** Most CSV tooling for VS Code quietly stops working somewhere between 20MB and 50MB — highlighting switches off, the grid stops rendering, or you're told to open the file somewhere else. CSV ClearView is built the other way around: virtual scrolling, chunked parsing, and head/tail sampling mean a **500MB+ file opens and stays responsive**, with real SQL, full column profiling, and duplicate detection working on it the whole time.
+**View, query, and profile CSV files without leaving VS Code — including the big ones.** CSV ClearView opens `.csv`, `.tsv`, `.psv`, and Excel `.xlsx` files in a fast, color-coded grid with real SQL, column statistics, and a duplicate finder built in. Files up to 500MB get every feature; anything larger opens in a paged view you can scroll end to end, at any size.
 
-Built for data engineers, analysts, and scientists who would rather not leave the editor.
+Built for data engineers, analysts, and developers who would rather not open Excel or start a Python notebook just to look at a file.
 
-## Installation
-
-You can install this extension from the Open VSX Registry, which makes it available for VS Codium, Cursor, Gitpod, and other VS Code-compatible editors:
-
-[Install from Open VSX Registry](https://open-vsx.org/extension/vinuthomas/csv-clearview)
-
-### Manual Installation (.vsix)
-
-You can also install the extension manually by downloading the compiled `.vsix` file from the [GitHub Releases](https://github.com/vinuthomas/CSV-Clear-View-for-VSCode/releases) page.
-
-**To install manually in Cursor or VS Code:**
-1. Download the latest `csv-clearview-x.x.x.vsix` file from the Releases page.
-2. Open your editor and go to the **Extensions** view (`Cmd+Shift+X` or `Ctrl+Shift+X`).
-3. Click the `...` (Views and More Actions) menu at the top right of the Extensions view.
-4. Select **Install from VSIX...**
-5. Locate the downloaded file and select it to install.
-
-## Screenshots
-
-![Color-coded columns with alternating rows](screenshots/Color%20seprated%20rows%20in%20CSV.png)
-
-*Each column is automatically color-coded for instant visual separation, with alternating row shading to keep your eyes on the right line — no more losing your place in wide datasets.*
-
-![SQL query bar for ad-hoc data analysis](screenshots/Search%20or%20query%20CSV%20with%20SQL.png)
-
-*Run SQL SELECT queries directly on your CSV without leaving VS Code. Filter, sort, aggregate, and join — powered by a full in-memory SQL engine.*
-
-![Data profile panel showing column types and statistics](screenshots/Data%20Profile%20of%20Columns.png)
-
-*The Profile panel gives you a complete schema summary at a glance: inferred data types, null percentage, distinct value counts, and min/max ranges for every column.*
-
-![Histogram distribution chart in the column stats popover](screenshots/Histogram%20Stats%20PopOver.png)
-
-*Shift+click any numeric column header to see an instant distribution histogram alongside min, max, mean, median, and percentile stats — no external tools needed.*
-
-![Excel workbook open in read-only mode with a sheet-tab switcher](screenshots/Open%20XLSX%20file%20in%20readonly%20with%20sheets.png)
-
-*Open `.xlsx` files directly — no more converting to CSV first. Multi-sheet workbooks get a sheet-tab switcher right in the toolbar so you can flip between sheets instantly.*
-
-![Custom and regex delimiter dialog parsing an aligned log file](screenshots/Custom%20and%20Regex%20Delimiters.png)
-
-*Not everything is comma-separated. Set any delimiter you like — a multi-character string such as `||`, or a regular expression — and watch the column count update live before you apply. Here a space-aligned application log is split into clean `timestamp / level / service / message` columns with `[\s]{2,}`. Give it a name and it joins the picker for every file you open.*
+![CSV ClearView showing a CSV file as a color-coded grid with sticky header and alternating rows in VS Code](screenshots/csv-colored-columns.png)
 
 ## Why CSV ClearView?
 
-Stop switching between VS Code, Excel, and a Python notebook. CSV ClearView delivers a **complete data exploration experience** without leaving your editor — and keeps delivering it at sizes where other tooling backs out.
+- **🗻 Built for large CSV files** — Virtual scrolling and chunked parsing keep files up to 500MB fully interactive: SQL, filters, profiling, and duplicates all work. Past 500MB, Paged View streams rows on demand so even multi-GB files open and scroll.
+- **🔍 Real SQL, not a lookalike** — Run full `SELECT` statements with `WHERE`, `GROUP BY`, aggregates, and `ORDER BY` against your CSV. The SQL you already know, no new query language to learn.
+- **📈 Column profiling without a notebook** — Inferred types, null counts, distinct values, min/max, percentiles, and histograms are one click away. No Python, no pandas, no kernel.
+- **🔎 Duplicate row finder** — One click finds every duplicate row, groups matches together, and shows each row's original line number.
+- **📗 Excel viewer included** — Open `.xlsx` workbooks in the same grid, with a sheet-tab switcher for multi-sheet files.
+- **🔣 Any delimiter, even regex** — Comma, tab, pipe, and semicolon are auto-detected. Multi-character separators like `||`, or a regular expression for space-aligned log files, are one click away.
+- **♻️ Non-destructive by default** — Filters, queries, sorting, and duplicate views change what you see, never what's on disk.
 
-### What sets it apart
+## Quick Start
 
-- **🗻 No size cliff** - No 20MB warning, no 50MB cut-off, no "open this elsewhere". Virtual rendering and smart chunking keep 500MB+ files scrolling smoothly, and every feature — SQL, filters, profiling, duplicates — keeps working at that size.
-- **🔍 Real SQL, not a lookalike** - A genuine in-memory SQL engine runs full `SELECT` statements with `WHERE`, `GROUP BY`, aggregates, and joins. Not a SQL-flavoured expression syntax — the SQL you already know.
-- **📈 Profiling without a notebook** - Inferred types, null counts, distinct values, min/max ranges, and distribution histograms are one click away. No Python, no pandas, no kernel to start.
-- **🔎 Duplicate detection built in** - One click finds every duplicate row in the file, groups them together, and shows the original line number of each so you can go straight to it in the source.
-- **♻️ Non-destructive by default** - Filters, queries, sorting, and duplicate views change what you see, never what's on disk. Your file is untouched until you explicitly edit or export.
-- **🧰 One tool, not three** - Colour-coded grid, SQL, profiling, linting, raw-text view, and `.xlsx` reading in a single extension — no stacking several to get a full workflow.
-- **🔣 Any delimiter, not just commas** - Multi-character separators like `||` or `::`, or a full regular expression for space-aligned logs and mixed-separator exports. Name the ones you use and they stay in the picker.
+1. **Install** CSV ClearView from the Extensions view (search for `CSV ClearView`).
+2. **Open any `.csv`, `.tsv`, `.tab`, `.psv`, or `.xlsx` file** — it opens in the grid automatically.
+3. **Query it** — type SQL in the query bar: `SELECT * FROM ? WHERE [Department] = 'Sales' ORDER BY [Salary] DESC`
+4. **Explore it** — click **Profile** for a summary of every column, or Shift+click a column header for stats and a histogram.
 
-### Everything else you get
+Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose **Open with CSV ClearView**.
 
-- **✏️ Edit with confidence** - In-place cell editing with full undo/redo support
-- **🔎 Find & Replace** - Search and replace across the entire grid
-- **🎨 Stay oriented** - Color-coded columns, sticky headers, and freeze panes keep you focused
-- **📋 Handle headerless files** - Toggle the header row off and filter, sort, and query log exports with generated column names
-- **🧪 Catch bad rows early** - Inconsistent column counts and unclosed quotes surface in the Problems pane with one-click jump-to-line
+## How it compares
 
-Perfect for data analysis, ETL pipeline debugging, machine learning dataset inspection, log file analysis, and database exports.
+A quick, honest look at the most popular ways to work with CSV files in VS Code.
 
-## Key Features
+| | Rainbow CSV | Edit CSV | Data Wrangler | **CSV ClearView** |
+|---|:---:|:---:|:---:|:---:|
+| Opens as an interactive grid | ❌ (colored text) | ✅ | ✅ | ✅ |
+| Edit cells and save back | text editing | ✅ | via pandas operations | ✅ |
+| Query language | RBQL (SQL-like) | ❌ | generated pandas code | **SQL** |
+| Column statistics & profiling | hover info | not documented | ✅ | ✅ |
+| Find & group duplicate rows | ❌ | ❌ | drop duplicates | ✅ |
+| Excel `.xlsx` viewing | ❌ | ❌ | ✅ | ✅ (read-only) |
+| Needs Python installed | No | No | **Yes** | No |
+| Large files | features off above 50MB | not designed for large files | memory-bound (pandas) | full features to 500MB, paged view beyond |
+
+> Checked November 2026 against each extension's Marketplace README. All three are excellent tools — Rainbow CSV is great for lightweight highlighting in the text editor, and Data Wrangler is the right pick if you want generated pandas code. CSV ClearView focuses on exploring and querying big files with zero setup.
+
+## Screenshots
+
+![SQL query bar running a SELECT query against a CSV file in VS Code](screenshots/csv-sql-query.png)
+
+*Run SQL SELECT queries directly on your CSV. Filter, sort, and aggregate — powered by a full in-memory SQL engine.*
+
+![Data profile panel showing column types, null percentage, distinct counts and ranges for every CSV column](screenshots/csv-data-profile.png)
+
+*The Profile panel gives you a complete schema summary at a glance: inferred data types, null percentage, distinct value counts, and min/max ranges for every column.*
+
+![Column statistics popover with a distribution histogram, min, max, mean, median and percentiles](screenshots/csv-column-histogram.png)
+
+*Shift+click any numeric column header to see an instant distribution histogram alongside min, max, mean, median, and percentile stats.*
+
+![Excel xlsx workbook open in VS Code in read-only mode with a sheet-tab switcher](screenshots/excel-xlsx-viewer.png)
+
+*Open `.xlsx` files directly — no more converting to CSV first. Multi-sheet workbooks get a sheet-tab switcher right in the toolbar.*
+
+![Custom regex delimiter dialog splitting a space-aligned log file into columns](screenshots/regex-delimiter-log-parsing.png)
+
+*Not everything is comma-separated. Set a multi-character delimiter such as `||`, or a regular expression, and watch the column count update live before you apply. Here a space-aligned application log is split into clean `timestamp / level / service / message` columns with `[\s]{2,}`.*
+
+## Features
 
 ### 🎨 Visual Clarity
 - **Colored Columns:** Each column is automatically color-coded for instant visual separation (adapts to dark/light themes)
@@ -100,11 +93,11 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
   - Date: earliest, latest
   - String: length stats, frequency distribution
   - All: null count, distinct values, top-5 most common values
+- **Schema Summary Panel:** Click **Profile** for a complete data dictionary showing type, nulls, distinct count, and ranges for every column
+- **Data Type Inference:** Automatic detection of integers, floats, dates, booleans, and strings with visual badges
 - **Export:** Click **Export** to save your data via a native save dialog
   - **Full File:** export the entire file to JSON, Markdown table, or HTML table
   - **Current View:** export whatever's currently displayed — filtered rows, sorted order, or SQL query/aggregation results — to CSV, JSON, Markdown, or HTML
-- **Data Type Inference:** Automatic detection of integers, floats, dates, booleans, and strings with visual badges
-- **Schema Summary Panel:** Click **Profile** for a complete data dictionary showing type, nulls, distinct count, and ranges for every column
 
 ### 🔎 Duplicate Detection
 - **One-click scan:** Click **Duplicates** to instantly find all duplicate rows across the entire file
@@ -119,53 +112,60 @@ Perfect for data analysis, ETL pipeline debugging, machine learning dataset insp
 - **Error markers:** Visual markers in the scrollbar for quick jumping to parsing errors
 
 ### 📊 Large File Support
-- **Virtual Scrolling:** Handle 500MB+ files with only visible rows rendered
-- **Head/Tail Sampling:** Instant preview of massive files without loading everything
+- **Virtual Scrolling:** Only visible rows are rendered, so large grids stay responsive
+- **You choose how to open it:** Files over 20MB (configurable) ask how to open them — **Open Full File**, **Paged View**, **Show Head** / **Show Tail** (first or last 1,000 rows), or **Plain Text**
+- **Full features up to 500MB:** Open the full file and SQL, filters, profiling, and duplicate detection all work on every row
+- **Paged View for anything bigger:** Files over 500MB stream rows on demand from a row index, so multi-GB files open and scroll. Paged View is for browsing — SQL and editing are turned off in this mode
 - **Smart Chunking:** Files are processed in chunks to keep VS Code responsive
-- **Configurable Thresholds:** Set your own limits for when large-file mode kicks in
 
 ### ✏️ Editing & Validation
 - **In-Place Cell Editing:** Double-click any cell to edit with full undo/redo support
-- **CSV Linting:** Automatic detection of rows with inconsistent column counts
+- **Find & Replace:** Search and replace across the entire grid
+- **CSV Linting:** Automatic detection of rows with inconsistent column counts and unclosed quotes
+- **Native Diagnostics:** Parsing errors surface in VS Code's Problems pane with one-click jump-to-line
 - **Raw File View:** Click **Raw** to flip between the table and the underlying file text — perfect for eyeballing a row with a stray delimiter, then flip back
 - **Open in Text Editor:** Parse errors include a one-click button that reopens the file in VS Code's text editor so you can fix the offending line directly
-- **Native Diagnostics:** Parsing errors surface in VS Code's Problems pane
 
 ### 🔧 Format Flexibility
 - **Excel (.xlsx) Viewing:** Open `.xlsx` workbooks directly — each sheet renders through the same colored grid, SQL query, filter, profile, and export tools as CSV. Multi-sheet workbooks get a **sheet-tab switcher** in the toolbar. Currently read-only (no cell editing or save-back to Excel).
 - **Auto-Delimiter Detection:** Automatically recognizes comma, tab, pipe, and semicolon delimiters
 - **Multi-Character Delimiters:** Files separated by `||`, `::`, `<SEP>` or any other string parse correctly — pick **Custom…** from the delimiter badge. Fully editable and saved back with the same separator
 - **Regex Delimiters:** Split on a pattern such as ` {2,}` or `[,;]` for column-aligned logs and mixed-separator exports, with a live column-count preview that warns you when a pattern splits unevenly. Read-only, since a pattern has no single separator to write back
-  - For space-aligned columns use ` {2,}` (two or more spaces) rather than `\s+` — `\s+` splits on *every* space, including spaces inside a message or description field
-- **Saved Delimiters:** Give a custom delimiter a name and it joins the picker for every file you open. Manage the list — apply or delete — from **Manage saved…** on the delimiter badge. Stored in your VS Code settings, so it follows your profile across workspaces
-- **Multi-Format Support:** `.csv`, `.tsv`, `.tab`, `.psv` files open natively
-- **Open Any File:** Use the **"Open with CSV ClearView"** command (right-click Explorer or Command Palette) to open any file — `.txt`, `.dat`, `.log`, etc. — in the CSV editor
-- **Manual Override:** Click the delimiter badge in the toolbar to change parsing
-- **Headerless Files:** Click **Headers** to toggle whether the first row is a header — files without one (e.g. exported logs) get generic `Column 1..N` names so filtering and SQL still work (`csvClearView.firstRowIsHeader` sets the default)
+- **Saved Delimiters:** Give a custom delimiter a name and it joins the picker for every file you open. Stored in your VS Code settings, so it follows your profile across workspaces
+- **Open Any File:** Use **"Open with CSV ClearView"** (right-click in the Explorer, or the Command Palette) to open `.txt`, `.dat`, `.log`, or any other file in the grid
+- **Headerless Files:** Click **Headers** to toggle whether the first row is a header — files without one get generic `Column 1..N` names so filtering and SQL still work
 - **Type-Aware Sorting:** Click column headers to sort with intelligent handling of numbers, dates, and strings
 
 ## Use Cases
 
-✅ **Data Engineers** - Debug ETL pipelines, validate transformations, inspect data quality  
-✅ **Data Scientists** - Quick dataset exploration, feature analysis, ML data validation  
-✅ **Analysts** - Ad-hoc SQL queries, statistical summaries, large report inspection  
-✅ **Developers** - Log file analysis with regex delimiters, database export review, test data generation  
-✅ **DBAs** - Query result inspection, data migration validation, schema analysis  
-✅ **SREs / Platform** - Turn space-aligned log exports, `ps`/`df` dumps, and legacy pipe-delimited feeds into a sortable, queryable grid
+- **Data engineers** — debug ETL pipelines, validate transformations, inspect data quality
+- **Data scientists** — quick dataset exploration and ML data validation without starting a kernel
+- **Analysts** — ad-hoc SQL queries, statistical summaries, large report inspection
+- **Developers** — review database exports and test fixtures, parse log files with regex delimiters
+- **SREs / platform engineers** — turn space-aligned log exports, `ps`/`df` dumps, and legacy pipe-delimited feeds into a sortable, queryable grid
 
-## Quick Start
+## FAQ
 
-1. **Open any CSV file** - Just open `.csv`, `.tsv`, `.tab`, or `.psv` files and CSV ClearView activates automatically
-2. **Open any file** - Right-click any file in the Explorer and choose **"Open with CSV ClearView"** to open `.txt`, `.dat`, `.log`, or any other delimiter-separated file
-3. **Query your data** - Type SQL in the query bar at the top: `SELECT * FROM ? WHERE [Department] = 'Sales' ORDER BY [Salary] DESC`
-3. **Find duplicates** - Click **Duplicates** to scan for duplicate rows, then **Show only duplicates** to see them grouped with original line numbers
-4. **Jump to any row** - Click **Go to Row** and type a row number to navigate instantly
-5. **Explore statistics** - Shift+click any column header for detailed stats or click **Profile** for a full data summary
-6. **Sort and freeze** - Click column headers to sort, right-click to freeze panes
-7. **Filter rows** - Click **Filter** to show a per-column filter row and narrow results by substring match
-8. **Edit cells** - Double-click any cell to edit in-place with undo/redo support
-9. **Parse anything** - Click the **Delim:** badge → **Custom…** to split on `||`, `::`, or a regex like `[\s]{2,}` for aligned logs — then name it to keep it
-10. **Handle large files** - For 20MB+ files, choose **Head**, **Tail**, or **Plain Text** mode when prompted
+### How do I open a large CSV file in VS Code?
+Install CSV ClearView and open the file. Files over 20MB ask how you'd like to open them: load the full file into the grid (all features, up to 500MB), browse it in **Paged View** (any size), preview the first or last 1,000 rows, or open it as plain text. By comparison, text-editor highlighters such as Rainbow CSV are switched off by VS Code for files above 50MB.
+
+### How do I run SQL queries on a CSV file in VS Code?
+Open the CSV in CSV ClearView and type a query in the SQL bar at the top of the grid. Use `?` as the table name and brackets for column names: `SELECT [Region], SUM([Sales]) FROM ? GROUP BY [Region]`. Only `SELECT` statements are allowed, so a query can never change your file. See the [SQL Query Guide](#sql-query-guide).
+
+### Can I view Excel `.xlsx` files in VS Code?
+Yes. `.xlsx` files open in the same grid as CSV files, with a sheet-tab switcher for multi-sheet workbooks. SQL, filters, profiling, and export all work. Excel files are read-only for now.
+
+### How do I find duplicate rows in a CSV file?
+Click **Duplicates** in the toolbar. Every duplicate row is highlighted, and **Show only duplicates** groups matching rows together with their original line numbers.
+
+### Does it work with tab, pipe, semicolon, or custom delimiters?
+Comma, tab, pipe, and semicolon are detected automatically. For anything else — `||`, `::`, or a regular expression for space-aligned logs — click the **Delim:** badge and choose **Custom…**. See [Delimiters & Log Parsing](#delimiters--log-parsing).
+
+### Does it work in Cursor, Windsurf, or VSCodium?
+Yes. CSV ClearView is published on the [Open VSX Registry](https://open-vsx.org/extension/vinuthomas/csv-clearview), which these editors use. Search for `CSV ClearView` in their Extensions view.
+
+### Does CSV ClearView change my file?
+Not unless you edit a cell and save. Sorting, filtering, SQL queries, profiling, and duplicate views only change what you see.
 
 ## Configuration
 
@@ -176,7 +176,7 @@ Customize CSV ClearView through VS Code settings:
 | `csvClearView.stickyHeader` | `true` | Keep header row fixed at top while scrolling |
 | `csvClearView.firstRowIsHeader` | `true` | Treat the first row as a header; when `false`, generic `Column 1..N` names are used and the first row is shown as data |
 | `csvClearView.alternatingRows` | `true` | Enable zebra-stripe row coloring |
-| `csvClearView.safeModeThreshold` | `20` | File size (MB) to trigger large-file mode options |
+| `csvClearView.safeModeThreshold` | `20` | File size (MB) above which you're asked how to open the file (full, paged, head, tail, or plain text) |
 | `csvClearView.forceTextColumnColoring` | `false` | Force column coloring in Plain Text mode (may impact performance) |
 | `csvClearView.delimiter` | `auto` | Delimiter: `auto`, a single character (`,`, `\t`, `\|`, `;`), a multi-character string (`\|\|`, `::`), or a regex when `delimiterIsRegex` is on |
 | `csvClearView.delimiterIsRegex` | `false` | Treat `delimiter` as a regular expression. Files parsed this way are read-only |
@@ -295,18 +295,24 @@ SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
 | `.xlsx` | N/A | Excel workbook — read-only, with a sheet-tab switcher for multi-sheet files |
 | `.log`, `.txt`, `.dat`, any | Custom or regex | Open via right-click → **"Open with CSV ClearView"**, then set the delimiter from the toolbar badge |
 
-CSV ClearView auto-detects comma, tab, pipe, and semicolon. Anything else — a multi-character separator like `||`, or a regular expression for aligned logs — is one click away on the delimiter badge. See [Delimiters & Log Parsing](#delimiters--log-parsing).
+## Installation
+
+- **VS Code:** search for `CSV ClearView` in the Extensions view, or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview).
+- **Cursor, Windsurf, VSCodium, Gitpod, and other VS Code-compatible editors:** install from the [Open VSX Registry](https://open-vsx.org/extension/vinuthomas/csv-clearview).
+- **Manual (.vsix):** download the latest `csv-clearview-x.x.x.vsix` from [GitHub Releases](https://github.com/vinuthomas/CSV-Clear-View-for-VSCode/releases), then in the Extensions view open the `...` menu and choose **Install from VSIX...**
 
 ## What's New
 
 See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
 
-### Latest Release (v1.4.1)
-- **Fixed: Dependabot security alerts** — Updated transitive build/packaging dependencies to resolve all open advisories (no source changes)
+### Latest Release (v1.5.0)
+- **New: Rating prompt** — After sustained use (10+ opens over 3+ days), a one-time notification asks whether you'd like to rate CSV ClearView. "Later" defers it; "Don't ask again" ends it for good
+- **Improved: Marketplace listing and README** — Clearer name and description, a comparison table, an FAQ, and an accurate description of large-file behaviour (every feature up to 500MB; Paged View beyond)
 
-### Recent Highlights (v1.4.0)
-- **New: Custom & regex delimiters** — Split on a multi-character separator such as `||`, or on a regular expression such as `[\s]{2,}` for space-aligned log files. Live column-count preview before you apply, with a warning when a pattern splits unevenly
-- **New: Saved delimiters** — Name a delimiter and it stays in the picker for every file you open; manage the list from the toolbar
+### Recent Highlights (v1.4.0–v1.4.1)
+- **New: Custom & regex delimiters** (v1.4.0) — Split on a multi-character separator such as `||`, or on a regular expression such as `[\s]{2,}` for space-aligned log files. Live column-count preview before you apply, with a warning when a pattern splits unevenly
+- **New: Saved delimiters** (v1.4.0) — Name a delimiter and it stays in the picker for every file you open; manage the list from the toolbar
+- **Fixed: Dependabot security alerts** (v1.4.1) — Updated transitive build/packaging dependencies to resolve all open advisories
 
 ### Recent Highlights (v1.3.0–v1.3.1)
 - **New: Excel (.xlsx) viewing** (v1.3.0) — Open `.xlsx` workbooks directly in the same grid used for CSV, with a sheet-tab switcher for multi-sheet files. Read-only for now (no cell editing or save-back to Excel).
@@ -321,38 +327,10 @@ See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
 - **Open with CSV ClearView, Duplicate Row Detection, Go to Row** (v1.0.7–v1.0.8) — Open any file type in the CSV editor, find and group duplicate rows, and jump to a row by number
 - **SQL hardening** (v1.0.3–v1.0.6) — SQL moved to the extension host (removed `unsafe-eval` from the CSP), fixed AVG/SUM/MIN/MAX on numeric columns, and clearer SQL error messages
 
-## Development
+## Support the Project
 
-### Prerequisites
-- [Node.js](https://nodejs.org/) (includes npm)
-- [Visual Studio Code](https://code.visualstudio.com/)
-
-### Build and Install Locally
-
-```bash
-# Install dependencies
-npm install
-
-# Compile and package the extension
-npm run compile
-node_modules/.bin/vsce package
-
-# Install into your VS Code
-code --install-extension csv-clearview-1.3.0.vsix
-```
-
-### Debugging
-1. Open the project folder in VS Code
-2. Press `F5` to launch the Extension Development Host
-3. Open any `.csv` file in the new window to test your changes
-
-## Keywords
-
-CSV, TSV, viewer, editor, table, grid, spreadsheet, Excel, xlsx, data analysis, SQL queries, data profiling, statistics, large files, virtual scrolling, duplicate detection, delimiter detection, custom delimiters, regex delimiters, log parsing, log file viewer, data science, ETL, pipe-separated, tab-separated, data visualization, column sorting, data validation, go to row, row navigation
+If CSV ClearView saves you time, the most helpful thing you can do is [leave a rating on the Marketplace](https://marketplace.visualstudio.com/items?itemName=VinuThomas.csv-clearview&ssr=false#review-details) or [on Open VSX](https://open-vsx.org/extension/vinuthomas/csv-clearview/reviews) — it's how other people find the extension. Found a bug or have an idea? [Open an issue](https://github.com/vinuthomas/CSV-Clear-View-for-VSCode/issues). Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
+
 MIT
-
----
-
-**Made with ❤️ for the data community** | [Report Issues](https://github.com/vinuthomas/CSV-Clear-View-for-VSCode/issues) | [Contribute](https://github.com/vinuthomas/CSV-Clear-View-for-VSCode)
