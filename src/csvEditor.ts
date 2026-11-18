@@ -5,6 +5,7 @@ import * as ExcelJS from 'exceljs';
 import * as os from 'os';
 import { maybePromptForReview } from './reviewPrompt';
 import { computeSqlPayloadLimit, estimateJsonBytes, formatMB } from './sqlLimits';
+import { validateSqlQuery } from './sqlValidate';
 
 let _alasql: ((query: string, params?: any[]) => any) | null = null;
 function getAlasql(): (query: string, params?: any[]) => any {
@@ -459,7 +460,14 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 
 		// Handle file changes
 		const watcher = vscode.workspace.createFileSystemWatcher(document.uri.fsPath);
-		const watcherListener = watcher.onDidChange(() => {
+		// mtime of our own last save. The webview already shows that content, so
+		// reloading it would only re-parse the file and clear filters/sort/query.
+		let selfWrite: Promise<number> | null = null;
+		const watcherListener = watcher.onDidChange(async () => {
+			try {
+				const own = selfWrite ? await selfWrite.catch(() => -1) : -1;
+				if ((await vscode.workspace.fs.stat(document.uri)).mtime === own) { return; }
+			} catch { /* stat failed — reload below */ }
 			// Invalidate row index / cached workbook so they are rebuilt on next access
 			rowIndex = null;
 			workbook = null;
@@ -482,8 +490,9 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						console.warn('CSV ClearView: edit ignored — Excel files are read-only');
 						return;
 					}
-					if (viewMode === 'chunked') {
-						console.warn('CSV ClearView: edit ignored — file is in chunked (read-only) mode');
+					// Paged/Head/Tail hold only part of the file: saving would overwrite the rest.
+					if (viewMode === 'chunked' || viewMode === 'head' || viewMode === 'tail') {
+						console.warn(`CSV ClearView: edit ignored — ${viewMode} view is read-only`);
 						return;
 					}
 					if (typeof e.text !== 'string') {
@@ -492,10 +501,12 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					}
 					// Guard against implausibly large payloads (100MB)
 					if (e.text.length > 100 * 1024 * 1024) {
-						console.error('Edit payload too large, ignoring');
+						vscode.window.showErrorMessage('CSV ClearView: This file is too large to save edits (over 100 MB). Your change was NOT saved.');
 						return;
 					}
-					this.saveDocument(document, e.text).catch(err => {
+					selfWrite = this.saveDocument(document, e.text)
+						.then(async () => (await vscode.workspace.fs.stat(document.uri)).mtime);
+					selfWrite.catch(err => {
 						vscode.window.showErrorMessage(`CSV ClearView: Failed to save file — ${err.message || err}`);
 					});
 					return;
@@ -508,18 +519,9 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					return;
 				}
 				// Server-side SQL validation (defence-in-depth alongside webview checks)
-				const normalizedQ = e.query.replace(/\/\*[\s\S]*?\*\//g, '').trim();
-				if (!/^SELECT\s/i.test(normalizedQ)) {
-					webviewPanel.webview.postMessage({ type: 'queryError', message: 'Only SELECT queries are allowed' });
-					return;
-				}
-				if (/;/.test(normalizedQ)) {
-					webviewPanel.webview.postMessage({ type: 'queryError', message: 'Semicolons are not allowed in queries' });
-					return;
-				}
-				const blocked = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP|ATTACH|DETACH|SOURCE|PRAGMA|SHOW\s+TABLES|SHOW\s+DATABASES|SET\s+OPTION)\b/i;
-				if (blocked.test(normalizedQ)) {
-					webviewPanel.webview.postMessage({ type: 'queryError', message: 'Data modification statements are not allowed' });
+				const sqlError = validateSqlQuery(e.query);
+				if (sqlError) {
+					webviewPanel.webview.postMessage({ type: 'queryError', message: sqlError });
 					return;
 				}
 				try {

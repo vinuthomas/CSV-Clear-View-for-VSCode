@@ -33,6 +33,24 @@ function assertEqual(actual, expected, testName) {
     }
 }
 
+// The real SQL checks: host module src/sqlValidate.ts, and the pattern the
+// webview (media/csv.js) uses for its early error.
+const sqlValidate = (() => {
+    const p = require('path').join(__dirname, '..', 'src', 'sqlValidate.ts');
+    const ts = require('typescript');
+    const js = ts.transpileModule(require('fs').readFileSync(p, 'utf8'),
+        { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+    const m = new (require('module'))(p);
+    m._compile(js, p);
+    return m.exports;
+})();
+const WEBVIEW_BLOCKED_SQL = (() => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'media', 'csv.js'), 'utf8');
+    const m = src.match(/const blockedPattern = \/(.+)\/i;/);
+    if (!m) { throw new Error('blockedPattern not found in media/csv.js'); }
+    return new RegExp(m[1], 'i');
+})();
+
 // ============================================================
 // Extract functions from csv.js for testing
 // ============================================================
@@ -189,8 +207,7 @@ function validateQuery(query) {
     if (/;/.test(normalizedQuery)) {
         return { valid: false, error: "Semicolons are not allowed in queries." };
     }
-    const blockedPattern = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP|ATTACH|DETACH|SOURCE|PRAGMA|SHOW\s+TABLES|SHOW\s+DATABASES|SET\s+OPTION)\b/i;
-    if (blockedPattern.test(normalizedQuery)) {
+    if (WEBVIEW_BLOCKED_SQL.test(normalizedQuery)) {
         return { valid: false, error: "Data modification statements are not allowed." };
     }
     if (/(?<!\])"(?!\[)/.test(normalizedQuery.replace(/\[[^\]]*\]/g, ''))) {
@@ -698,9 +715,9 @@ async function runTests() {
         // queryResult response
         assert(src.includes("type: 'queryResult'"), 'Extension host sends queryResult response');
         // Server-side semicolon block
-        assert(src.includes('/;/'), 'Server-side SQL validation blocks semicolons');
-        // ATTACH/DETACH blocked server-side
-        assert(src.includes('ATTACH'), 'Server-side SQL validation blocks ATTACH');
+        assert(src.includes('validateSqlQuery(e.query)'), 'runQuery handler uses the shared validateSqlQuery');
+        assert(sqlValidate.validateSqlQuery('SELECT * FROM ?; SELECT 1') !== null, 'Server-side SQL validation blocks semicolons');
+        assert(sqlValidate.validateSqlQuery('SELECT * FROM ? ATTACH x') !== null, 'Server-side SQL validation blocks ATTACH');
         // watcher listener is disposed
         assert(src.includes('watcherListener.dispose()'), 'File watcher listener is disposed on panel close');
         // saveDocument errors surfaced
@@ -1278,24 +1295,22 @@ async function runTests() {
     // --------------------------------------------------------
 
     {
-        // Mirrors the validation logic in csvEditor.ts resolveCustomEditor → case 'runQuery'
+        // csvEditor.ts case 'runQuery': shape check, then the real validateSqlQuery
         function validateRunQueryMessage(e) {
             if (typeof e.query !== 'string' || !Array.isArray(e.data)) {
                 return { error: 'Invalid query request' };
             }
-            const normalizedQ = e.query.replace(/\/\*[\s\S]*?\*\//g, '').trim();
-            if (!/^SELECT\s/i.test(normalizedQ)) {
-                return { error: 'Only SELECT queries are allowed' };
-            }
-            if (/;/.test(normalizedQ)) {
-                return { error: 'Semicolons are not allowed in queries' };
-            }
-            const blocked = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP|ATTACH|DETACH|SOURCE|PRAGMA|SHOW\s+TABLES|SHOW\s+DATABASES|SET\s+OPTION)\b/i;
-            if (blocked.test(normalizedQ)) {
-                return { error: 'Data modification statements are not allowed' };
-            }
-            return { valid: true };
+            const error = sqlValidate.validateSqlQuery(e.query);
+            return error ? { error } : { valid: true };
         }
+
+        // AlaSQL's SELECT ... INTO CSV('path') writes files on disk
+        assertEqual(validateRunQueryMessage({ query: "SELECT * INTO CSV('/tmp/x.csv') FROM ?", data: [] }).error,
+            'Data modification statements are not allowed', 'runQuery handler: SELECT INTO CSV(file) blocked');
+        assert(WEBVIEW_BLOCKED_SQL.test("SELECT * INTO JSON('/tmp/x.json') FROM ?"),
+            'webview: SELECT INTO JSON(file) blocked');
+        assertEqual(WEBVIEW_BLOCKED_SQL.source, sqlValidate.BLOCKED_SQL.source,
+            'webview and host use the same blocked-keyword pattern');
 
         // Valid messages
         assert(validateRunQueryMessage({ query: 'SELECT * FROM ?', data: [] }).valid,

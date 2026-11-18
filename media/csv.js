@@ -13,6 +13,12 @@ let findMatchIndex = -1;    // index into findMatches of the current match
 let autocompleteOptions = []; // Shared source for autocomplete
 let currentFocus = -1; // Shared focus state for autocomplete
 let isUpdating = false; // Guard for overlapping updates
+// Header row of the last SQL result. Query rows are copies, so edits to them
+// would never reach the file; sorting keeps this header object at [0].
+let queryResultHeader = null;
+function isShowingQueryResult() {
+    return queryResultHeader !== null && currentDisplayData[0] === queryResultHeader;
+}
 let loadGeneration = 0; // Bumped on every new load; an in-flight load with an older value abandons itself
 let pendingUpdateTimeout = null; // Tracks the scheduled render so a newer message can cancel it
 
@@ -1892,7 +1898,9 @@ window.addEventListener('message', event => {
             hasHeaders = !message.config || message.config.firstRowIsHeader !== false;
             updateHeadersBtnState();
 
-            sourceIsReadOnly = !!(message.config && message.config.readOnly);
+            // Head/Tail show only part of the file — saving an edit would overwrite the rest.
+            sourceIsReadOnly = !!(message.config && message.config.readOnly)
+                || message.viewMode === 'head' || message.viewMode === 'tail';
             if (message.config && typeof message.config.sqlPayloadLimit === 'number' && message.config.sqlPayloadLimit > 0) {
                 sqlPayloadLimit = message.config.sqlPayloadLimit;
             }
@@ -1978,7 +1986,7 @@ window.addEventListener('message', event => {
 
             } else if (message.viewMode === 'head') {
                 isChunkedMode = false;
-                warningContainer.textContent = "Viewing Sample: Top 1000 rows. SQL queries will only run against this sample.";
+                warningContainer.textContent = "Viewing Sample: Top 1000 rows (read-only). SQL queries will only run against this sample.";
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
                 headerContainer.classList.remove('hidden');
@@ -1987,7 +1995,7 @@ window.addEventListener('message', event => {
                 if (errorRuler) errorRuler.classList.remove('hidden');
             } else if (message.viewMode === 'tail') {
                 isChunkedMode = false;
-                warningContainer.textContent = "Viewing Sample: Bottom 1000 rows. SQL queries will only run against this sample.";
+                warningContainer.textContent = "Viewing Sample: Bottom 1000 rows (read-only). SQL queries will only run against this sample.";
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
                 headerContainer.classList.remove('hidden');
@@ -2107,6 +2115,7 @@ window.addEventListener('message', event => {
                         await renderTable([], []);
                     } else {
                         const newData = objectsToData(result);
+                        queryResultHeader = newData[0];
                         currentDisplayData = newData;
                         columnTypes = inferColumnTypes(newData);
                         sortState = { col: -1, dir: 'none' };
@@ -2374,6 +2383,11 @@ if (tableContainer) {
     // Double-click to edit
     tableContainer.addEventListener('dblclick', (e) => {
         if (isChunkedMode || isReadOnly) { return; }
+        if (isShowingQueryResult()) {
+            errorContainer.textContent = 'Query results are read-only. Click Reset to edit the file.';
+            errorContainer.classList.remove('hidden');
+            return;
+        }
         const cell = e.target;
         if ((cell.tagName === 'TD' || cell.tagName === 'TH') && cell.contentEditable !== 'true') {
             cell.contentEditable = 'true';
@@ -2789,7 +2803,7 @@ function findPrevMatch() {
 }
 
 function replaceCurrentMatch() {
-    if (findMatches.length === 0 || !isFindReplaceAvailable()) { return; }
+    if (findMatches.length === 0 || !isFindReplaceAvailable() || isShowingQueryResult()) { return; }
     const { row, col } = findMatches[findMatchIndex];
     const replacement = replaceInput ? replaceInput.value : '';
     if (!currentDisplayData[row]) { return; }
@@ -2799,7 +2813,7 @@ function replaceCurrentMatch() {
 }
 
 function replaceAllMatches() {
-    if (findMatches.length === 0 || !isFindReplaceAvailable()) { return; }
+    if (findMatches.length === 0 || !isFindReplaceAvailable() || isShowingQueryResult()) { return; }
     const replacement = replaceInput ? replaceInput.value : '';
     findMatches.forEach(({ row, col }) => {
         if (currentDisplayData[row]) {
@@ -3314,7 +3328,7 @@ function runQuery() {
         errorContainer.classList.remove('hidden');
         return;
     }
-    const blockedPattern = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO\s+TEMP|ATTACH|DETACH|SOURCE|PRAGMA|SHOW\s+TABLES|SHOW\s+DATABASES|SET\s+OPTION)\b/i;
+    const blockedPattern = /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|INTO|ATTACH|DETACH|SOURCE|PRAGMA|SHOW\s+TABLES|SHOW\s+DATABASES|SET\s+OPTION)\b/i;
     if (blockedPattern.test(normalizedQuery)) {
         errorContainer.textContent = "Query Error: Data modification statements are not allowed.";
         errorContainer.classList.remove('hidden');
