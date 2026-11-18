@@ -113,18 +113,18 @@ A quick, honest look at the most popular ways to work with CSV files in VS Code.
 
 ### 📊 Large File Support
 - **Virtual Scrolling:** Only visible rows are rendered, so large grids stay responsive
-- **You choose how to open it:** Files over 20MB (configurable) ask how to open them — **Open Full File**, **Paged View**, **Show Head** / **Show Tail** (first or last 1,000 rows, read-only), or **Plain Text**
-- **Full grid up to 500MB:** Choose **Open Full File** and every row is loaded into the grid
+- **You choose how to open it:** Files over 20MB (configurable) ask how to open them — **Open Full File**, **Paged View**, **Show Head** / **Show Tail** (the first or last ~256KB of rows, read-only), or **Plain Text**
+- **Full grid up to 500MB:** Choose **Open Full File** and every row is loaded into the grid. Edits save on files up to about 100MB; past that, you're told the change can't be saved
 - **SQL up to about 150–175MB:** A query sends the whole dataset to VS Code's extension host, which needs roughly 2× the file size in one message plus several times that in memory. The limit is set from your machine's memory — about 160MB of CSV on an 8GB machine, about 175MB on 16GB or more. Past it, the query bar tells you instead of running out of memory; use **Filter**, or **Show Head** / **Show Tail** to query a sample. A query that *returns* too many rows (for example `SELECT *` with no `WHERE`) is stopped the same way
 - **Switch mid-load:** If a full load is taking a while, the prompt offers **Paged View** or **Plain Text** so you're never stuck waiting
 - **Paged View for anything bigger:** Files over 500MB stream rows on demand from a row index, so multi-GB files open and scroll. Paged View is for browsing — SQL and editing are turned off in this mode
 - **Smart Chunking:** Files are processed in chunks to keep VS Code responsive
 
 ### ✏️ Editing & Validation
-- **In-Place Cell Editing:** Double-click any cell to edit with full undo/redo support
-- **Find & Replace:** Search and replace across the entire grid
-- **CSV Linting:** Automatic detection of rows with inconsistent column counts and unclosed quotes
-- **Native Diagnostics:** Parsing errors surface in VS Code's Problems pane with one-click jump-to-line
+- **In-Place Cell Editing:** Double-click any cell to edit it. Changes are written to the file automatically as you make them
+- **Find & Replace:** Search and replace across the rows in the current view (filters applied)
+- **Read-only views:** Editing is off for Excel files, regex delimiters, Show Head / Show Tail, Paged View, and SQL query results (click **Reset** to edit again)
+- **CSV Linting:** Automatic detection of rows with inconsistent column counts and unclosed quotes, marked in the scrollbar
 - **Raw File View:** Click **Raw** to flip between the table and the underlying file text — perfect for eyeballing a row with a stray delimiter, then flip back
 - **Open in Text Editor:** Parse errors include a one-click button that reopens the file in VS Code's text editor so you can fix the offending line directly
 
@@ -149,7 +149,7 @@ A quick, honest look at the most popular ways to work with CSV files in VS Code.
 ## FAQ
 
 ### How do I open a large CSV file in VS Code?
-Install CSV ClearView and open the file. Files over 20MB ask how you'd like to open them: load the full file into the grid (up to 500MB; SQL up to about 150–175MB), browse it in **Paged View** (any size), preview the first or last 1,000 rows, or open it as plain text. By comparison, text-editor highlighters such as Rainbow CSV are switched off by VS Code for files above 50MB.
+Install CSV ClearView and open the file. Files over 20MB ask how you'd like to open them: load the full file into the grid (up to 500MB; SQL up to about 150–175MB), browse it in **Paged View** (any size), preview the first or last ~256KB of rows, or open it as plain text. By comparison, text-editor highlighters such as Rainbow CSV are switched off by VS Code for files above 50MB.
 
 ### How do I run SQL queries on a CSV file in VS Code?
 Open the CSV in CSV ClearView and type a query in the SQL bar at the top of the grid. Use `?` as the table name and brackets for column names: `SELECT [Region], SUM([Sales]) FROM ? GROUP BY [Region]`. Only `SELECT` statements are allowed, so a query can never change your file. SQL works on files up to about 150–175MB, depending on your machine's memory. See the [SQL Query Guide](#sql-query-guide).
@@ -167,7 +167,7 @@ Comma, tab, pipe, and semicolon are detected automatically. For anything else �
 Yes. CSV ClearView is published on the [Open VSX Registry](https://open-vsx.org/extension/vinuthomas/csv-clearview), which these editors use. Search for `CSV ClearView` in their Extensions view.
 
 ### Does CSV ClearView change my file?
-Not unless you edit a cell and save. Sorting, filtering, SQL queries, profiling, and duplicate views only change what you see.
+Only when you edit a cell or use Replace — those changes are written to the file right away. Sorting, filtering, SQL queries, profiling, and duplicate views only change what you see.
 
 ## Configuration
 
@@ -179,6 +179,7 @@ Customize CSV ClearView through VS Code settings:
 | `csvClearView.firstRowIsHeader` | `true` | Treat the first row as a header; when `false`, generic `Column 1..N` names are used and the first row is shown as data |
 | `csvClearView.alternatingRows` | `true` | Enable zebra-stripe row coloring |
 | `csvClearView.safeModeThreshold` | `20` | File size (MB) above which you're asked how to open the file (full, paged, head, tail, or plain text) |
+| `csvClearView.showSlowLoadPrompt` | `true` | When the grid takes too long to render, offer to switch to Paged View or Plain Text |
 | `csvClearView.forceTextColumnColoring` | `false` | Force column coloring in Plain Text mode (may impact performance) |
 | `csvClearView.delimiter` | `auto` | Delimiter: `auto`, a single character (`,`, `\t`, `\|`, `;`), a multi-character string (`\|\|`, `::`), or a regex when `delimiterIsRegex` is on |
 | `csvClearView.delimiterIsRegex` | `false` | Treat `delimiter` as a regular expression. Files parsed this way are read-only |
@@ -312,6 +313,7 @@ See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
 - **Fixed: Lost edits** (v1.5.1) — Edits to SQL query results (which are copies) are now blocked instead of silently discarded, and edits too large to save now say so
 - **Fixed: Filters and sort reset after every edit** (v1.5.1) — Saving a cell no longer reloads the whole file
 - **Security** (v1.5.1) — SQL queries can no longer write files with `SELECT ... INTO`
+- **Fixed: Column stats crash on big text columns** (v1.5.1) — Shift+click stats on a text column with more than about 150,000 values no longer fails
 - **New: Rating prompt** — After sustained use (10+ opens over 3+ days), a one-time notification asks whether you'd like to rate CSV ClearView. "Later" defers it; "Don't ask again" ends it for good
 - **Fixed: SQL on large files crashing the editor** — Querying a very large file (for example 500MB) turned the editor grey. SQL now has a size limit based on your machine's memory and shows a clear message past it, and oversized results are stopped the same way
 - **New: Paged View from the slow-load prompt** — When a full load is taking a while, switch straight to Paged View to browse the file as a table at any size

@@ -981,11 +981,17 @@ function computeColStats(data, colIndex) {
             stats.maxDate = dates[dates.length - 1].toLocaleDateString();
         }
     } else if (type === 'string') {
-        const lens = values.map(v => v.length);
-        if (lens.length > 0) {
-            stats.minLen = Math.min(...lens);
-            stats.maxLen = Math.max(...lens);
-            stats.avgLen = (lens.reduce((a, b) => a + b, 0) / lens.length).toFixed(1);
+        // A loop, not Math.min(...lens): spreading ~150k+ values overflows the call stack.
+        if (values.length > 0) {
+            let minLen = Infinity, maxLen = 0, totalLen = 0;
+            for (const v of values) {
+                if (v.length < minLen) minLen = v.length;
+                if (v.length > maxLen) maxLen = v.length;
+                totalLen += v.length;
+            }
+            stats.minLen = minLen;
+            stats.maxLen = maxLen;
+            stats.avgLen = (totalLen / values.length).toFixed(1);
         }
     }
 
@@ -1986,7 +1992,7 @@ window.addEventListener('message', event => {
 
             } else if (message.viewMode === 'head') {
                 isChunkedMode = false;
-                warningContainer.textContent = "Viewing Sample: Top 1000 rows (read-only). SQL queries will only run against this sample.";
+                warningContainer.textContent = "Viewing Sample: First ~256KB of rows (read-only). SQL queries will only run against this sample.";
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
                 headerContainer.classList.remove('hidden');
@@ -1995,7 +2001,7 @@ window.addEventListener('message', event => {
                 if (errorRuler) errorRuler.classList.remove('hidden');
             } else if (message.viewMode === 'tail') {
                 isChunkedMode = false;
-                warningContainer.textContent = "Viewing Sample: Bottom 1000 rows (read-only). SQL queries will only run against this sample.";
+                warningContainer.textContent = "Viewing Sample: Last ~256KB of rows (read-only). SQL queries will only run against this sample.";
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
                 headerContainer.classList.remove('hidden');

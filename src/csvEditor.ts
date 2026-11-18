@@ -276,12 +276,12 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				{
 					id: 'head',
 					label: '$(arrow-up) Show Head',
-					description: 'Preview the first 1,000 rows'
+					description: 'Preview the first ~256KB of rows (read-only)'
 				},
 				{
 					id: 'tail',
 					label: '$(arrow-down) Show Tail',
-					description: 'Preview the last 1,000 rows'
+					description: 'Preview the last ~256KB of rows (read-only)'
 				},
 				{
 					id: 'text',

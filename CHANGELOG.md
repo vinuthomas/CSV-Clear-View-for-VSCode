@@ -10,6 +10,8 @@ All notable changes to the "CSV ClearView" extension will be documented in this 
 - **Edits too large to save failed silently:** Files up to 500MB can open fully, but edits over 100MB were dropped with only a console message. You now get an error saying the change was not saved.
 - **Edits to SQL query results were lost:** Query results are copies of the rows, so editing a cell or using Replace / Replace All there showed the change but never saved it. Query results are now read-only; click **Reset** to edit the file.
 - **Filters and sort reset after every edit:** Each save made the file watcher reload the whole file, which re-parsed it and cleared filters, sort, duplicate mode and query results. The extension now skips the change its own save made; changes from other programs still reload.
+- **Column stats crashed on big text columns:** Shift+click stats on a text column with more than about 150,000 values failed with "Maximum call stack size exceeded", because the length stats passed every value to `Math.min`/`Math.max` as a separate argument. They now use a loop.
+- **Show Head / Show Tail described as "1,000 rows":** These previews load the first or last ~256KB of the file, so the row count depends on row length. The picker, banner and README now say so.
 
 ### Security
 
@@ -18,6 +20,7 @@ All notable changes to the "CSV ClearView" extension will be documented in this 
 ### Changed
 
 - Removed an unused 510KB copy of AlaSQL (`media/alasql.min.js`) from the package.
+- **README:** Removed two features that no longer exist (undo/redo and Problems-pane diagnostics), stated that edits save immediately and stop at about 100MB, listed every read-only view, and added the `showSlowLoadPrompt` setting.
 
 ## [1.5.0] - 2026-11-16
 
