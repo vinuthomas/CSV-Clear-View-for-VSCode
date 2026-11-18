@@ -91,10 +91,10 @@ console.log('\n📋 recordOpen');
 
 console.log('\n📋 reviewUrlFor');
 
-assert(reviewUrlFor('Visual Studio Code').includes('marketplace.visualstudio.com'), 'VS Code → Microsoft Marketplace');
-assert(reviewUrlFor('Visual Studio Code - Insiders').includes('marketplace.visualstudio.com'), 'VS Code Insiders → Microsoft Marketplace');
-assert(reviewUrlFor('Cursor').includes('open-vsx.org'), 'Cursor → Open VSX');
-assert(reviewUrlFor('VSCodium').includes('open-vsx.org'), 'VSCodium → Open VSX');
+assert(new URL(reviewUrlFor('Visual Studio Code')).hostname === 'marketplace.visualstudio.com', 'VS Code → Microsoft Marketplace');
+assert(new URL(reviewUrlFor('Visual Studio Code - Insiders')).hostname === 'marketplace.visualstudio.com', 'VS Code Insiders → Microsoft Marketplace');
+assert(new URL(reviewUrlFor('Cursor')).hostname === 'open-vsx.org', 'Cursor → Open VSX');
+assert(new URL(reviewUrlFor('VSCodium')).hostname === 'open-vsx.org', 'VSCodium → Open VSX');
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
