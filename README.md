@@ -113,7 +113,7 @@ A quick, honest look at the most popular ways to work with CSV files in VS Code.
 
 ### 📊 Large File Support
 - **Virtual Scrolling:** Only visible rows are rendered, so large grids stay responsive
-- **You choose how to open it:** Files over 20MB (configurable) ask how to open them — **Open Full File**, **Paged View**, **Show Head** / **Show Tail** (first or last 1,000 rows), or **Plain Text**
+- **You choose how to open it:** Files over 20MB (configurable) ask how to open them — **Open Full File**, **Paged View**, **Show Head** / **Show Tail** (first or last 1,000 rows, read-only), or **Plain Text**
 - **Full grid up to 500MB:** Choose **Open Full File** and every row is loaded into the grid
 - **SQL up to about 150–175MB:** A query sends the whole dataset to VS Code's extension host, which needs roughly 2× the file size in one message plus several times that in memory. The limit is set from your machine's memory — about 160MB of CSV on an 8GB machine, about 175MB on 16GB or more. Past it, the query bar tells you instead of running out of memory; use **Filter**, or **Show Head** / **Show Tail** to query a sample. A query that *returns* too many rows (for example `SELECT *` with no `WHERE`) is stopped the same way
 - **Switch mid-load:** If a full load is taking a while, the prompt offers **Paged View** or **Plain Text** so you're never stuck waiting
@@ -307,7 +307,11 @@ SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
 
 See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
 
-### Latest Release (v1.5.0)
+### Latest Release (v1.5.0–v1.5.1)
+- **Fixed: Editing in Show Head / Show Tail could overwrite the file** (v1.5.1) — These previews hold only part of the file, so they are now read-only
+- **Fixed: Lost edits** (v1.5.1) — Edits to SQL query results (which are copies) are now blocked instead of silently discarded, and edits too large to save now say so
+- **Fixed: Filters and sort reset after every edit** (v1.5.1) — Saving a cell no longer reloads the whole file
+- **Security** (v1.5.1) — SQL queries can no longer write files with `SELECT ... INTO`
 - **New: Rating prompt** — After sustained use (10+ opens over 3+ days), a one-time notification asks whether you'd like to rate CSV ClearView. "Later" defers it; "Don't ask again" ends it for good
 - **Fixed: SQL on large files crashing the editor** — Querying a very large file (for example 500MB) turned the editor grey. SQL now has a size limit based on your machine's memory and shows a clear message past it, and oversized results are stopped the same way
 - **New: Paged View from the slow-load prompt** — When a full load is taking a while, switch straight to Paged View to browse the file as a table at any size

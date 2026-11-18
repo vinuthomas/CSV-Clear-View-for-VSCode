@@ -2,6 +2,23 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [1.5.1] - 2026-11-18
+
+### Fixed
+
+- **Editing in Show Head / Show Tail could overwrite the file:** These previews load only part of a large file (about 256KB), but cells were still editable, and saving wrote just that part over the whole file. Show Head and Show Tail are now read-only, and the extension host refuses such edits too. Closing the "how would you like to open it?" picker defaults to Show Head, so this could happen without choosing a preview on purpose.
+- **Edits too large to save failed silently:** Files up to 500MB can open fully, but edits over 100MB were dropped with only a console message. You now get an error saying the change was not saved.
+- **Edits to SQL query results were lost:** Query results are copies of the rows, so editing a cell or using Replace / Replace All there showed the change but never saved it. Query results are now read-only; click **Reset** to edit the file.
+- **Filters and sort reset after every edit:** Each save made the file watcher reload the whole file, which re-parsed it and cleared filters, sort, duplicate mode and query results. The extension now skips the change its own save made; changes from other programs still reload.
+
+### Security
+
+- **SQL could write files:** AlaSQL's `SELECT ... INTO CSV('path')` passed the read-only check and wrote files on disk. `INTO` is now blocked in any form. The check lives in one module, and the tests run the real code instead of a copy.
+
+### Changed
+
+- Removed an unused 510KB copy of AlaSQL (`media/alasql.min.js`) from the package.
+
 ## [1.5.0] - 2026-11-16
 
 ### Added
