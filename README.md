@@ -36,23 +36,6 @@ Built for data engineers, analysts, and developers who would rather not open Exc
 
 Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose **Open with CSV ClearView**.
 
-## How it compares
-
-A quick, honest look at the most popular ways to work with CSV files in VS Code.
-
-| | Rainbow CSV | Edit CSV | Data Wrangler | **CSV ClearView** |
-|---|:---:|:---:|:---:|:---:|
-| Opens as an interactive grid | ❌ (colored text) | ✅ | ✅ | ✅ |
-| Edit cells and save back | text editing | ✅ | via pandas operations | ✅ |
-| Query language | RBQL (SQL-like) | ❌ | generated pandas code | **SQL** |
-| Column statistics & profiling | hover info | not documented | ✅ | ✅ |
-| Find & group duplicate rows | ❌ | ❌ | drop duplicates | ✅ |
-| Excel `.xlsx` viewing | ❌ | ❌ | ✅ | ✅ (read-only) |
-| Needs Python installed | No | No | **Yes** | No |
-| Large files | features off above 50MB | not designed for large files | memory-bound (pandas) | full grid to 500MB (SQL to ~150–175MB), paged view beyond |
-
-> Checked November 2026 against each extension's Marketplace README. All three are excellent tools — Rainbow CSV is great for lightweight highlighting in the text editor, and Data Wrangler is the right pick if you want generated pandas code. CSV ClearView focuses on exploring and querying big files with zero setup.
-
 ## Screenshots
 
 ![SQL query bar running a SELECT query against a CSV file in VS Code](screenshots/csv-sql-query.png)
@@ -149,7 +132,7 @@ A quick, honest look at the most popular ways to work with CSV files in VS Code.
 ## FAQ
 
 ### How do I open a large CSV file in VS Code?
-Install CSV ClearView and open the file. Files over 20MB ask how you'd like to open them: load the full file into the grid (up to 500MB; SQL up to about 150–175MB), browse it in **Paged View** (any size), preview the first or last ~256KB of rows, or open it as plain text. By comparison, text-editor highlighters such as Rainbow CSV are switched off by VS Code for files above 50MB.
+Install CSV ClearView and open the file. Files over 20MB ask how you'd like to open them: load the full file into the grid (up to 500MB; SQL up to about 150–175MB), browse it in **Paged View** (any size), preview the first or last ~256KB of rows, or open it as plain text.
 
 ### How do I run SQL queries on a CSV file in VS Code?
 Open the CSV in CSV ClearView and type a query in the SQL bar at the top of the grid. Use `?` as the table name and brackets for column names: `SELECT [Region], SUM([Sales]) FROM ? GROUP BY [Region]`. Only `SELECT` statements are allowed, so a query can never change your file. SQL works on files up to about 150–175MB, depending on your machine's memory. See the [SQL Query Guide](#sql-query-guide).
@@ -317,7 +300,7 @@ See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
 - **New: Rating prompt** — After sustained use (10+ opens over 3+ days), a one-time notification asks whether you'd like to rate CSV ClearView. "Later" defers it; "Don't ask again" ends it for good
 - **Fixed: SQL on large files crashing the editor** — Querying a very large file (for example 500MB) turned the editor grey. SQL now has a size limit based on your machine's memory and shows a clear message past it, and oversized results are stopped the same way
 - **New: Paged View from the slow-load prompt** — When a full load is taking a while, switch straight to Paged View to browse the file as a table at any size
-- **Improved: Marketplace listing and README** — Clearer name and description, a comparison table, an FAQ, and an accurate description of large-file behaviour
+- **Improved: Marketplace listing and README** — Clearer name and description, an FAQ, and an accurate description of large-file behaviour
 
 ### Recent Highlights (v1.4.0–v1.4.1)
 - **New: Custom & regex delimiters** (v1.4.0) — Split on a multi-character separator such as `||`, or on a regular expression such as `[\s]{2,}` for space-aligned log files. Live column-count preview before you apply, with a warning when a pattern splits unevenly

@@ -20,7 +20,7 @@ All notable changes to the "CSV ClearView" extension will be documented in this 
 ### Changed
 
 - Removed an unused 510KB copy of AlaSQL (`media/alasql.min.js`) from the package.
-- **README:** Removed two features that no longer exist (undo/redo and Problems-pane diagnostics), stated that edits save immediately and stop at about 100MB, listed every read-only view, and added the `showSlowLoadPrompt` setting.
+- **README:** Removed two features that no longer exist (undo/redo and Problems-pane diagnostics), stated that edits save immediately and stop at about 100MB, listed every read-only view, added the `showSlowLoadPrompt` setting, and removed the comparison with other extensions.
 
 ## [1.5.0] - 2026-11-16
 
