@@ -6,8 +6,8 @@ anything larger than a small fix, so we can agree on the approach.
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) (includes npm)
-- [Visual Studio Code](https://code.visualstudio.com/)
+- [Node.js](https://nodejs.org/) 20 or newer (includes npm) — CI runs on Node 20
+- [Visual Studio Code](https://code.visualstudio.com/) 1.109 or newer
 
 ## Build and install locally
 
@@ -32,6 +32,17 @@ code --install-extension csv-clearview-x.x.x.vsix
 ## Tests and benchmarks
 
 ```bash
-npm test            # unit tests (no VS Code needed)
-npm run benchmark   # parse, paging, and SQL timings — see benchmark/README.md
+npm run test-compile   # TypeScript type-check (CI runs this first)
+npm test               # unit tests (no VS Code needed)
+npm run benchmark      # parse, paging, and SQL timings — see benchmark/README.md
 ```
+
+`npm test` runs a fixed list of files. When you add a test file under `tests/`,
+add it to the `test` script in `package.json` too, or it will never run.
+
+## Pull requests
+
+1. Fork the repo (or create a branch) and make your change
+2. Run `npm run test-compile` and `npm test` — both must pass
+3. Open a pull request against `main`. Changes to `main` go through pull
+   requests, and CI runs the type-check and tests on every one
