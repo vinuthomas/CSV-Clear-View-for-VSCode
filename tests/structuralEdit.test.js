@@ -17,6 +17,23 @@ function assert(condition, testName) {
 }
 
 const csv = fs.readFileSync(path.join(__dirname, '..', 'media', 'csv.js'), 'utf8');
+const promptHandler = csv.match(/function handlePromptResult\([\s\S]*?\n}\n/);
+if (!promptHandler) { throw new Error('handlePromptResult not found in media/csv.js'); }
+const pending = new Map();
+const handlePrompt = new Function('pendingPrompts', `${promptHandler[0]}; return handlePromptResult;`)(pending);
+let promptValue;
+pending.set(1, value => { promptValue = value; });
+handlePrompt({ id: '__proto__', value: 'unexpected' });
+assert(promptValue === undefined && pending.has(1), 'invalid prompt IDs do not invoke or remove callbacks');
+handlePrompt({ id: 1, value: 'renamed' });
+assert(promptValue === 'renamed' && !pending.has(1), 'valid prompt result invokes its callback once');
+pending.set(2, () => { promptValue = 'unexpected'; });
+handlePrompt({ id: 2 });
+assert(promptValue === 'renamed' && !pending.has(2), 'cancelled prompts remove callbacks without invoking them');
+pending.set(3, 'not a function');
+handlePrompt({ id: 3, value: 'ignored' });
+assert(!pending.has(3), 'non-function prompt entries are safely ignored');
+
 const names = ['padRows', 'uniqueColumnName', 'insertColumn', 'deleteColumn', 'swapColumns', 'insertRow', 'deleteRow',
     'mapColumn', 'filterDataRows', 'toTitleCase', 'deleteRowsWhereEmpty', 'removeDuplicateRows', 'splitColumn'];
 const src = names.map(n => {

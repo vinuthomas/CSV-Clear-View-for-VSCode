@@ -1521,10 +1521,19 @@ function deleteRow(at) {
 // --- Prompts: webviews can't use window.prompt, so the host shows an input box ---
 const pendingPrompts = new Map(); // id -> callback(value)
 let promptSeq = 0;
-function askHost(prompt, value, then) {
+function askHost(prompt, value, callback) {
     const id = ++promptSeq;
-    pendingPrompts.set(id, then);
+    pendingPrompts.set(id, callback);
     vscode.postMessage({ type: 'prompt', id, prompt, value });
+}
+
+function handlePromptResult(message) {
+    if (!Number.isSafeInteger(message.id)) { return; }
+    const callback = pendingPrompts.get(message.id);
+    pendingPrompts.delete(message.id);
+    if (typeof callback === 'function' && typeof message.value === 'string') {
+        callback(message.value);
+    }
 }
 
 function notify(message) {
@@ -2097,9 +2106,7 @@ window.addEventListener('message', event => {
     const message = event.data;
     switch (message.type) {
         case 'promptResult': {
-            const then = pendingPrompts.get(message.id);
-            pendingPrompts.delete(message.id);
-            if (then && typeof message.value === 'string') { then(message.value); } // undefined = cancelled
+            handlePromptResult(message); // undefined value means cancelled
             return;
         }
 
