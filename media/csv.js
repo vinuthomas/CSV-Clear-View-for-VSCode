@@ -1437,7 +1437,7 @@ function showColumnContextMenu(colIndex, e) {
         items.push({ label: 'Insert column right', action: () => insertColumn(colIndex + 1) });
         if (colIndex > 0) { items.push({ label: 'Move column left', action: () => swapColumns(colIndex, colIndex - 1) }); }
         if (colIndex < colCount - 1) { items.push({ label: 'Move column right', action: () => swapColumns(colIndex, colIndex + 1) }); }
-        if (colCount > 1) { items.push({ label: 'Delete column', danger: true, action: () => deleteColumn(colIndex) }); }
+        if (colCount > 1) { items.push({ label: 'Delete column', action: () => deleteColumn(colIndex) }); }
     }
     openContextMenu(e, items);
 }
@@ -1521,7 +1521,7 @@ function showRowContextMenu(displayIdx, e) {
     openContextMenu(e, [
         { label: 'Insert row above', action: () => insertRow(idx) },
         { label: 'Insert row below', action: () => insertRow(idx + 1) },
-        { label: 'Delete row', danger: true, action: () => deleteRow(idx) }
+        { label: 'Delete row', action: () => deleteRow(idx) }
     ]);
 }
 
@@ -1543,12 +1543,16 @@ if (tableContainer) {
 
         if (isChunkedMode) {
             handleChunkedScroll();
-        } else if (currentDisplayData.length > 50) {
-            // Virtual vertical scroll
+        } else if (currentDisplayData.length > 50 && tableContainer.scrollTop !== lastVirtualScrollTop) {
+            // Virtual vertical scroll. Horizontal scrolling (e.g. Tab into an off-screen
+            // column) must not re-render: that would destroy the cell being edited.
+            lastVirtualScrollTop = tableContainer.scrollTop;
             handleScroll();
         }
     });
 }
+
+let lastVirtualScrollTop = 0;
 
 function handleScroll() {
     requestAnimationFrame(() => {
@@ -1649,6 +1653,7 @@ function updateVirtualTable() {
     if (!currentDisplayData || currentDisplayData.length === 0) return;
     
     const scrollTop = tableContainer.scrollTop;
+    lastVirtualScrollTop = scrollTop; // rows now match this position
     const containerHeight = tableContainer.clientHeight;
     const visibleRowCount = Math.ceil(containerHeight / rowHeight);
     const dataRowCount = currentDisplayData.length - 1; // exclude header
@@ -2501,16 +2506,27 @@ if (tableContainer) {
         }
         const cell = e.target;
         if ((cell.tagName === 'TD' || cell.tagName === 'TH') && cell.contentEditable !== 'true') {
-            cell.contentEditable = 'true';
-            cell.focus();
-            
-            const range = document.createRange();
-            range.selectNodeContents(cell);
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
+            startCellEdit(cell);
         }
     });
+
+    function startCellEdit(cell) {
+        cell.contentEditable = 'true';
+        cell.focus();
+        const range = document.createRange();
+        range.selectNodeContents(cell);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+
+    /** Next (or previous) editable cell, wrapping across rows; skips the frozen spacer and line-number pins. */
+    function adjacentEditableCell(cell, backward) {
+        const cells = [...table.querySelectorAll('tbody td')]
+            .filter(td => !td.hasAttribute('aria-hidden') && !td.classList.contains('dupe-linenum-cell'));
+        const i = cells.indexOf(cell);
+        return i === -1 ? null : cells[backward ? i - 1 : i + 1] || null;
+    }
 
     tableContainer.addEventListener('focusout', (e) => {
         if (e.target.tagName === 'TD' || e.target.tagName === 'TH') {
@@ -2524,6 +2540,14 @@ if (tableContainer) {
         if ((cell.tagName === 'TD' || cell.tagName === 'TH') && cell.contentEditable === 'true') {
             if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
                 e.stopPropagation();
+            }
+            if (e.key === 'Tab') {
+                // Tab / Shift+Tab: save this cell and edit the next / previous one.
+                e.preventDefault();
+                e.stopPropagation();
+                const next = adjacentEditableCell(cell, e.shiftKey);
+                cell.blur(); // focusout saves the edit
+                if (next) { startCellEdit(next); }
             }
         }
     }, true);

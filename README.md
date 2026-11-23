@@ -104,7 +104,7 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 - **Smart Chunking:** Files are processed in chunks to keep VS Code responsive
 
 ### ✏️ Editing & Validation
-- **In-Place Cell Editing:** Double-click any cell to edit it. **Ctrl+Z / Ctrl+Y** (Cmd+Z / Cmd+Shift+Z on macOS) undo and redo edits, and **Ctrl+S** saves — like any other VS Code editor, unsaved edits show a dot on the tab and survive a restart
+- **In-Place Cell Editing:** Double-click any cell to edit it; **Tab** / **Shift+Tab** move to the next or previous cell. **Ctrl+Z / Ctrl+Y** (Cmd+Z / Cmd+Shift+Z on macOS) undo and redo edits, and **Ctrl+S** saves — like any other VS Code editor, unsaved edits show a dot on the tab and survive a restart
 - **Rows & Columns:** Right-click a cell to insert a row above or below, or delete it. Right-click a column header to rename, insert, move, or delete a column. All of it can be undone
 - **Find & Replace:** Search and replace across the rows in the current view (filters applied)
 - **Read-only views:** Editing is off for Excel files, regex delimiters, Show Head / Show Tail, Paged View, and SQL query results (click **Reset** to edit again)
