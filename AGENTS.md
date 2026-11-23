@@ -215,30 +215,37 @@ code --install-extension csv-clearview-x.x.x.vsix
    - **Patch (1.0.X):** the release is bug fixes / internal changes only, no new feature
    - **Major (X.0.0):** breaking changes — only when the user explicitly calls for it
    - When a release mixes a feature with bug fixes, the feature decides: bump minor, not patch.
-4. **Build and Package:** Compile and package the extension:
+4. **Build and Package:** Run the tests and type check, then package the extension:
    ```bash
-   npm run compile
+   npm test
+   npm run test-compile
    node_modules/.bin/vsce package
    ```
+   - If packaging reports invalid or extraneous dependencies, check the installation against `package-lock.json`. `npm ci` removes the existing `node_modules` before reinstalling, so use a separate clean checkout or build directory when it may contain dependencies needed for other work.
+   - Inspect the VSIX contents and confirm local agent configuration, credentials and other development-only files are excluded.
 5. **Git Commit and Tag:** Create commit and tag for the release:
    ```bash
-   git add .
+   git add <release-files>
    git commit -m "chore: bump version to x.x.x"
    git tag -a vx.x.x -m "Release vx.x.x"
-   git push && git push --tags
+   git push origin main refs/tags/vx.x.x
    ```
-6. **Marketplace Publishing:** Do NOT push releases to the marketplace automatically. Always allow the user to explicitly request publishing. When approved, publish to BOTH the VS Code Marketplace and the Open VSX Registry:
-   ```bash
-   node_modules/.bin/vsce publish
-   npx ovsx publish
-   ```
-7. **GitHub Release:** Create a GitHub release with the VSIX file attached:
+   Stage only the intended release files, preserve unrelated work and check the remote branch before pushing.
+6. **GitHub Release:** Create a GitHub release with the VSIX file attached:
    ```bash
    gh release create vx.x.x csv-clearview-x.x.x.vsix --title "vx.x.x - Release Title" --notes "Release notes from CHANGELOG"
    ```
    - Include release notes from the CHANGELOG
    - Attach the VSIX file for manual installation
    - Provide installation instructions
+7. **Marketplace Publishing:** Do NOT publish automatically. The user must explicitly request marketplace publication. Publish to BOTH the VS Code Marketplace and Open VSX:
+   - Download the VSIX attached to the GitHub release. Compare its SHA-256 with the release asset digest and inspect its manifest to confirm publisher, extension name and version. Use this same verified file for both registries.
+   ```bash
+   node_modules/.bin/vsce publish --packagePath /path/to/verified.vsix
+   npx ovsx publish /path/to/verified.vsix
+   ```
+   - If `ovsx` fails to load `@node-rs/crc32` with a macOS code-signature or Team ID error, retry with a compatible Node runtime. The Homebrew Node runtime worked for v1.6.0; select it on `PATH` before running `npx ovsx` rather than relying on a cached npx directory. Do not print or store publisher credentials.
+   - Check each registry independently after publishing. `node_modules/.bin/vsce show vinuthomas.csv-clearview --json` and `curl -fsSL https://open-vsx.org/api/vinuthomas/csv-clearview/latest` show the public versions. A successful upload is not proof the public listing has updated: report each as accepted or publicly available and recheck if it still shows an older version.
 
 ## Recent Bug Fixes (v1.0.1)
 - **Scroll Position Preservation:** Fixed issue where sorting columns would reset horizontal scroll position. Now saves and restores `scrollLeft` on both `tableContainer` and `headerContainer` when sorting is triggered (media/csv.js lines ~2102-2110 and ~2199-2207)
