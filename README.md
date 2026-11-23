@@ -104,7 +104,7 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 - **Smart Chunking:** Files are processed in chunks to keep VS Code responsive
 
 ### ✏️ Editing & Validation
-- **In-Place Cell Editing:** Double-click any cell to edit it. Changes are written to the file automatically as you make them
+- **In-Place Cell Editing:** Double-click any cell to edit it. **Ctrl+Z / Ctrl+Y** (Cmd+Z / Cmd+Shift+Z on macOS) undo and redo edits, and **Ctrl+S** saves — like any other VS Code editor, unsaved edits show a dot on the tab and survive a restart
 - **Find & Replace:** Search and replace across the rows in the current view (filters applied)
 - **Read-only views:** Editing is off for Excel files, regex delimiters, Show Head / Show Tail, Paged View, and SQL query results (click **Reset** to edit again)
 - **CSV Linting:** Automatic detection of rows with inconsistent column counts and unclosed quotes, marked in the scrollbar
@@ -150,7 +150,7 @@ Comma, tab, pipe, and semicolon are detected automatically. For anything else �
 Yes. CSV ClearView is published on the [Open VSX Registry](https://open-vsx.org/extension/vinuthomas/csv-clearview), which these editors use. Search for `CSV ClearView` in their Extensions view.
 
 ### Does CSV ClearView change my file?
-Only when you edit a cell or use Replace — those changes are written to the file right away. Sorting, filtering, SQL queries, profiling, and duplicate views only change what you see.
+Only when you save (Ctrl+S, or auto-save if you have it on) after editing a cell or using Replace — and you can undo those edits first. Sorting, filtering, SQL queries, profiling, and duplicate views only change what you see.
 
 ## Configuration
 

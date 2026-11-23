@@ -40,7 +40,7 @@ assert((csv.match(/!isFindReplaceAvailable\(\) \|\| isShowingQueryResult\(\)/g) 
     'Replace and Replace All are blocked on query results');
 
 console.log('\n📋 Own saves do not reload the view');
-assert(/selfWrite = this\.saveDocument\(/.test(editCase), 'save records its write');
+assert(/document\.selfWrite = this\.saveDocument\(/.test(host), 'save records its write');
 assert(/onDidChange\(async \(\) => \{[\s\S]{0,300}mtime === own\) \{ return; \}/.test(host),
     'watcher skips the change our own save made');
 

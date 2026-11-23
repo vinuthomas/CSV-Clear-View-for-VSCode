@@ -1900,8 +1900,10 @@ window.addEventListener('message', event => {
             loadGeneration++;
             // Leave raw view — the branches below set visibility for the new mode
             resetRawViewState();
-            // Header mode comes from the setting on every fresh load
-            hasHeaders = !message.config || message.config.firstRowIsHeader !== false;
+            // Header mode comes from the setting on every fresh load; undo/redo keeps the user's choice
+            if (!message.isUndo) {
+                hasHeaders = !message.config || message.config.firstRowIsHeader !== false;
+            }
             updateHeadersBtnState();
 
             // Head/Tail show only part of the file — saving an edit would overwrite the rest.

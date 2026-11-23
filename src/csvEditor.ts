@@ -6,6 +6,7 @@ import * as os from 'os';
 import { maybePromptForReview } from './reviewPrompt';
 import { computeSqlPayloadLimit, estimateJsonBytes, formatMB } from './sqlLimits';
 import { validateSqlQuery } from './sqlValidate';
+import { diffText, applyChange } from './textDiff';
 
 let _alasql: ((query: string, params?: any[]) => any) | null = null;
 function getAlasql(): (query: string, params?: any[]) => any {
@@ -126,6 +127,15 @@ const SQL_PAYLOAD_LIMIT = computeSqlPayloadLimit(os.totalmem());
  * This allows us to handle large files without VS Code's TextDocument limitations.
  */
 class CsvDocument implements vscode.CustomDocument {
+	/** Current content (with unsaved edits) once loaded in Full or Text view; null = read from disk. */
+	text: string | null = null;
+	/** True after an edit, undo or redo until the next save or revert. */
+	dirty = false;
+	/** mtime of our own last save, so the file watcher can skip it. */
+	selfWrite: Promise<number> | null = null;
+	/** Re-sends the current content to the open webview. Set by resolveCustomEditor. */
+	refresh: (isUndo?: boolean) => Promise<void> = async () => { };
+
 	constructor(
 		public readonly uri: vscode.Uri,
 		public readonly size: number
@@ -186,11 +196,18 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 
 	async openCustomDocument(
 		uri: vscode.Uri,
-		_openContext: vscode.CustomDocumentOpenContext,
+		openContext: vscode.CustomDocumentOpenContext,
 		_token: vscode.CancellationToken
 	): Promise<CsvDocument> {
 		const stats = await vscode.workspace.fs.stat(uri);
-		return new CsvDocument(uri, stats.size);
+		const document = new CsvDocument(uri, stats.size);
+		if (openContext.backupId) {
+			// Restoring unsaved edits after a restart (hot exit).
+			const backup = await vscode.workspace.fs.readFile(vscode.Uri.parse(openContext.backupId));
+			document.text = Buffer.from(backup).toString('utf8');
+			document.dirty = true;
+		}
+		return document;
 	}
 
 	public async resolveCustomEditor(
@@ -320,7 +337,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		// ----------------------------------------------------------------
 		// updateWebview — sends initial data to the webview
 		// ----------------------------------------------------------------
-		const updateWebview = async () => {
+		const updateWebview = async (isUndo = false) => {
 			try {
 				const cfg = vscode.workspace.getConfiguration('csvClearView');
 				let text = '';
@@ -384,8 +401,11 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 
 					return;
 				} else if (viewMode === 'full' || viewMode === 'text') {
-					const uint8Array = await vscode.workspace.fs.readFile(document.uri);
-					text = Buffer.from(uint8Array).toString('utf8');
+					if (document.text === null) {
+						const uint8Array = await vscode.workspace.fs.readFile(document.uri);
+						document.text = Buffer.from(uint8Array).toString('utf8');
+					}
+					text = document.text;
 				} else if (viewMode === 'head') {
 					// Read the first 256KB as a safe "head" buffer
 					const headSize = Math.min(document.size, 256 * 1024);
@@ -431,6 +451,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			webviewPanel.webview.postMessage({
 					type: 'update',
 					text: text,
+					isUndo,
 					isLargeFile: isLargeFile,
 					viewMode: viewMode,
 					fileExtension: document.uri.fsPath.split('.').pop()?.toLowerCase() || 'csv',
@@ -455,22 +476,30 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			}
 		};
 
+		document.refresh = updateWebview;
+
 		// Initial update
 		updateWebview();
 
 		// Handle file changes
 		const watcher = vscode.workspace.createFileSystemWatcher(document.uri.fsPath);
-		// mtime of our own last save. The webview already shows that content, so
-		// reloading it would only re-parse the file and clear filters/sort/query.
-		let selfWrite: Promise<number> | null = null;
+		// Our own saves are skipped (document.selfWrite holds their mtime): the webview
+		// already shows that content, and reloading would clear filters/sort/query.
 		const watcherListener = watcher.onDidChange(async () => {
 			try {
-				const own = selfWrite ? await selfWrite.catch(() => -1) : -1;
+				const own = document.selfWrite ? await document.selfWrite.catch(() => -1) : -1;
 				if ((await vscode.workspace.fs.stat(document.uri)).mtime === own) { return; }
 			} catch { /* stat failed — reload below */ }
-			// Invalidate row index / cached workbook so they are rebuilt on next access
+			if (document.dirty) {
+				// Reloading would throw away the user's unsaved edits.
+				vscode.window.showWarningMessage(
+					'CSV ClearView: The file changed on disk. Your unsaved edits are kept — save to overwrite it, or run "File: Revert File" to load the version on disk.');
+				return;
+			}
+			// Invalidate row index / cached workbook / text so they are rebuilt on next access
 			rowIndex = null;
 			workbook = null;
+			document.text = null;
 			updateWebview();
 		});
 
@@ -504,11 +533,21 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						vscode.window.showErrorMessage('CSV ClearView: This file is too large to save edits (over 100 MB). Your change was NOT saved.');
 						return;
 					}
-					selfWrite = this.saveDocument(document, e.text)
-						.then(async () => (await vscode.workspace.fs.stat(document.uri)).mtime);
-					selfWrite.catch(err => {
-						vscode.window.showErrorMessage(`CSV ClearView: Failed to save file — ${err.message || err}`);
-					});
+					{
+						const before = document.text
+							?? Buffer.from(await vscode.workspace.fs.readFile(document.uri)).toString('utf8');
+						if (before === e.text) { return; }
+						// Keep only the changed span per undo step, not a full copy of the file.
+						const change = diffText(before, e.text);
+						document.text = e.text;
+						document.dirty = true;
+						const step = (backward: boolean) => async () => {
+							document.text = applyChange(document.text ?? '', change, backward);
+							document.dirty = true;
+							await document.refresh(true);
+						};
+						this._onDidChangeCustomDocumentEmitter.fire({ document, label: 'Edit', undo: step(true), redo: step(false) });
+					}
 					return;
 
 				case 'runQuery': {
@@ -888,19 +927,36 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 	}
 
 	async saveCustomDocument(document: CsvDocument, _cancellation: vscode.CancellationToken): Promise<void> {
-		// Since we save on every edit for now, this is just to satisfy the interface.
-		// In a more complex app, we'd handle dirty states here.
+		if (document.text === null) { return; } // nothing loaded, so nothing edited
+		document.selfWrite = this.saveDocument(document, document.text)
+			.then(async () => (await vscode.workspace.fs.stat(document.uri)).mtime);
+		await document.selfWrite; // a failure propagates so VS Code reports it and keeps the file dirty
+		document.dirty = false;
 	}
 
 	async saveCustomDocumentAs(document: CsvDocument, destination: vscode.Uri, _cancellation: vscode.CancellationToken): Promise<void> {
-		const uint8Array = await vscode.workspace.fs.readFile(document.uri);
+		const uint8Array = document.text !== null
+			? Buffer.from(document.text, 'utf8')
+			: await vscode.workspace.fs.readFile(document.uri);
 		await vscode.workspace.fs.writeFile(destination, uint8Array);
 	}
 
-	async backupCustomDocument(_document: CsvDocument, _context: vscode.CustomDocumentBackupContext, _token: vscode.CancellationToken): Promise<vscode.CustomDocumentBackup> {
-		return { id: '', delete: () => {} };
+	async backupCustomDocument(document: CsvDocument, context: vscode.CustomDocumentBackupContext, _token: vscode.CancellationToken): Promise<vscode.CustomDocumentBackup> {
+		const bytes = document.text !== null
+			? Buffer.from(document.text, 'utf8')
+			: await vscode.workspace.fs.readFile(document.uri);
+		await vscode.workspace.fs.writeFile(context.destination, bytes);
+		return {
+			id: context.destination.toString(),
+			delete: () => { vscode.workspace.fs.delete(context.destination).then(undefined, () => { /* already gone */ }); }
+		};
 	}
-	async revertCustomDocument(_document: CsvDocument, _token: vscode.CancellationToken): Promise<void> {}
+
+	async revertCustomDocument(document: CsvDocument, _token: vscode.CancellationToken): Promise<void> {
+		document.text = null;
+		document.dirty = false;
+		await document.refresh();
+	}
 
 	private getHtmlForWebview(webview: vscode.Webview): string {
 		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'csv.js'));
