@@ -106,6 +106,8 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 ### ✏️ Editing & Validation
 - **In-Place Cell Editing:** Double-click any cell to edit it; **Tab** / **Shift+Tab** move to the next or previous cell. **Ctrl+Z / Ctrl+Y** (Cmd+Z / Cmd+Shift+Z on macOS) undo and redo edits, and **Ctrl+S** saves — like any other VS Code editor, unsaved edits show a dot on the tab and survive a restart
 - **Rows & Columns:** Right-click a cell to insert a row above or below, or delete it. Right-click a column header to rename, insert, move, or delete a column. All of it can be undone
+- **Clean a Column:** Right-click a column header → **Clean column…** to trim whitespace, change case (UPPERCASE, lowercase, Title Case), fill empty cells, delete rows where the column is empty, or split it into several columns on a separator
+- **Remove Duplicates:** After **Duplicates** finds repeated rows, **Remove duplicates** deletes them and keeps the first of each
 - **Find & Replace:** Search and replace across the rows in the current view (filters applied)
 - **Read-only views:** Editing is off for Excel files, regex delimiters, Show Head / Show Tail, Paged View, and SQL query results (click **Reset** to edit again)
 - **CSV Linting:** Automatic detection of rows with inconsistent column counts and unclosed quotes, marked in the scrollbar

@@ -1402,7 +1402,9 @@ function openContextMenu(e, items) {
     // Close on outside click
     setTimeout(() => {
         document.addEventListener('click', function closeMenu() {
-            if (contextMenu) { contextMenu.remove(); contextMenu = null; }
+            // Only close this menu: a menu item may have just opened a submenu.
+            menu.remove();
+            if (contextMenu === menu) { contextMenu = null; }
             document.removeEventListener('click', closeMenu);
         });
     }, 0);
@@ -1430,11 +1432,12 @@ function showColumnContextMenu(colIndex, e) {
         const colCount = originalRawData[0].length;
         if (hasHeaders) {
             items.push({ label: 'Rename column…', action: () => {
-                vscode.postMessage({ type: 'renameColumn', col: colIndex, current: originalRawData[0][colIndex] || '' });
+                askHost('Rename column', originalRawData[0][colIndex] || '', name => renameColumn(colIndex, name));
             } });
         }
         items.push({ label: 'Insert column left', action: () => insertColumn(colIndex) });
         items.push({ label: 'Insert column right', action: () => insertColumn(colIndex + 1) });
+        items.push({ label: 'Clean column…', action: () => showCleanColumnMenu(colIndex, e) });
         if (colIndex > 0) { items.push({ label: 'Move column left', action: () => swapColumns(colIndex, colIndex - 1) }); }
         if (colIndex < colCount - 1) { items.push({ label: 'Move column right', action: () => swapColumns(colIndex, colIndex + 1) }); }
         if (colCount > 1) { items.push({ label: 'Delete column', action: () => deleteColumn(colIndex) }); }
@@ -1513,6 +1516,120 @@ function insertRow(at) {
 function deleteRow(at) {
     originalRawData.splice(at, 1);
     commitStructuralEdit();
+}
+
+// --- Prompts: webviews can't use window.prompt, so the host shows an input box ---
+const pendingPrompts = new Map(); // id -> callback(value)
+let promptSeq = 0;
+function askHost(prompt, value, then) {
+    const id = ++promptSeq;
+    pendingPrompts.set(id, then);
+    vscode.postMessage({ type: 'prompt', id, prompt, value });
+}
+
+function notify(message) {
+    vscode.postMessage({ type: 'notify', message });
+}
+
+// =============================================================================
+// CLEANING — whole-column operations; each is one undo step
+// =============================================================================
+
+/** Replace every data cell in a column with fn(cell). Returns how many cells changed. */
+function mapColumn(col, fn) {
+    let changed = 0;
+    for (let i = 1; i < originalRawData.length; i++) {
+        const row = originalRawData[i];
+        const before = row[col] == null ? '' : row[col];
+        const after = fn(before);
+        if (after !== before) {
+            while (row.length < col) { row.push(''); }
+            row[col] = after;
+            changed++;
+        }
+    }
+    if (changed) { commitStructuralEdit(); }
+    return changed;
+}
+
+/** Keep the header plus data rows where keep(row) is true, in place. Returns how many were removed. */
+function filterDataRows(keep) {
+    let w = 1;
+    for (let i = 1; i < originalRawData.length; i++) {
+        if (keep(originalRawData[i])) { originalRawData[w++] = originalRawData[i]; }
+    }
+    const removed = originalRawData.length - w;
+    originalRawData.length = w;
+    if (removed) { commitStructuralEdit(); }
+    return removed;
+}
+
+const isBlank = v => v == null || v.trim() === '';
+
+function toTitleCase(s) {
+    return s.toLowerCase().replace(/(^|\s)(\S)/g, (_, space, ch) => space + ch.toUpperCase());
+}
+
+function deleteRowsWhereEmpty(col) {
+    return filterDataRows(row => !isBlank(row[col]));
+}
+
+/** Remove repeated rows, keeping the first of each. */
+function removeDuplicateRows() {
+    const seen = new Set();
+    return filterDataRows(row => {
+        const key = row.join('\x00');
+        if (seen.has(key)) { return false; }
+        seen.add(key);
+        return true;
+    });
+}
+
+const MAX_SPLIT_COLUMNS = 50;
+
+/** Split a column on a fixed string into "Name 1", "Name 2", …; short rows get blanks. Returns new column count, or an error string. */
+function splitColumn(col, delim) {
+    if (!delim) { return 'Enter the text to split on.'; }
+    let width = 1;
+    for (let i = 1; i < originalRawData.length; i++) {
+        const v = originalRawData[i][col];
+        if (v) { width = Math.max(width, v.split(delim).length); }
+    }
+    if (width < 2) { return `No cell in this column contains "${delim}".`; }
+    if (width > MAX_SPLIT_COLUMNS) { return `That would create ${width} columns (limit ${MAX_SPLIT_COLUMNS}).`; }
+    padRows(col + 1);
+    const name = originalRawData[0][col] || `Column ${col + 1}`;
+    originalRawData.forEach((row, i) => {
+        const parts = i === 0
+            ? Array.from({ length: width }, (_, k) => `${name} ${k + 1}`)
+            : (row[col] || '').split(delim);
+        while (parts.length < width) { parts.push(''); }
+        row.splice(col, 1, ...parts);
+    });
+    commitStructuralEdit();
+    return width;
+}
+
+function showCleanColumnMenu(col, e) {
+    const name = (hasHeaders && originalRawData[0][col]) || `Column ${col + 1}`;
+    const report = (n, what) => { if (!n) { notify(`Nothing to change: ${what}.`); } };
+    openContextMenu(e, [
+        { label: 'Trim whitespace', action: () => report(mapColumn(col, v => v.trim()), 'no leading or trailing spaces') },
+        { label: 'UPPERCASE', action: () => report(mapColumn(col, v => v.toUpperCase()), 'already uppercase') },
+        { label: 'lowercase', action: () => report(mapColumn(col, v => v.toLowerCase()), 'already lowercase') },
+        { label: 'Title Case', action: () => report(mapColumn(col, toTitleCase), 'already title case') },
+        { label: 'Fill empty cells…', action: () => askHost(`Fill empty cells in "${name}" with`, '', value => {
+            report(mapColumn(col, v => isBlank(v) ? value : v), 'no empty cells');
+        }) },
+        { label: 'Delete rows where empty', action: () => {
+            const n = deleteRowsWhereEmpty(col);
+            notify(n ? `Deleted ${n.toLocaleString()} row(s) with an empty "${name}".` : `No rows have an empty "${name}".`);
+        } },
+        { label: 'Split column…', action: () => askHost(`Split "${name}" on (for example , or a space)`, ',', delim => {
+            const result = splitColumn(col, delim);
+            if (typeof result === 'string') { notify(result); }
+        }) }
+    ]);
 }
 
 function showRowContextMenu(displayIdx, e) {
@@ -1979,9 +2096,12 @@ window.addEventListener('message', event => {
     }
     const message = event.data;
     switch (message.type) {
-        case 'renameColumnResult':
-            renameColumn(message.col, message.name);
+        case 'promptResult': {
+            const then = pendingPrompts.get(message.id);
+            pendingPrompts.delete(message.id);
+            if (then && typeof message.value === 'string') { then(message.value); } // undefined = cancelled
             return;
+        }
 
         case 'savedDelimiters':
             // Authoritative list echoed back after a save or delete.
@@ -3248,8 +3368,17 @@ function runDuplicateDetection() {
         dupesBanner.innerHTML =
             `<span class="dupes-found">⚠ ${dupeIndices.size} duplicate rows found across ${groups.size} group(s).</span>` +
             ` <button id="dupes-show-only-btn" class="dupes-action-btn">Show only duplicates</button>` +
+            (canEditStructure() ? ` <button id="dupes-remove-btn" class="dupes-action-btn" title="Delete repeated rows from the file, keeping the first of each">Remove duplicates</button>` : '') +
             ` <button id="dupes-clear-btn" class="dupes-clear-btn">Dismiss</button>`;
         dupesBanner.classList.remove('hidden');
+    }
+    const removeBtn = document.getElementById('dupes-remove-btn');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', () => {
+            dismissDupesBanner();
+            const n = removeDuplicateRows();
+            notify(`Removed ${n.toLocaleString()} duplicate row(s). Press Ctrl+Z to undo.`);
+        });
     }
     // Attach banner button handlers
     const clearBtn = document.getElementById('dupes-clear-btn');

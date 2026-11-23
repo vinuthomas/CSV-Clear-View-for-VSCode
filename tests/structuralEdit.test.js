@@ -17,9 +17,14 @@ function assert(condition, testName) {
 }
 
 const csv = fs.readFileSync(path.join(__dirname, '..', 'media', 'csv.js'), 'utf8');
-const names = ['padRows', 'uniqueColumnName', 'insertColumn', 'deleteColumn', 'swapColumns', 'insertRow', 'deleteRow'];
+const names = ['padRows', 'uniqueColumnName', 'insertColumn', 'deleteColumn', 'swapColumns', 'insertRow', 'deleteRow',
+    'mapColumn', 'filterDataRows', 'toTitleCase', 'deleteRowsWhereEmpty', 'removeDuplicateRows', 'splitColumn'];
 const src = names.map(n => {
     const m = csv.match(new RegExp(`function ${n}\\([\\s\\S]*?\\n}\\n`));
+    if (!m) { throw new Error(`${n} not found in media/csv.js`); }
+    return m[0];
+}).join('\n') + '\n' + ['isBlank', 'MAX_SPLIT_COLUMNS'].map(n => {
+    const m = csv.match(new RegExp(`const ${n} = .*;`));
     if (!m) { throw new Error(`${n} not found in media/csv.js`); }
     return m[0];
 }).join('\n');
@@ -60,6 +65,41 @@ assert(JSON.stringify(d[1]) === '["",""]' && d.length === 4, 'insert row adds a 
 d = fresh();
 run(d, f => f.deleteRow(1));
 assert(JSON.stringify(d) === JSON.stringify([['a', 'b'], ['3']]), 'delete row removes only that row');
+
+console.log('\n📋 Cleaning');
+d = [['name', 'city'], ['  ada  ', 'x'], ['bob', ''], ['ada', 'x']];
+commits = run(d, f => f.mapColumn(0, v => v.trim()));
+assert(d[1][0] === 'ada' && commits === 1, 'trim changes cells and sends one edit');
+commits = run(d, f => f.mapColumn(0, v => v.trim()));
+assert(commits === 0, 'a no-op cleaning step sends no edit (no empty undo step)');
+
+let r;
+run([], f => { r = [f.toTitleCase('mARY o\'neil-smith'), f.toTitleCase('  two  words')]; });
+assert(r[0] === "Mary O'neil-smith" && r[1] === '  Two  Words', 'title case capitalises after spaces only');
+
+d = [['name', 'city'], ['ada', 'x'], ['bob', ' '], ['cy']];
+run(d, f => { r = f.deleteRowsWhereEmpty(1); });
+assert(r === 2 && JSON.stringify(d) === JSON.stringify([['name', 'city'], ['ada', 'x']]), 'delete rows where empty treats blanks and missing cells as empty');
+
+d = [['a', 'b'], ['1', '2'], ['1', '2'], ['3', '4'], ['1', '2']];
+run(d, f => { r = f.removeDuplicateRows(); });
+assert(r === 2 && JSON.stringify(d) === JSON.stringify([['a', 'b'], ['1', '2'], ['3', '4']]), 'remove duplicates keeps the first of each, header untouched');
+d = [['a'], ['1,2']];
+run(d, f => { r = f.removeDuplicateRows(); });
+assert(r === 0, 'no duplicates means nothing removed');
+
+d = [['id', 'name', 'z'], ['1', 'Ada Lovelace', 'q'], ['2', 'Bob', 'r'], ['3', 'A B C', 's']];
+commits = run(d, f => { r = f.splitColumn(1, ' '); });
+assert(r === 3 && commits === 1, 'split returns the new column count');
+assert(JSON.stringify(d) === JSON.stringify([
+    ['id', 'name 1', 'name 2', 'name 3', 'z'], ['1', 'Ada', 'Lovelace', '', 'q'], ['2', 'Bob', '', '', 'r'], ['3', 'A', 'B', 'C', 's']]),
+    'split pads short rows and keeps later columns aligned');
+d = [['a'], ['x']];
+commits = run(d, f => { r = f.splitColumn(0, ','); });
+assert(typeof r === 'string' && commits === 0, 'split with no matches explains instead of editing');
+d = [['a'], ['x'.repeat(60).split('').join(',')]];
+run(d, f => { r = f.splitColumn(0, ','); });
+assert(typeof r === 'string' && d[0].length === 1, 'split refuses to create more than the column limit');
 
 console.log('\n📋 Wiring');
 const host = fs.readFileSync(path.join(__dirname, '..', 'src', 'csvEditor.ts'), 'utf8');

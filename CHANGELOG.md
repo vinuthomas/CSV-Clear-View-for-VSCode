@@ -10,6 +10,8 @@ All notable changes to the "CSV ClearView" extension will be documented in this 
 
 - **Insert, delete, rename and move rows and columns:** Right-click a cell for **Insert row above / below** and **Delete row**. Right-click a column header for **Rename column…**, **Insert column left / right**, **Move column left / right** and **Delete column**. Each change is one undo step. Changing rows or columns reloads the view, so sort and filters are cleared.
 
+- **Clean a column:** Right-click a column header → **Clean column…** for Trim whitespace, UPPERCASE, lowercase, Title Case, Fill empty cells…, Delete rows where empty, and Split column… (on any separator, up to 50 columns). Each applies to the whole column and is one undo step.
+- **Remove duplicates:** The Duplicates banner has a **Remove duplicates** button that deletes repeated rows across the file, keeping the first of each.
 - **Tab to the next cell while editing:** Tab saves the cell and starts editing the next one (Shift+Tab goes back), wrapping to the next row and scrolling to columns off screen.
 
 ### Changed

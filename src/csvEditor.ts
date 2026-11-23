@@ -709,11 +709,17 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					return;
 				}
 
-				case 'renameColumn': {
-					if (typeof e.col !== 'number' || typeof e.current !== 'string') { return; }
-					const name = await vscode.window.showInputBox({ prompt: 'Rename column', value: e.current });
-					if (name === undefined || disposed) { return; } // cancelled
-					webviewPanel.webview.postMessage({ type: 'renameColumnResult', col: e.col, name });
+				case 'prompt': {
+					// Webviews can't use window.prompt; ask with an input box and reply by id.
+					if (typeof e.id !== 'number' || typeof e.prompt !== 'string') { return; }
+					const value = await vscode.window.showInputBox({ prompt: e.prompt, value: typeof e.value === 'string' ? e.value : '' });
+					if (disposed) { return; }
+					webviewPanel.webview.postMessage({ type: 'promptResult', id: e.id, value }); // undefined when cancelled
+					return;
+				}
+
+				case 'notify': {
+					if (typeof e.message === 'string') { vscode.window.showInformationMessage(`CSV ClearView: ${e.message.slice(0, 300)}`); }
 					return;
 				}
 
