@@ -14,6 +14,8 @@ node_modules/**
 !node_modules/alasql/**
 
 # Dev/agent tooling — not needed in published extension
+.agents/**
+.codex/**
 .claude/**
 .code-review-graph/**
 .github/**

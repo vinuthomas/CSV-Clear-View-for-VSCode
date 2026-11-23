@@ -87,7 +87,7 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 - **Grouped view:** "Show only duplicates" hides non-duplicate rows and groups matching rows together with a thin divider between each group
 - **Original line numbers:** A **#** column shows the exact CSV line number of every duplicate row so you can find it in the source file immediately
 - **Amber highlights:** Duplicate rows are tinted amber in the normal view for quick visual scanning
-- **Non-destructive:** Dismiss or restore the full table at any time — your data is never changed
+- **Review or remove:** Dismiss the results to leave your data unchanged, or choose **Remove duplicates** to keep the first of each repeated row. Removal can be undone
 
 ### 🧭 Navigation
 - **Go to Row:** Jump to any row by number instantly — the target row flashes to confirm navigation
@@ -294,7 +294,14 @@ SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
 
 See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
 
-### Latest Release (v1.5.0–v1.5.1)
+### Latest Release (v1.6.0)
+- **Undo, redo and save:** Edit cells and use Replace with VS Code's undo stack. Changes are saved with Ctrl+S (or auto-save), and unsaved edits are backed up
+- **Rows and columns:** Insert and delete rows; insert, delete, rename and move columns
+- **Clean columns:** Trim whitespace, change case, fill empty cells, delete rows with empty values or split a column
+- **Remove duplicates:** Delete repeated rows while keeping the first of each
+- **Faster cell editing:** Use Tab and Shift+Tab to move between cells
+
+### Previous Releases (v1.5.0–v1.5.1)
 - **Fixed: Editing in Show Head / Show Tail could overwrite the file** (v1.5.1) — These previews hold only part of the file, so they are now read-only
 - **Fixed: Lost edits** (v1.5.1) — Edits to SQL query results (which are copies) are now blocked instead of silently discarded, and edits too large to save now say so
 - **Fixed: Filters and sort reset after every edit** (v1.5.1) — Saving a cell no longer reloads the whole file
