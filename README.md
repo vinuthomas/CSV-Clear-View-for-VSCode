@@ -64,7 +64,7 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 - **Colored Columns:** Each column is automatically color-coded for instant visual separation (adapts to dark/light themes)
 - **Sticky Header:** Header row stays fixed at the top while scrolling through thousands of rows
 - **Alternating Rows:** Zebra-striping for improved row readability
-- **Freeze Panes:** Right-click any column header to freeze it Excel-style for easy comparison
+- **Freeze Panes:** Right-click any column header and choose **Freeze pane here** for Excel-style frozen columns
 
 ### 🔍 Data Analysis & Profiling
 - **SQL Queries:** Run full SQL SELECT statements on your CSV data (powered by AlaSQL)
@@ -105,6 +105,7 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 
 ### ✏️ Editing & Validation
 - **In-Place Cell Editing:** Double-click any cell to edit it. **Ctrl+Z / Ctrl+Y** (Cmd+Z / Cmd+Shift+Z on macOS) undo and redo edits, and **Ctrl+S** saves — like any other VS Code editor, unsaved edits show a dot on the tab and survive a restart
+- **Rows & Columns:** Right-click a cell to insert a row above or below, or delete it. Right-click a column header to rename, insert, move, or delete a column. All of it can be undone
 - **Find & Replace:** Search and replace across the rows in the current view (filters applied)
 - **Read-only views:** Editing is off for Excel files, regex delimiters, Show Head / Show Tail, Paged View, and SQL query results (click **Reset** to edit again)
 - **CSV Linting:** Automatic detection of rows with inconsistent column counts and unclosed quotes, marked in the scrollbar

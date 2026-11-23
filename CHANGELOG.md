@@ -8,6 +8,8 @@ All notable changes to the "CSV ClearView" extension will be documented in this 
 
 - **Undo and redo for edits:** Ctrl+Z / Ctrl+Y (Cmd+Z / Cmd+Shift+Z on macOS) undo and redo cell edits and Replace / Replace All. Each step stores only the text that changed, so undo stays cheap on large files.
 
+- **Insert, delete, rename and move rows and columns:** Right-click a cell for **Insert row above / below** and **Delete row**. Right-click a column header for **Rename column…**, **Insert column left / right**, **Move column left / right** and **Delete column**. Each change is one undo step. Changing rows or columns reloads the view, so sort and filters are cleared.
+
 ### Changed
 
 - **Edits are saved when you save:** Edits used to be written to disk as you typed. They now mark the tab as unsaved until you press Ctrl+S (or VS Code's auto-save runs), just like the text editor. Unsaved edits are backed up and restored after a restart, **File: Revert File** discards them, and if another program changes the file while you have unsaved edits, your edits are kept instead of being reloaded away.

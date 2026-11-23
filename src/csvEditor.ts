@@ -547,6 +547,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 							await document.refresh(true);
 						};
 						this._onDidChangeCustomDocumentEmitter.fire({ document, label: 'Edit', undo: step(true), redo: step(false) });
+						// Row/column changes shift indices, so the view re-parses instead of patching in place.
+						if (e.reload === true) { await document.refresh(true); }
 					}
 					return;
 
@@ -704,6 +706,14 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					if (isExcel || viewMode === 'chunked') { return; }
 					viewMode = 'chunked';
 					await updateWebview();
+					return;
+				}
+
+				case 'renameColumn': {
+					if (typeof e.col !== 'number' || typeof e.current !== 'string') { return; }
+					const name = await vscode.window.showInputBox({ prompt: 'Rename column', value: e.current });
+					if (name === undefined || disposed) { return; } // cancelled
+					webviewPanel.webview.postMessage({ type: 'renameColumnResult', col: e.col, name });
 					return;
 				}
 

@@ -237,7 +237,7 @@
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
     "test-compile": "tsc -p ./",
-    "test": "node tests/security.test.js && node tests/excel.test.js && node tests/delimiter.test.js && node tests/reviewPrompt.test.js && node tests/sqlLimits.test.js && node tests/pagedSwitch.test.js && node tests/editGuards.test.js && node tests/colStats.test.js && node tests/textDiff.test.js",
+    "test": "node tests/security.test.js && node tests/excel.test.js && node tests/delimiter.test.js && node tests/reviewPrompt.test.js && node tests/sqlLimits.test.js && node tests/pagedSwitch.test.js && node tests/editGuards.test.js && node tests/colStats.test.js && node tests/textDiff.test.js && node tests/structuralEdit.test.js",
     "benchmark": "node --expose-gc benchmark/run.js"
   },
   "devDependencies": {

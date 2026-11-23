@@ -1378,50 +1378,25 @@ function updateSortIndicators() {
 // Context menu for freeze
 let contextMenu = null;
 
-function showFreezeContextMenu(colIndex, e) {
+/** Show a context menu at the cursor. items: [{ label, action, danger? }] */
+function openContextMenu(e, items) {
     if (contextMenu) { contextMenu.remove(); contextMenu = null; }
-
     const menu = document.createElement('div');
     menu.className = 'context-menu';
-
-    // "Freeze pane here" means freeze all columns 0..colIndex as a contiguous pane.
-    // The pane is already frozen at this column if frozenCols covers exactly 0..colIndex.
-    const currentFreezeAt = frozenCols.size > 0 ? Math.max(...frozenCols) : -1;
-    const isPaneFrozenHere = currentFreezeAt === colIndex;
-
-    const item1 = document.createElement('div');
-    item1.className = 'context-menu-item';
-    item1.textContent = isPaneFrozenHere ? 'Unfreeze pane' : 'Freeze pane here';
-    item1.addEventListener('click', () => {
-        frozenCols.clear();
-        if (!isPaneFrozenHere) {
-            // Freeze all columns from 0 up to and including colIndex
-            for (let i = 0; i <= colIndex; i++) {
-                frozenCols.add(i);
-            }
-        }
-        menu.remove();
-        contextMenu = null;
-        renderTable(currentDisplayData, []);
+    items.forEach(({ label, action, danger }) => {
+        const item = document.createElement('div');
+        item.className = 'context-menu-item' + (danger ? ' context-menu-item-danger' : '');
+        item.textContent = label;
+        item.addEventListener('click', () => {
+            menu.remove();
+            contextMenu = null;
+            action();
+        });
+        menu.appendChild(item);
     });
-
-    const item2 = document.createElement('div');
-    item2.className = 'context-menu-item context-menu-item-danger';
-    item2.textContent = 'Unfreeze all';
-    item2.addEventListener('click', () => {
-        frozenCols.clear();
-        menu.remove();
-        contextMenu = null;
-        renderTable(currentDisplayData, []);
-    });
-
-    menu.appendChild(item1);
-    if (frozenCols.size > 0) { menu.appendChild(item2); }
-
-    // Position near cursor
-    menu.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
-    menu.style.top = Math.min(e.clientY, window.innerHeight - 100) + 'px';
     document.body.appendChild(menu);
+    menu.style.left = Math.max(0, Math.min(e.clientX, window.innerWidth - menu.offsetWidth)) + 'px';
+    menu.style.top = Math.max(0, Math.min(e.clientY, window.innerHeight - menu.offsetHeight)) + 'px';
     contextMenu = menu;
 
     // Close on outside click
@@ -1431,6 +1406,123 @@ function showFreezeContextMenu(colIndex, e) {
             document.removeEventListener('click', closeMenu);
         });
     }, 0);
+}
+
+/** Right-click on a column header: freeze pane, plus column editing when allowed. */
+function showColumnContextMenu(colIndex, e) {
+    // "Freeze pane here" means freeze all columns 0..colIndex as a contiguous pane.
+    const currentFreezeAt = frozenCols.size > 0 ? Math.max(...frozenCols) : -1;
+    const isPaneFrozenHere = currentFreezeAt === colIndex;
+    const items = [{
+        label: isPaneFrozenHere ? 'Unfreeze pane' : 'Freeze pane here',
+        action: () => {
+            frozenCols.clear();
+            if (!isPaneFrozenHere) {
+                for (let i = 0; i <= colIndex; i++) { frozenCols.add(i); }
+            }
+            renderTable(currentDisplayData, []);
+        }
+    }];
+    if (frozenCols.size > 0) {
+        items.push({ label: 'Unfreeze all', danger: true, action: () => { frozenCols.clear(); renderTable(currentDisplayData, []); } });
+    }
+    if (canEditStructure()) {
+        const colCount = originalRawData[0].length;
+        if (hasHeaders) {
+            items.push({ label: 'Rename column…', action: () => {
+                vscode.postMessage({ type: 'renameColumn', col: colIndex, current: originalRawData[0][colIndex] || '' });
+            } });
+        }
+        items.push({ label: 'Insert column left', action: () => insertColumn(colIndex) });
+        items.push({ label: 'Insert column right', action: () => insertColumn(colIndex + 1) });
+        if (colIndex > 0) { items.push({ label: 'Move column left', action: () => swapColumns(colIndex, colIndex - 1) }); }
+        if (colIndex < colCount - 1) { items.push({ label: 'Move column right', action: () => swapColumns(colIndex, colIndex + 1) }); }
+        if (colCount > 1) { items.push({ label: 'Delete column', danger: true, action: () => deleteColumn(colIndex) }); }
+    }
+    openContextMenu(e, items);
+}
+
+// =============================================================================
+// STRUCTURAL EDITING — rows and columns
+// Every change mutates originalRawData, then sends the whole file as one edit
+// with reload: true. The host records it for undo and reloads the view, which
+// clears sort/filters — needed anyway, since column indices shift.
+// =============================================================================
+
+function canEditStructure() {
+    return !isChunkedMode && !isReadOnly && !isShowingQueryResult() && !dupesOnlyMode
+        && originalRawData.length > 0;
+}
+
+function commitStructuralEdit() {
+    if (delimiterIsLossy()) { return; }
+    clearTimeout(saveTimeout); // a pending cell edit is already in originalRawData; send it with this one
+    const rows = hasHeaders ? originalRawData : originalRawData.slice(1);
+    vscode.postMessage({ type: 'edit', text: dataToCSV(rows, detectedDelimiter), reload: true });
+}
+
+/** Pad ragged rows so a column index exists in every row before splicing at it. */
+function padRows(width) {
+    originalRawData.forEach(row => { while (row.length < width) { row.push(''); } });
+}
+
+function uniqueColumnName() {
+    const taken = new Set(originalRawData[0]);
+    let n = 1;
+    while (taken.has(`New Column ${n}`)) { n++; }
+    return `New Column ${n}`;
+}
+
+function insertColumn(at) {
+    padRows(at);
+    const name = uniqueColumnName();
+    originalRawData.forEach((row, i) => row.splice(at, 0, i === 0 ? name : ''));
+    commitStructuralEdit();
+}
+
+function deleteColumn(col) {
+    originalRawData.forEach(row => row.splice(col, 1));
+    commitStructuralEdit();
+}
+
+function swapColumns(a, b) {
+    padRows(Math.max(a, b) + 1);
+    originalRawData.forEach(row => { [row[a], row[b]] = [row[b], row[a]]; });
+    commitStructuralEdit();
+}
+
+function renameColumn(col, name) {
+    if (!canEditStructure() || !hasHeaders || typeof name !== 'string' || !originalRawData[0]) { return; }
+    if (originalRawData[0][col] === name) { return; }
+    padRows(col + 1);
+    originalRawData[0][col] = name;
+    commitStructuralEdit();
+}
+
+/** Index in originalRawData of the row shown at currentDisplayData[displayIdx] (rows are shared arrays). */
+function sourceRowIndex(displayIdx) {
+    const row = currentDisplayData[displayIdx];
+    return row ? originalRawData.indexOf(row) : -1;
+}
+
+function insertRow(at) {
+    originalRawData.splice(at, 0, new Array(originalRawData[0].length).fill(''));
+    commitStructuralEdit();
+}
+
+function deleteRow(at) {
+    originalRawData.splice(at, 1);
+    commitStructuralEdit();
+}
+
+function showRowContextMenu(displayIdx, e) {
+    const idx = sourceRowIndex(displayIdx);
+    if (idx < 1) { return; } // 0 is the header row
+    openContextMenu(e, [
+        { label: 'Insert row above', action: () => insertRow(idx) },
+        { label: 'Insert row below', action: () => insertRow(idx + 1) },
+        { label: 'Delete row', danger: true, action: () => deleteRow(idx) }
+    ]);
 }
 
 // =============================================================================
@@ -1587,7 +1679,7 @@ function updateVirtualTable() {
         // In dupes-only mode, blank rows are group separators
         const isSeparator = dupesOnlyMode && row.every(c => c === '');
         const rowClass = isSeparator ? 'dupe-separator-row' : (isDupe ? 'dupe-row' : '');
-        html += `<tr style="height: ${rowHeight}px"${rowClass ? ` class="${rowClass}"` : ''}>`;
+        html += `<tr data-row="${absoluteRowIdx}" style="height: ${rowHeight}px"${rowClass ? ` class="${rowClass}"` : ''}>`;
         // Spacer td that sits under the frozen overlay
         if (frozenCols.size > 0) {
             html += `<td style="width:${frozenSpacerWidth}px;min-width:${frozenSpacerWidth}px;padding:0;border:none;" aria-hidden="true"></td>`;
@@ -1882,6 +1974,10 @@ window.addEventListener('message', event => {
     }
     const message = event.data;
     switch (message.type) {
+        case 'renameColumnResult':
+            renameColumn(message.col, message.name);
+            return;
+
         case 'savedDelimiters':
             // Authoritative list echoed back after a save or delete.
             if (Array.isArray(message.savedDelimiters)) {
@@ -2389,6 +2485,13 @@ function navigateHistoryPanel(direction) {
 
 if (tableContainer) {
     // Double-click to edit
+    tableContainer.addEventListener('contextmenu', (e) => {
+        const tr = e.target.closest && e.target.closest('tr[data-row]');
+        if (!tr || !canEditStructure()) { return; }
+        e.preventDefault();
+        showRowContextMenu(Number(tr.dataset.row), e);
+    });
+
     tableContainer.addEventListener('dblclick', (e) => {
         if (isChunkedMode || isReadOnly) { return; }
         if (isShowingQueryResult()) {
@@ -3981,10 +4084,10 @@ async function renderTable(data, errors) {
         // Right-click: freeze context menu
         th.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            showFreezeContextMenu(index, e);
+            showColumnContextMenu(index, e);
         });
 
-        th.title = `${colName} (${TYPE_TITLES[type] || 'String'})\nClick to sort | Shift+click for stats | Right-click to freeze pane`;
+        th.title = `${colName} (${TYPE_TITLES[type] || 'String'})\nClick to sort | Shift+click for stats | Right-click for column options`;
         th.classList.add('col-stats-trigger');
         trHead.appendChild(th);
     });
@@ -4103,7 +4206,7 @@ function buildFrozenOverlay(data, frozenArr, frozenWidths, totalFrozenWidth, dat
 
         th.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            showFreezeContextMenu(colIndex, e);
+            showColumnContextMenu(colIndex, e);
         });
 
         fTrHead.appendChild(th);
