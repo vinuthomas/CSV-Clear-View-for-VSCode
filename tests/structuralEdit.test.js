@@ -35,7 +35,7 @@ handlePrompt({ id: 3, value: 'ignored' });
 assert(!pending.has(3), 'non-function prompt entries are safely ignored');
 
 const names = ['padRows', 'uniqueColumnName', 'insertColumn', 'deleteColumn', 'swapColumns', 'insertRow', 'deleteRow',
-    'mapColumn', 'filterDataRows', 'toTitleCase', 'deleteRowsWhereEmpty', 'removeDuplicateRows', 'splitColumn'];
+    'mapColumn', 'filterDataRows', 'toTitleCase', 'deleteRowsWhereEmpty', 'removeDuplicateRows', 'splitColumn', 'carryComments'];
 const src = names.map(n => {
     const m = csv.match(new RegExp(`function ${n}\\([\\s\\S]*?\\n}\\n`));
     if (!m) { throw new Error(`${n} not found in media/csv.js`); }
@@ -49,7 +49,7 @@ const src = names.map(n => {
 function run(data, call) {
     let commits = 0;
     const fns = new Function('originalRawData', 'commitStructuralEdit',
-        `${src}; return { ${names.join(', ')} };`)(data, () => { commits++; });
+        `let rowComments = new Map(); ${src}; return { ${names.join(', ')} };`)(data, () => { commits++; });
     call(fns);
     return commits;
 }

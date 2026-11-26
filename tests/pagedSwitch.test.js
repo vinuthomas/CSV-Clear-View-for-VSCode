@@ -59,7 +59,7 @@ console.log('\n📋 Cancelling a superseded load');
 
 assert(/async function parseCSV\(text, delimiter, isRegex, isCancelled\)/.test(csv), 'parseCSV takes an isCancelled callback');
 assert(/if \(isCancelled && isCancelled\(\)\) \{\s*return \{ data: \[\], errors: \[\], cancelled: true \};/.test(csv), 'parseCSV stops at a yield point when cancelled');
-assert(/const gen = loadGeneration;\s*const parsed = await parseCSV\([^)]*\(\) => gen !== loadGeneration\)/.test(csv), 'updateContent passes a generation check to parseCSV');
+assert(/const gen = loadGeneration;\s*(?:const extracted = .*\s*)?const parsed = await parseCSV\([^)]*\(\) => gen !== loadGeneration\)/.test(csv), 'updateContent passes a generation check to parseCSV');
 assert(/if \(parsed\.cancelled \|\| gen !== loadGeneration\) \{ return; \}/.test(csv), 'updateContent leaves state alone when superseded');
 assert(/case 'update':[\s\S]{0,400}?loadGeneration\+\+/.test(csv), "every 'update' message starts a new load generation");
 assert(/finally \{\s*if \(gen === loadGeneration\) \{\s*isUpdating = false;\s*hideLoader\(\);/.test(csv), 'a superseded load does not hide the new load\'s spinner');

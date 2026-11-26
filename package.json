@@ -161,6 +161,12 @@
           "default": true,
           "description": "Treat the first row as a header row. When disabled, generic column names (Column 1, Column 2, …) are used and the first row is shown as data. Can also be toggled per file with the Headers toolbar button."
         },
+        "csvClearView.commentPrefix": {
+          "type": "string",
+          "default": "#",
+          "maxLength": 16,
+          "markdownDescription": "Lines starting with this text are comments: hidden from the grid, left out of SQL, stats and exports, and kept in place when you save. Set to an empty string to treat every line as data. Not applied in Paged View."
+        },
         "csvClearView.alternatingRows": {
           "type": "boolean",
           "default": true,
@@ -237,7 +243,7 @@
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
     "test-compile": "tsc -p ./",
-    "test": "node tests/security.test.js && node tests/excel.test.js && node tests/delimiter.test.js && node tests/reviewPrompt.test.js && node tests/sqlLimits.test.js && node tests/pagedSwitch.test.js && node tests/editGuards.test.js && node tests/colStats.test.js && node tests/textDiff.test.js && node tests/structuralEdit.test.js",
+    "test": "node tests/security.test.js && node tests/excel.test.js && node tests/delimiter.test.js && node tests/reviewPrompt.test.js && node tests/sqlLimits.test.js && node tests/pagedSwitch.test.js && node tests/editGuards.test.js && node tests/colStats.test.js && node tests/textDiff.test.js && node tests/structuralEdit.test.js && node tests/commentLines.test.js",
     "benchmark": "node --expose-gc benchmark/run.js"
   },
   "devDependencies": {

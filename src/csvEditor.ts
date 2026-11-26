@@ -466,6 +466,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						delimiterIsRegex: cfg.get('delimiterIsRegex') === true,
 						savedDelimiters: readSavedDelimiters(cfg),
 						firstRowIsHeader: hasHeaders,
+						// Converted formats have no comment lines: a leading # there is cell data.
+						commentPrefix: isExcel ? '' : (cfg.get<string>('commentPrefix') ?? '#'),
 						readOnly: isExcel,
 						sqlPayloadLimit: SQL_PAYLOAD_LIMIT
 					}
