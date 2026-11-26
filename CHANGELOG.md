@@ -14,6 +14,9 @@ All notable changes to the "CSV ClearView" extension will be documented in this 
 ### Fixed
 
 - **Excel files with a delimiter setting:** A non-default `csvClearView.delimiter` (for example `;`) was applied to the CSV converted from an `.xlsx` sheet, splitting its columns wrongly. Converted files (Excel, JSONL, Parquet) now always use a comma.
+- **Comment-prefixed values:** Saving a CSV now keeps a first-column value such as `#123` quoted so it remains data when the file is reopened.
+- **Parquet headers in Paged View:** Parquet schema names remain headers when `firstRowIsHeader` is disabled, keeping the row count and page offsets correct.
+- **Missing JSONL keys:** Missing keys named `__proto__` or `constructor` now show as empty cells instead of inherited JavaScript values.
 
 ## [1.6.0] - 2026-11-23
 
