@@ -32,6 +32,10 @@ let rowHeight = 30; // Matches CSS height
 let totalRows = 0;
 let lastScrollTop = 0;
 let columnWidths = []; // Array of pixel widths for columns
+let userColWidths = {}; // colIndex -> px set by dragging a header edge; kept while the column count is unchanged
+let userColWidthsCols = 0;
+const MIN_COL_WIDTH = 100; // th/td min-width in csv.css
+const MAX_COL_WIDTH = 800; // th/td max-width in csv.css
 
 // Browsers clamp scrollTop at ~16–33 million px depending on engine.
 // We cap the virtual spacer at 10M px and scale logical row positions into
@@ -4116,6 +4120,52 @@ function dataToCSV(data, delimiter, withComments) {
     return lines.join(lineEnding);
 }
 
+/** Width that fits the header and the first 100 data rows, capped at 600px. */
+function autoColumnWidth(data, colIndex) {
+    let maxWidth = data[0] && data[0][colIndex] ? data[0][colIndex].length : 0;
+    data.slice(1, 101).forEach(row => {
+        const cellLength = row[colIndex] ? row[colIndex].length : 0;
+        if (cellLength > maxWidth) maxWidth = cellLength;
+    });
+    const charWidth = 9;
+    const padding = 24;
+    return Math.max(MIN_COL_WIDTH, Math.min(600, (maxWidth * charWidth) + padding));
+}
+
+/** Set one column's width in place, without re-rendering the grid. */
+function setColumnWidth(colIndex, px) {
+    const width = Math.round(Math.max(MIN_COL_WIDTH, Math.min(MAX_COL_WIDTH, px)));
+    columnWidths[colIndex] = width;
+    // Frozen columns sit in the overlay; when any exist the main colgroups start with one spacer <col>.
+    let colPos = frozenCols.size ? 1 : 0;
+    for (let i = 0; i < colIndex; i++) { if (!frozenCols.has(i)) { colPos++; } }
+    const total = columnWidths.reduce((a, b) => a + b, 0);
+    [headerTable, table].forEach(t => {
+        if (!t) { return; }
+        const col = t.querySelectorAll('colgroup > col')[colPos];
+        if (col) { col.style.width = width + 'px'; }
+        t.style.width = total + 'px';
+    });
+}
+
+/** Drag a header's right edge to resize its column. */
+function startColumnResize(e, colIndex) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = columnWidths[colIndex];
+    document.body.classList.add('col-resizing');
+    const onMove = ev => setColumnWidth(colIndex, startWidth + ev.clientX - startX);
+    const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.classList.remove('col-resizing');
+        userColWidths[colIndex] = columnWidths[colIndex];
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
 function createColGroup(widths) {
     const colgroup = document.createElement('colgroup');
     widths.forEach(w => {
@@ -4187,17 +4237,8 @@ async function renderTable(data, errors) {
     // full dataset so filter fields stay aligned even with zero result rows.
     const hasExistingWidths = filtersActive && columnWidths.length === headerRow.length;
     if (!hasExistingWidths) {
-        const sampleRows = displayData.slice(1, 101);
-        columnWidths = headerRow.map((h, colIndex) => {
-            let maxWidth = h.length;
-            sampleRows.forEach(row => {
-                const cellLength = row[colIndex] ? row[colIndex].length : 0;
-                if (cellLength > maxWidth) maxWidth = cellLength;
-            });
-            const charWidth = 9;
-            const padding = 24;
-            return Math.max(100, Math.min(600, (maxWidth * charWidth) + padding));
-        });
+        if (userColWidthsCols !== headerRow.length) { userColWidths = {}; userColWidthsCols = headerRow.length; }
+        columnWidths = headerRow.map((h, colIndex) => userColWidths[colIndex] || autoColumnWidth(displayData, colIndex));
     }
 
     // Widths for visible (non-frozen) columns
@@ -4328,7 +4369,20 @@ async function renderTable(data, errors) {
             showColumnContextMenu(index, e);
         });
 
-        th.title = `${colName} (${TYPE_TITLES[type] || 'String'})\nClick to sort | Shift+click for stats | Right-click for column options`;
+        // Right edge: drag to resize, double-click to fit the content again.
+        const resizer = document.createElement('span');
+        resizer.className = 'col-resizer';
+        resizer.title = 'Drag to resize · Double-click to fit';
+        resizer.addEventListener('mousedown', (e) => startColumnResize(e, index));
+        resizer.addEventListener('click', (e) => e.stopPropagation()); // not a sort click
+        resizer.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            delete userColWidths[index];
+            setColumnWidth(index, autoColumnWidth(currentDisplayData, index));
+        });
+        th.appendChild(resizer);
+
+        th.title = `${colName} (${TYPE_TITLES[type] || 'String'})\nClick to sort | Shift+click for stats | Right-click for column options | Drag the right edge to resize`;
         th.classList.add('col-stats-trigger');
         trHead.appendChild(th);
     });

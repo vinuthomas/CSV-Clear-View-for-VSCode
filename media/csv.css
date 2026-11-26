@@ -665,6 +665,25 @@ th:hover {
     background-color: var(--vscode-list-hoverBackground);
 }
 
+.col-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 1;
+}
+
+.col-resizer:hover {
+    background-color: var(--vscode-focusBorder);
+}
+
+body.col-resizing {
+    cursor: col-resize;
+    user-select: none;
+}
+
 .sticky-header th {
     position: sticky;
     top: 0;
