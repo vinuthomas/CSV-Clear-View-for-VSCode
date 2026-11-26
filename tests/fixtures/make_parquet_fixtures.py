@@ -22,3 +22,6 @@ pq.write_table(n, f'{out}/rowgroups.parquet', compression='snappy', row_group_si
 c = pa.table({'s': pa.array(['a', 'b'], pa.string())})
 for codec in ['gzip', 'brotli', 'lz4']:
     pq.write_table(c, f'{out}/codec.{codec}.parquet', compression=codec)
+# Compresses ~60x: tiny on disk, over 1MB uncompressed (for the size-gate test)
+e = pa.table({'s': pa.array(['the same fifty-character string, repeated again...'] * 20000, pa.string())})
+pq.write_table(e, f'{out}/expands.parquet', compression='zstd', use_dictionary=False)

@@ -97,7 +97,7 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 
 ### 📊 Large File Support
 - **Virtual Scrolling:** Only visible rows are rendered, so large grids stay responsive
-- **You choose how to open it:** Files over 20MB (configurable) ask how to open them — **Open Full File**, **Paged View**, **Show Head** / **Show Tail** (the first or last ~256KB of rows, read-only), or **Plain Text**
+- **You choose how to open it:** Files over 20MB (configurable) ask how to open them — **Open Full File**, **Paged View**, **Show Head** / **Show Tail** (the first or last ~256KB of rows, read-only), or **Plain Text**. Parquet files are measured by their uncompressed size and offer the same choices except Plain Text; Show Head / Show Tail there means the first or last 1,000 rows
 - **Full grid up to 500MB:** Choose **Open Full File** and every row is loaded into the grid. Edits save on files up to about 100MB; past that, you're told the change can't be saved
 - **SQL up to about 150–175MB:** A query sends the whole dataset to VS Code's extension host, which needs roughly 2× the file size in one message plus several times that in memory. The limit is set from your machine's memory — about 160MB of CSV on an 8GB machine, about 175MB on 16GB or more. Past it, the query bar tells you instead of running out of memory; use **Filter**, or **Show Head** / **Show Tail** to query a sample. A query that *returns* too many rows (for example `SELECT *` with no `WHERE`) is stopped the same way
 - **Switch mid-load:** If a full load is taking a while, the prompt offers **Paged View** or **Plain Text** so you're never stuck waiting
@@ -117,7 +117,7 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 
 ### 🔧 Format Flexibility
 - **Excel (.xlsx) Viewing:** Open `.xlsx` workbooks directly — each sheet renders through the same colored grid, SQL query, filter, profile, and export tools as CSV. Multi-sheet workbooks get a **sheet-tab switcher** in the toolbar. Currently read-only (no cell editing or save-back to Excel).
-- **Parquet (.parquet) Viewing:** Open Parquet files directly, read-only. 64-bit integers keep full precision, dates and timestamps show as ISO 8601, nested list/map/struct columns show as JSON, and binary values show as `<binary N bytes>`. Files bigger than the Safe Mode threshold load only their first row groups, with a notice saying how many rows are shown.
+- **Parquet (.parquet) Viewing:** Open Parquet files directly, read-only. 64-bit integers keep full precision, dates and timestamps show as ISO 8601, nested list/map/struct columns show as JSON, and binary values show as `<binary N bytes>`. Files that expand past the Safe Mode threshold (uncompressed size) offer the same choices as large CSVs: Open Full File, Paged View, or Show Head / Show Tail (first or last 1,000 rows).
 - **Auto-Delimiter Detection:** Automatically recognizes comma, tab, pipe, and semicolon delimiters
 - **Multi-Character Delimiters:** Files separated by `||`, `::`, `<SEP>` or any other string parse correctly — pick **Custom…** from the delimiter badge. Fully editable and saved back with the same separator
 - **Regex Delimiters:** Split on a pattern such as ` {2,}` or `[,;]` for column-aligned logs and mixed-separator exports, with a live column-count preview that warns you when a pattern splits unevenly. Read-only, since a pattern has no single separator to write back
@@ -284,7 +284,7 @@ SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
 | `.tsv`, `.tab` | Tab | Tab-separated values |
 | `.psv` | Pipe (`\|`) | Pipe-separated values |
 | `.xlsx` | N/A | Excel workbook — read-only, with a sheet-tab switcher for multi-sheet files |
-| `.parquet` | N/A | Parquet file — read-only; large files load their first row groups |
+| `.parquet` | N/A | Parquet file — read-only; large files offer Paged View and Show Head / Show Tail |
 | `.log`, `.txt`, `.dat`, any | Custom or regex | Open via right-click → **"Open with CSV ClearView"**, then set the delimiter from the toolbar badge |
 
 ## Installation

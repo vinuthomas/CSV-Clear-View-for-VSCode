@@ -51,7 +51,7 @@ assert(!!handler && /postMessage\(\{ type: 'switchToPagedView' \}\)/.test(handle
 
 const hostCase = host.match(/case 'switchToPagedView': \{[\s\S]*?\n\t+\}/);
 assert(!!hostCase, 'host handles switchToPagedView');
-assert(!!hostCase && /isBinary/.test(hostCase[0]), 'host ignores the switch for Excel and Parquet files');
+assert(!!hostCase && /isExcel \|\| viewMode === 'chunked'/.test(hostCase[0]), 'host ignores the switch for Excel files (Parquet has a Paged View)');
 assert(!!hostCase && /viewMode = 'chunked'/.test(hostCase[0]), 'host switches to chunked mode');
 assert(!!hostCase && /await updateWebview\(\)/.test(hostCase[0]), 'host resends the file');
 

@@ -2222,7 +2222,7 @@ window.addEventListener('message', event => {
 
             } else if (message.viewMode === 'head') {
                 isChunkedMode = false;
-                warningContainer.textContent = "Viewing Sample: First ~256KB of rows (read-only). SQL queries will only run against this sample.";
+                warningContainer.textContent = `Viewing Sample: First ${message.sampleRows ? message.sampleRows.toLocaleString() + ' rows' : '~256KB of rows'} (read-only). SQL queries will only run against this sample.`;
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
                 headerContainer.classList.remove('hidden');
@@ -2231,7 +2231,7 @@ window.addEventListener('message', event => {
                 if (errorRuler) errorRuler.classList.remove('hidden');
             } else if (message.viewMode === 'tail') {
                 isChunkedMode = false;
-                warningContainer.textContent = "Viewing Sample: Last ~256KB of rows (read-only). SQL queries will only run against this sample.";
+                warningContainer.textContent = `Viewing Sample: Last ${message.sampleRows ? message.sampleRows.toLocaleString() + ' rows' : '~256KB of rows'} (read-only). SQL queries will only run against this sample.`;
                 warningContainer.classList.remove('hidden');
                 tableContainer.classList.remove('hidden');
                 headerContainer.classList.remove('hidden');
