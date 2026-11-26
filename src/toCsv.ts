@@ -44,7 +44,7 @@ export function jsonlToCsv(text: string): string {
 	for (const record of records) {
 		const fields = typeof record === 'string'
 			? [...keys.map(() => ''), record]
-			: [...keys.map(k => jsonValueToString(record[k])), ...(hasRaw ? [''] : [])];
+			: [...keys.map(k => Object.prototype.hasOwnProperty.call(record, k) ? jsonValueToString(record[k]) : ''), ...(hasRaw ? [''] : [])];
 		lines.push(fields.map(csvEscapeField).join(','));
 	}
 	return lines.join('\r\n') + '\r\n';

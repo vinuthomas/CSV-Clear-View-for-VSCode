@@ -4117,9 +4117,10 @@ function dataToCSV(data, delimiter, withComments) {
     const lineEnding = currentText && currentText.includes('\r\n') ? '\r\n' : '\n';
     const lines = data.map(row => {
         const comments = withComments && rowComments.get(row);
-        return (comments ? comments.join(lineEnding) + lineEnding : '') + row.map(cell => {
+        return (comments ? comments.join(lineEnding) + lineEnding : '') + row.map((cell, index) => {
             const text = cell || '';
-            if (text.includes(delim) || text.includes('"') || text.includes('\n') || text.includes('\r')) {
+            const prefix = withComments && commentPrefixOf(currentConfig);
+            if ((index === 0 && prefix && text.startsWith(prefix)) || text.includes(delim) || text.includes('"') || text.includes('\n') || text.includes('\r')) {
                 return `"${text.replace(/"/g, '""')}"`;
             }
             return text;

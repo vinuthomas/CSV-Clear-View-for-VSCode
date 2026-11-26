@@ -17,7 +17,7 @@ function assert(condition, testName) {
 }
 
 const csv = fs.readFileSync(path.join(__dirname, '..', 'media', 'csv.js'), 'utf8');
-const names = ['extractCommentLines', 'carryComments', 'commentLineCount', 'dataToCSV', 'parseCSV',
+const names = ['commentPrefixOf', 'extractCommentLines', 'carryComments', 'commentLineCount', 'dataToCSV', 'parseCSV',
     'deleteRow', 'filterDataRows', 'removeDuplicateRows'];
 const src = names.map(n => {
     const m = csv.match(new RegExp(`(async )?function ${n}\\([\\s\\S]*?\\n}\\n`));
@@ -29,7 +29,7 @@ const src = names.map(n => {
 async function load(text) {
     const state = { rowComments: new Map(), data: null };
     const fns = new Function('state', 'currentText', 'detectedDelimiter', 'delimiterIsRegex', 'commitStructuralEdit',
-        `let rowComments = state.rowComments; let originalRawData;
+        `let rowComments = state.rowComments; let originalRawData; let currentConfig = { commentPrefix: '#' };
         ${src}
         return {
             async load(text, prefix) {
@@ -54,6 +54,11 @@ async function load(text) {
     assert(f.count() === 4, 'all four comment lines are counted');
     assert(f.save() === '# generated 2026\n# by tool\na,b\n1,2\n# middle\n3,4\n# end', 'save round-trips comments in place');
     assert(f.exportCsv() === 'a,b\n1,2\n3,4', 'export leaves comments out');
+
+    f = await load('a,b\n"#123",Alice\n');
+    const saved = f.save();
+    const reloaded = await load(saved);
+    assert(saved === 'a,b\n"#123",Alice' && reloaded.state.data[1][0] === '#123', 'saving preserves a quoted first field that starts with the comment prefix');
 
     f = await load('a,b\n1,"two\n#not a comment"\n3,4\n');
     assert(f.state.data.length === 3 && f.state.data[1][1] === 'two\n#not a comment', '# inside a quoted field stays data');

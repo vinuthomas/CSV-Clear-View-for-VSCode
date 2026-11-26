@@ -34,6 +34,7 @@ assert(jsonlToCsv('﻿{"a":1}\r\n\r\n{"a":2}') === 'a\r\n1\r\n2\r\n', 'BOM, CRLF
 assert(jsonlToCsv('{"a":1}\n{"a":2\n[1,2]\n') === 'a,_raw\r\n1,\r\n,"{""a"":2"\r\n,"[1,2]"\r\n', 'bad JSON and non-objects keep their text in _raw');
 assert(jsonlToCsv('{"_raw":1}\noops\n') === '_raw,__raw\r\n1,\r\n,oops\r\n', 'the raw column never collides with a real key');
 assert(jsonlToCsv('{"__proto__":"p","constructor":"c"}\n') === '__proto__,constructor\r\np,c\r\n', '__proto__ and constructor keys are ordinary columns');
+assert(jsonlToCsv('{"__proto__":"p","constructor":"c"}\n{"other":1}\n') === '__proto__,constructor,other\r\np,c,\r\n,,1\r\n', 'missing prototype-named keys are empty');
 assert(jsonlToCsv('') === '\r\n', 'empty file gives an empty header');
 
 console.log('\n📋 Wiring');

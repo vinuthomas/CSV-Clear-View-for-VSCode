@@ -256,7 +256,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 
 		// Whether the first row is a header (affects chunked-mode row offsets).
 		// Read once at open; the webview toggles its own copy for non-chunked modes.
-		const hasHeaders = config.get<boolean>('firstRowIsHeader') !== false;
+		const hasHeaders = isParquet || config.get<boolean>('firstRowIsHeader') !== false;
 
 		// Row index built lazily for chunked mode
 		let rowIndex: RowIndex | null = null;

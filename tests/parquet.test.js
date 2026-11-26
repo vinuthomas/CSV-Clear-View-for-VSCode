@@ -111,6 +111,7 @@ async function runTests() {
         assert(onDisk < 10 * 1024 && pq.uncompressedBytes > 1024 * 1024,
             `Tiny file on disk (${onDisk} B) still counts as large (${pq.uncompressedBytes} B uncompressed)`);
         const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'csvEditor.ts'), 'utf8');
+        assert(/const hasHeaders = isParquet \|\| config\.get<boolean>\('firstRowIsHeader'\) !== false;/.test(src), 'Parquet always treats its generated schema as the header, including in paged view');
         assert(/const openSize = parquetInfo \? parquetInfo\.uncompressedBytes : document\.size;/.test(src)
             && src.includes('} else if (openSize > LARGE_FILE_THRESHOLD) {')
             && src.includes('const isHuge = openSize > CHUNKED_MODE_THRESHOLD;'),
