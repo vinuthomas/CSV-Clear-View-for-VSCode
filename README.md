@@ -55,6 +55,10 @@ Have a `.jsonl`, `.ndjson`, `.log`, `.txt`, or `.dat` file? Right-click it in th
 
 *Open `.xlsx` files directly — no more converting to CSV first. Multi-sheet workbooks get a sheet-tab switcher right in the toolbar.*
 
+![Parquet file of orders open in VS Code as a color-coded grid with inferred column types, ISO timestamps and list values shown as JSON](screenshots/parquet-features.png)
+
+*Open `.parquet` files without Python. Column types are inferred, timestamps show as ISO dates, and nested lists and structs show as JSON, with SQL, filters and profiling ready to go.*
+
 ![Custom regex delimiter dialog splitting a space-aligned log file into columns](screenshots/regex-delimiter-log-parsing.png)
 
 *Not everything is comma-separated. Set a multi-character delimiter such as `||`, or a regular expression, and watch the column count update live before you apply. Here a space-aligned application log is split into clean `timestamp / level / service / message` columns with `[\s]{2,}`.*
