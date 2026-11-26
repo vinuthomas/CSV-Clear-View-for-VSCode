@@ -3,7 +3,7 @@
   "displayName": "CSV ClearView: CSV Viewer & Editor with SQL",
   "publisher": "vinuthomas",
   "description": "Fast CSV viewer and editor for large files: colored columns, real SQL queries, column profiling and a duplicate finder. Opens CSV, TSV, PSV, Excel XLSX, Parquet and JSONL, and pages through multi-GB files.",
-  "version": "1.6.0",
+  "version": "2.0.0",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {

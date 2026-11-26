@@ -308,7 +308,14 @@ SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
 
 See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
 
-### Latest Release (v1.6.0)
+### Latest Release (v2.0.0)
+- **Parquet files:** Open `.parquet` files read-only in the grid, with SQL, filters and profiling. Large files offer Paged View and Show Head / Show Tail
+- **JSONL / NDJSON files:** Right-click → **Open with CSV ClearView** to see JSON Lines as a table; nested values show as JSON
+- **Comment lines:** `#` lines no longer show up as broken rows. They are hidden from the grid and kept when you save (`csvClearView.commentPrefix`)
+- **Resize columns:** Drag a column header's edge to resize it; double-click it to fit the content
+- **Fixed:** A delimiter setting such as `;` no longer splits Excel sheets wrongly
+
+### Previous Release (v1.6.0)
 - **Undo, redo and save:** Edit cells and use Replace with VS Code's undo stack. Changes are saved with Ctrl+S (or auto-save), and unsaved edits are backed up
 - **Rows and columns:** Insert and delete rows; insert, delete, rename and move columns
 - **Clean columns:** Trim whitespace, change case, fill empty cells, delete rows with empty values or split a column
