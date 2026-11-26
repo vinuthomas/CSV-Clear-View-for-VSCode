@@ -11,7 +11,7 @@
 </tr>
 </table>
 
-**View, query, and profile CSV files without leaving VS Code — including the big ones.** CSV ClearView opens `.csv`, `.tsv`, `.psv`, and Excel `.xlsx` files in a fast, color-coded grid with real SQL, column statistics, and a duplicate finder built in. Files up to 500MB open fully in the grid, SQL works on files up to about 150–175MB depending on your machine's memory, and anything larger than 500MB opens in a paged view you can scroll end to end, at any size.
+**View, query, and profile CSV files without leaving VS Code — including the big ones.** CSV ClearView opens `.csv`, `.tsv`, `.psv`, Excel `.xlsx`, Parquet and JSONL files in a fast, color-coded grid with real SQL, column statistics, and a duplicate finder built in. Files up to 500MB open fully in the grid, SQL works on files up to about 150–175MB depending on your machine's memory, and anything larger than 500MB opens in a paged view you can scroll end to end, at any size.
 
 Built for data engineers, analysts, and developers who would rather not open Excel or start a Python notebook just to look at a file.
 
@@ -24,7 +24,7 @@ Built for data engineers, analysts, and developers who would rather not open Exc
 - **📈 Column profiling without a notebook** — Inferred types, null counts, distinct values, min/max, percentiles, and histograms are one click away. No Python, no pandas, no kernel.
 - **🔎 Duplicate row finder** — One click finds every duplicate row, groups matches together, and shows each row's original line number.
 - **📗 Excel viewer included** — Open `.xlsx` workbooks in the same grid, with a sheet-tab switcher for multi-sheet files.
-- **🪵 Parquet viewer** — Open `.parquet` files (snappy, zstd, gzip, brotli, lz4) read-only in the same grid. No Python needed.
+- **🪵 Parquet and JSONL viewer** — Open `.parquet` files (snappy, zstd, gzip, brotli, lz4) and `.jsonl` / `.ndjson` logs read-only in the same grid, with SQL and profiling. No Python needed.
 - **🔣 Any delimiter, even regex** — Comma, tab, pipe, and semicolon are auto-detected. Multi-character separators like `||`, or a regular expression for space-aligned log files, are one click away.
 - **♻️ Non-destructive by default** — Filters, queries, sorting, and duplicate views change what you see, never what's on disk.
 
@@ -35,7 +35,7 @@ Built for data engineers, analysts, and developers who would rather not open Exc
 3. **Query it** — type SQL in the query bar: `SELECT * FROM ? WHERE [Department] = 'Sales' ORDER BY [Salary] DESC`
 4. **Explore it** — click **Profile** for a summary of every column, or Shift+click a column header for stats and a histogram.
 
-Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose **Open with CSV ClearView**.
+Have a `.jsonl`, `.ndjson`, `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose **Open with CSV ClearView**.
 
 ## Screenshots
 
@@ -147,6 +147,12 @@ Open the CSV in CSV ClearView and type a query in the SQL bar at the top of the 
 
 ### Can I view Excel `.xlsx` files in VS Code?
 Yes. `.xlsx` files open in the same grid as CSV files, with a sheet-tab switcher for multi-sheet workbooks. SQL, filters, profiling, and export all work. Excel files are read-only for now.
+
+### Can I view Parquet or JSONL files in VS Code?
+Yes. `.parquet` files open in the grid automatically. For `.jsonl` and `.ndjson`, right-click the file and choose **Open with CSV ClearView** (the text editor stays the default for them). Both are read-only, and SQL, filters, profiling and export all work. Nested values show as JSON in the cell. Large Parquet files offer Paged View, so you can browse millions of rows without loading them all.
+
+### My CSV has `#` comment lines at the top. Will they break the grid?
+No. Lines starting with `#` are kept out of the grid, SQL and exports, and written back where they were when you save. Change the prefix or turn this off with the `csvClearView.commentPrefix` setting.
 
 ### How do I find duplicate rows in a CSV file?
 Click **Duplicates** in the toolbar. Every duplicate row is highlighted, and **Show only duplicates** groups matching rows together with their original line numbers.
