@@ -5,6 +5,7 @@ dist
 *.vsix
 samples/stress_test_*.csv
 samples/huge_10gb.csv
+samples/orders_1m.parquet
 benchmark/.tmp/
 # Added by code-review-graph
 .code-review-graph/
