@@ -68,6 +68,7 @@ let hasHeaders = true;
 
 // --- Read-only / multi-sheet (Excel) State ---
 let isReadOnly = false;       // true when editing should be disabled (Excel source, or a regex delimiter)
+let sourceFormat = ''; // 'Excel' | 'JSONL' | 'Parquet' when showing a converted file, '' for delimited text
 let sourceIsReadOnly = false; // true when the *file itself* is read-only, independent of delimiter mode
 let currentSheets = null;  // array of sheet names, or null for non-workbook sources
 let currentActiveSheet = null;
@@ -134,6 +135,7 @@ const controls = document.getElementById('controls');
 const errorRuler = document.getElementById('error-ruler');
 const slowLoadModal = document.getElementById('slow-load-modal');
 const switchToTextBtn = document.getElementById('switch-to-text');
+const slowLoadMessage = document.getElementById('slow-load-message');
 const continueWaitingBtn = document.getElementById('continue-waiting');
 const switchToPagedBtn = document.getElementById('switch-to-paged');
 const profileBtn = document.getElementById('profile-btn');
@@ -461,7 +463,8 @@ function updateDelimiterBadge(delim) {
         title = 'Detected delimiter: ' + label + '\nClick to override';
     }
     delimiterDisplay.textContent = 'Delim: ' + label;
-    delimiterDisplay.classList.remove('hidden');
+    // Converted files are always comma-separated text; there is no delimiter to choose.
+    delimiterDisplay.classList.toggle('hidden', !!sourceFormat);
     delimiterDisplay.classList.toggle('delimiter-badge-custom', delimiterIsRegex || delim.length > 1);
     delimiterDisplay.title = title;
 }
@@ -2212,6 +2215,7 @@ window.addEventListener('message', event => {
             updateHeadersBtnState();
 
             // Head/Tail show only part of the file — saving an edit would overwrite the rest.
+            sourceFormat = message.config && typeof message.config.sourceFormat === 'string' ? message.config.sourceFormat : '';
             sourceIsReadOnly = !!(message.config && message.config.readOnly)
                 || message.viewMode === 'head' || message.viewMode === 'tail';
             if (message.config && typeof message.config.sqlPayloadLimit === 'number' && message.config.sqlPayloadLimit > 0) {
@@ -2248,10 +2252,16 @@ window.addEventListener('message', event => {
             updateDelimiterBadge(detectedDelimiter);
             updateReadOnlyForDelimiter();
 
-            // Paged View streams rows from the file on disk — not available for
-            // Excel workbooks, which are converted in memory.
-            if (switchToPagedBtn) {
-                switchToPagedBtn.classList.toggle('hidden', !!(message.config && message.config.readOnly));
+            // Paged View streams rows from disk: CSV and Parquet only (Excel and JSONL are
+            // converted in memory). Plain Text of a converted file would only show our CSV copy.
+            const pagedOk = !!(message.config && message.config.pagedViewAvailable);
+            if (switchToPagedBtn) { switchToPagedBtn.classList.toggle('hidden', !pagedOk); }
+            if (switchToTextBtn) { switchToTextBtn.classList.toggle('hidden', !!sourceFormat); }
+            if (slowLoadMessage) {
+                slowLoadMessage.textContent = 'This file is very large. ' + (
+                    pagedOk && !sourceFormat ? 'Switch to Paged View to browse it right away as a table, or Plain Text to see the raw file.'
+                    : pagedOk ? 'Switch to Paged View to browse it right away as a table.'
+                    : 'Continue to keep waiting while it loads.');
             }
 
             if (message.config.showSlowLoadPrompt && message.viewMode !== 'chunked') {
@@ -2290,7 +2300,7 @@ window.addEventListener('message', event => {
                         await initChunkedView(message.text, message.config);
                     } catch (e) {
                         console.error('Error initialising chunked view:', e);
-                        errorContainer.textContent = 'Error loading CSV: ' + e.message;
+                        errorContainer.textContent = 'Error loading ' + (sourceFormat || 'CSV') + ': ' + e.message;
                         errorContainer.classList.remove('hidden');
                     } finally {
                         hideLoader();
@@ -2381,7 +2391,7 @@ window.addEventListener('message', event => {
                         }
                     } catch (e) {
                         console.error("Error updating content:", e);
-                        errorContainer.textContent = "Error loading CSV: " + e.message;
+                        errorContainer.textContent = 'Error loading ' + (sourceFormat || 'CSV') + ': ' + e.message;
                         errorContainer.classList.remove('hidden');
                     } finally {
                         if (gen === loadGeneration) {

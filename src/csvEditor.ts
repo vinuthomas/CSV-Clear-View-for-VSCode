@@ -30,6 +30,11 @@ function isParquetFile(uri: vscode.Uri): boolean {
 	return uri.fsPath.toLowerCase().endsWith('.parquet');
 }
 
+/** Name of a format shown as converted CSV text, or '' for delimited text files. */
+function sourceFormatOf(uri: vscode.Uri): '' | 'Excel' | 'JSONL' | 'Parquet' {
+	return isExcelFile(uri) ? 'Excel' : isJsonlFile(uri) ? 'JSONL' : isParquetFile(uri) ? 'Parquet' : '';
+}
+
 /** A user-defined, named delimiter persisted in settings. */
 interface SavedDelimiter {
 	name: string;
@@ -228,7 +233,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')]
 		};
 
-		webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
+		webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview, sourceFormatOf(document.uri) || 'CSV');
 
 		// Count the open and, after sustained use, ask once for a rating.
 		// Fire-and-forget: never block or fail opening the file over this.
@@ -533,6 +538,9 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						// These formats have no comment lines: a leading # there is cell data.
 						commentPrefix: isTableFormat ? '' : (cfg.get<string>('commentPrefix') ?? '#'),
 						readOnly: isTableFormat,
+						// Drives format-specific UI: no delimiter badge, no Plain Text for converted files.
+						sourceFormat: sourceFormatOf(document.uri),
+						pagedViewAvailable: !isConverted,
 						sqlPayloadLimit: SQL_PAYLOAD_LIMIT
 					}
 				});
@@ -1043,7 +1051,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		await document.refresh();
 	}
 
-	private getHtmlForWebview(webview: vscode.Webview): string {
+	private getHtmlForWebview(webview: vscode.Webview, formatLabel: string): string {
 		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'csv.js'));
 		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'csv.css'));
 
@@ -1065,14 +1073,14 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						<div class="progress-container indeterminate">
 							<div class="progress-bar"></div>
 						</div>
-						<div class="loader-text">Loading CSV...</div>
+						<div class="loader-text">Loading ${formatLabel}...</div>
 					</div>
 				</div>
 
 				<div id="slow-load-modal" class="loader-overlay hidden">
 					<div class="loader-container slow-load-dialog" role="dialog" aria-labelledby="slow-load-title">
 						<div id="slow-load-title" class="slow-load-title">Rendering is taking a while...</div>
-						<div class="slow-load-message">This file is very large. Switch to Paged View to browse it right away as a table, or Plain Text to see the raw file.</div>
+						<div id="slow-load-message" class="slow-load-message">This file is very large. Switch to Paged View to browse it right away as a table, or Plain Text to see the raw file.</div>
 						<div class="slow-load-actions">
 							<button id="switch-to-paged">Paged View</button>
 							<button id="switch-to-text" class="secondary">Plain Text</button>

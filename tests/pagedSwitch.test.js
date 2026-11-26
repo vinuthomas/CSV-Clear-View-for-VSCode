@@ -35,7 +35,11 @@ console.log('\n📋 Slow-load prompt');
 assert(/id="switch-to-paged"/.test(host), 'prompt has a Paged View button');
 assert(/id="switch-to-text"/.test(host), 'prompt keeps the Plain Text button');
 assert(/id="continue-waiting"/.test(host), 'prompt keeps the Continue button');
-assert(/switchToPagedBtn\.classList\.toggle\('hidden',[^;]*readOnly/.test(csv), 'Paged View button is hidden for Excel workbooks');
+assert(/const pagedOk = !!\(message\.config && message\.config\.pagedViewAvailable\);/.test(csv) && /switchToPagedBtn\.classList\.toggle\('hidden', !pagedOk\)/.test(csv), 'Paged View button follows pagedViewAvailable');
+assert(/pagedViewAvailable: !isConverted/.test(host), 'host offers Paged View for CSV and Parquet, not Excel or JSONL');
+assert(/switchToTextBtn\.classList\.toggle\('hidden', !!sourceFormat\)/.test(csv), 'Plain Text is hidden for converted files');
+assert(/delimiterDisplay\.classList\.toggle\('hidden', !!sourceFormat\)/.test(csv), 'delimiter badge is hidden for converted files');
+assert(/Loading \$\{formatLabel\}\.\.\./.test(host), 'loader names the file format');
 // The webview CSP has no 'unsafe-inline' for style-src, so inline style=""
 // attributes are silently ignored — all styling must live in media/csv.css.
 assert(!/\sstyle="/.test(host), 'webview HTML has no inline style attributes (blocked by CSP)');
