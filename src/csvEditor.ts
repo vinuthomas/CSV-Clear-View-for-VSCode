@@ -8,6 +8,7 @@ import { computeSqlPayloadLimit, estimateJsonBytes, formatMB } from './sqlLimits
 import { validateSqlQuery } from './sqlValidate';
 import { diffText, applyChange } from './textDiff';
 import { csvEscapeField, jsonlToCsv } from './toCsv';
+import { openParquet, readParquetLines, ParquetFile } from './parquet';
 
 let _alasql: ((query: string, params?: any[]) => any) | null = null;
 function getAlasql(): (query: string, params?: any[]) => any {
@@ -23,6 +24,10 @@ function isExcelFile(uri: vscode.Uri): boolean {
 
 function isJsonlFile(uri: vscode.Uri): boolean {
 	return /\.(jsonl|ndjson)$/i.test(uri.fsPath);
+}
+
+function isParquetFile(uri: vscode.Uri): boolean {
+	return uri.fsPath.toLowerCase().endsWith('.parquet');
 }
 
 /** A user-defined, named delimiter persisted in settings. */
@@ -115,6 +120,7 @@ function worksheetToCsv(worksheet: ExcelJS.Worksheet): string {
 }
 
 const CHUNKED_MODE_THRESHOLD = 500 * 1024 * 1024; // 500 MB
+const PARQUET_SAMPLE_ROWS = 1000; // Show Head / Show Tail for Parquet
 const CHUNK_ROWS = 500; // rows per page delivered to the webview
 // Largest SQL request/result message this machine should attempt (see sqlLimits.ts).
 const SQL_PAYLOAD_LIMIT = computeSqlPayloadLimit(os.totalmem());
@@ -235,6 +241,9 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		const isJsonl = isJsonlFile(document.uri);
 		// Converted to CSV in memory: read-only, comma-delimited, no streaming views.
 		const isConverted = isExcel || isJsonl;
+		const isParquet = isParquetFile(document.uri);
+		// Shown as a table of CSV text: read-only, comma-delimited, no comment lines.
+		const isTableFormat = isConverted || isParquet;
 
 		const config = vscode.workspace.getConfiguration('csvClearView');
 		const safeModeThresholdMB = config.get<number>('safeModeThreshold') || 20;
@@ -260,6 +269,24 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			return wb;
 		};
 
+		// Parquet footer (schema, row count, row groups), cached like the workbook.
+		// Rows are decoded per request: a line range for full/head/tail, a page for Paged View.
+		let parquet: ParquetFile | null = null;
+		const ensureParquet = async (): Promise<ParquetFile> => {
+			if (!parquet) { parquet = await openParquet(document.uri.fsPath); }
+			return parquet;
+		};
+		const parquetCsv = async (start: number, count: number, withHeader = false): Promise<string> => {
+			const pq = await ensureParquet();
+			const lines = await readParquetLines(pq, start, count);
+			if (withHeader && start > 0) { lines.unshift(pq.header); }
+			return lines.map(fields => fields.map(csvEscapeField).join(',') + '\r\n').join('');
+		};
+		// A bad file is reported by updateWebview; here it just skips the picker.
+		const parquetInfo = isParquet ? await ensureParquet().catch(() => null) : null;
+		// Parquet is compressed: what lands in memory is the uncompressed size.
+		const openSize = parquetInfo ? parquetInfo.uncompressedBytes : document.size;
+
 		// Becomes true when the panel is closed — prevents postMessage on a dead webview
 		let disposed = false;
 
@@ -277,43 +304,48 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					`CSV ClearView: "${document.uri.fsPath.split(/[\\/]/).pop()}" is large (${(document.size / (1024 * 1024)).toFixed(2)} MB) — loading the full ${isExcel ? 'workbook' : 'file'} may be slow.`
 				);
 			}
-		} else if (document.size > LARGE_FILE_THRESHOLD) {
-			const isHuge = document.size > CHUNKED_MODE_THRESHOLD;
+		} else if (openSize > LARGE_FILE_THRESHOLD) {
+			const isHuge = openSize > CHUNKED_MODE_THRESHOLD;
+			const sizeMB = (openSize / (1024 * 1024)).toFixed(2);
+			const sample = isParquet ? `${PARQUET_SAMPLE_ROWS.toLocaleString()} rows` : '~256KB of rows';
 
 			const options: (vscode.QuickPickItem & { id: ViewMode })[] = [
 				...(isHuge ? [] : [{
 					id: 'full' as ViewMode,
 					label: '$(file-binary) Open Full File',
 					description: 'Load all data into the grid (may be slow)',
-					detail: `Full file size: ${(document.size / (1024 * 1024)).toFixed(2)} MB`
+					detail: isParquet ? `Uncompressed size: ${sizeMB} MB` : `Full file size: ${sizeMB} MB`
 				}]),
 				{
 					id: 'chunked' as ViewMode,
 					label: '$(list-flat) Paged View',
 					description: 'Stream rows on demand — works for any file size',
 					detail: isHuge
-						? `File is ${(document.size / (1024 * 1024 * 1024)).toFixed(2)} GB — full load is disabled`
+						? `${isParquet ? 'Data expands to' : 'File is'} ${(openSize / (1024 * 1024 * 1024)).toFixed(2)} GB — full load is disabled`
 						: undefined
 				},
 				{
 					id: 'head',
 					label: '$(arrow-up) Show Head',
-					description: 'Preview the first ~256KB of rows (read-only)'
+					description: `Preview the first ${sample} (read-only)`
 				},
 				{
 					id: 'tail',
 					label: '$(arrow-down) Show Tail',
-					description: 'Preview the last ~256KB of rows (read-only)'
+					description: `Preview the last ${sample} (read-only)`
 				},
-				{
-					id: 'text',
+				// Parquet is binary: there is no plain text to show.
+				...(isParquet ? [] : [{
+					id: 'text' as ViewMode,
 					label: '$(file-code) Open as Plain Text',
 					description: 'Fast raw text view without grid features'
-				}
+				}])
 			];
 
 			const selection = await vscode.window.showQuickPick(options, {
-				placeHolder: `This file is large (${(document.size / (1024 * 1024)).toFixed(2)} MB). How would you like to open it?`,
+				placeHolder: parquetInfo
+					? `This Parquet file expands to ~${sizeMB} MB (${parquetInfo.totalRows.toLocaleString()} rows). How would you like to open it?`
+					: `This file is large (${sizeMB} MB). How would you like to open it?`,
 				ignoreFocusOut: true
 			}, _token);
 
@@ -348,6 +380,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				let text = '';
 				let excelSheets: string[] | undefined;
 				let excelActiveSheet: string | undefined;
+				let parquetExtras: Record<string, number> | undefined;
 
 				if (isExcel) {
 					const wb = await ensureWorkbook();
@@ -365,6 +398,23 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						return;
 					}
 					text = jsonlToCsv(Buffer.from(await vscode.workspace.fs.readFile(document.uri)).toString('utf8'));
+				} else if (isParquet) {
+					// Lines number like a CSV file's: 0 is the header, i is data row i - 1.
+					const pq = await ensureParquet();
+					const lineCount = pq.totalRows + 1;
+					if (viewMode === 'chunked') {
+						text = await parquetCsv(0, 1 + CHUNK_ROWS);
+						// Row count comes from the footer, so there is no index to build.
+						parquetExtras = { totalRows: pq.totalRows + (hasHeaders ? 0 : 1), chunkSize: CHUNK_ROWS };
+					} else if (viewMode === 'head') {
+						text = await parquetCsv(0, 1 + PARQUET_SAMPLE_ROWS);
+						parquetExtras = { sampleRows: PARQUET_SAMPLE_ROWS };
+					} else if (viewMode === 'tail') {
+						text = await parquetCsv(Math.max(1, lineCount - PARQUET_SAMPLE_ROWS), PARQUET_SAMPLE_ROWS, hasHeaders);
+						parquetExtras = { sampleRows: PARQUET_SAMPLE_ROWS };
+					} else {
+						text = await parquetCsv(0, lineCount);
+					}
 				} else if (viewMode === 'chunked') {
 					// Fast path: send the first ~512 KB immediately so the webview
 					// can show the header and first rows while the index builds in
@@ -457,7 +507,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					text = headerText + tailText;
 				}
 
-			const isLargeFile = document.size > LARGE_FILE_THRESHOLD;
+			const isLargeFile = openSize > LARGE_FILE_THRESHOLD;
 
 			if (disposed) { return; }
 			webviewPanel.webview.postMessage({
@@ -468,6 +518,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					viewMode: viewMode,
 					fileExtension: document.uri.fsPath.split('.').pop()?.toLowerCase() || 'csv',
 					...(excelSheets ? { sheets: excelSheets, activeSheet: excelActiveSheet } : {}),
+					...parquetExtras,
 					config: {
 						stickyHeader: cfg.get('stickyHeader'),
 						alternatingRows: cfg.get('alternatingRows'),
@@ -475,19 +526,21 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						safeModeThreshold: safeModeThresholdMB,
 						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt'),
 						// Converted text is always comma-delimited with a header row.
-						delimiter: isConverted ? ',' : (cfg.get('delimiter') || 'auto'),
-						delimiterIsRegex: !isConverted && cfg.get('delimiterIsRegex') === true,
+						delimiter: isTableFormat ? ',' : (cfg.get('delimiter') || 'auto'),
+						delimiterIsRegex: !isTableFormat && cfg.get('delimiterIsRegex') === true,
 						savedDelimiters: readSavedDelimiters(cfg),
 						firstRowIsHeader: hasHeaders,
-						// Converted formats have no comment lines: a leading # there is cell data.
-						commentPrefix: isConverted ? '' : (cfg.get<string>('commentPrefix') ?? '#'),
-						readOnly: isConverted,
+						// These formats have no comment lines: a leading # there is cell data.
+						commentPrefix: isTableFormat ? '' : (cfg.get<string>('commentPrefix') ?? '#'),
+						readOnly: isTableFormat,
 						sqlPayloadLimit: SQL_PAYLOAD_LIMIT
 					}
 				});
 			} catch (err) {
 				console.error('Error updating webview:', err);
-				vscode.window.showErrorMessage(`Error loading ${isExcel ? 'Excel' : isJsonl ? 'JSONL' : 'CSV'} file contents.`);
+				vscode.window.showErrorMessage(isParquet
+					? `Error loading Parquet file: ${err instanceof Error ? err.message : String(err)}`
+					: `Error loading ${isExcel ? 'Excel' : isJsonl ? 'JSONL' : 'CSV'} file contents.`);
 			}
 		};
 
@@ -514,6 +567,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			// Invalidate row index / cached workbook / text so they are rebuilt on next access
 			rowIndex = null;
 			workbook = null;
+			parquet = null;
 			document.text = null;
 			updateWebview();
 		});
@@ -530,8 +584,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		webviewPanel.webview.onDidReceiveMessage(async e => {
 			switch (e.type) {
 				case 'edit':
-					if (isConverted) {
-						console.warn('CSV ClearView: edit ignored — converted files (Excel, JSONL) are read-only');
+					if (isTableFormat) {
+						console.warn('CSV ClearView: edit ignored — converted files (Excel, JSONL, Parquet) are read-only');
 						return;
 					}
 					// Paged/Head/Tail hold only part of the file: saving would overwrite the rest.
@@ -645,12 +699,12 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					const rowCount = typeof e.rowCount === 'number' ? e.rowCount : CHUNK_ROWS;
 
 				try {
-					const idx = await ensureIndex();
-					if (disposed) { return; }
 					// Row 0 in the index is the header (when the file has one);
 					// data rows start after it.
-						const indexStart = startDataRow + (hasHeaders ? 1 : 0);
-				const text = await this.readRows(idx, indexStart, rowCount);
+					const indexStart = startDataRow + (hasHeaders ? 1 : 0);
+					const text = isParquet
+						? await parquetCsv(indexStart, rowCount)
+						: await this.readRows(await ensureIndex(), indexStart, rowCount);
 					if (disposed) { return; }
 					webviewPanel.webview.postMessage({
 							type: 'pageData',
