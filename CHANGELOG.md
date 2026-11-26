@@ -2,6 +2,12 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Parquet viewing (read-only):** `.parquet` files open in the same grid as CSV, with SQL, filters, profiling and export. Snappy, zstd, gzip, brotli and lz4 compression are supported. 64-bit integers keep full precision, dates and timestamps show as ISO 8601, nested list/map/struct columns show as JSON, and binary values show as `<binary N bytes>`. Above the Safe Mode threshold only the first row groups load, and a notice says how many rows are shown.
+
 ## [1.6.0] - 2026-11-23
 
 ### Added

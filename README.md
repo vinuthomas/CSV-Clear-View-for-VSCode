@@ -24,13 +24,14 @@ Built for data engineers, analysts, and developers who would rather not open Exc
 - **📈 Column profiling without a notebook** — Inferred types, null counts, distinct values, min/max, percentiles, and histograms are one click away. No Python, no pandas, no kernel.
 - **🔎 Duplicate row finder** — One click finds every duplicate row, groups matches together, and shows each row's original line number.
 - **📗 Excel viewer included** — Open `.xlsx` workbooks in the same grid, with a sheet-tab switcher for multi-sheet files.
+- **🪵 Parquet viewer** — Open `.parquet` files (snappy, zstd, gzip, brotli, lz4) read-only in the same grid. No Python needed.
 - **🔣 Any delimiter, even regex** — Comma, tab, pipe, and semicolon are auto-detected. Multi-character separators like `||`, or a regular expression for space-aligned log files, are one click away.
 - **♻️ Non-destructive by default** — Filters, queries, sorting, and duplicate views change what you see, never what's on disk.
 
 ## Quick Start
 
 1. **Install** CSV ClearView from the Extensions view (search for `CSV ClearView`).
-2. **Open any `.csv`, `.tsv`, `.tab`, `.psv`, or `.xlsx` file** — it opens in the grid automatically.
+2. **Open any `.csv`, `.tsv`, `.tab`, `.psv`, `.xlsx`, or `.parquet` file** — it opens in the grid automatically.
 3. **Query it** — type SQL in the query bar: `SELECT * FROM ? WHERE [Department] = 'Sales' ORDER BY [Salary] DESC`
 4. **Explore it** — click **Profile** for a summary of every column, or Shift+click a column header for stats and a histogram.
 
@@ -109,13 +110,14 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 - **Clean a Column:** Right-click a column header → **Clean column…** to trim whitespace, change case (UPPERCASE, lowercase, Title Case), fill empty cells, delete rows where the column is empty, or split it into several columns on a separator
 - **Remove Duplicates:** After **Duplicates** finds repeated rows, **Remove duplicates** deletes them and keeps the first of each
 - **Find & Replace:** Search and replace across the rows in the current view (filters applied)
-- **Read-only views:** Editing is off for Excel files, regex delimiters, Show Head / Show Tail, Paged View, and SQL query results (click **Reset** to edit again)
+- **Read-only views:** Editing is off for Excel and Parquet files, regex delimiters, Show Head / Show Tail, Paged View, and SQL query results (click **Reset** to edit again)
 - **CSV Linting:** Automatic detection of rows with inconsistent column counts and unclosed quotes, marked in the scrollbar
 - **Raw File View:** Click **Raw** to flip between the table and the underlying file text — perfect for eyeballing a row with a stray delimiter, then flip back
 - **Open in Text Editor:** Parse errors include a one-click button that reopens the file in VS Code's text editor so you can fix the offending line directly
 
 ### 🔧 Format Flexibility
 - **Excel (.xlsx) Viewing:** Open `.xlsx` workbooks directly — each sheet renders through the same colored grid, SQL query, filter, profile, and export tools as CSV. Multi-sheet workbooks get a **sheet-tab switcher** in the toolbar. Currently read-only (no cell editing or save-back to Excel).
+- **Parquet (.parquet) Viewing:** Open Parquet files directly, read-only. 64-bit integers keep full precision, dates and timestamps show as ISO 8601, nested list/map/struct columns show as JSON, and binary values show as `<binary N bytes>`. Files bigger than the Safe Mode threshold load only their first row groups, with a notice saying how many rows are shown.
 - **Auto-Delimiter Detection:** Automatically recognizes comma, tab, pipe, and semicolon delimiters
 - **Multi-Character Delimiters:** Files separated by `||`, `::`, `<SEP>` or any other string parse correctly — pick **Custom…** from the delimiter badge. Fully editable and saved back with the same separator
 - **Regex Delimiters:** Split on a pattern such as ` {2,}` or `[,;]` for column-aligned logs and mixed-separator exports, with a live column-count preview that warns you when a pattern splits unevenly. Read-only, since a pattern has no single separator to write back
@@ -282,6 +284,7 @@ SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
 | `.tsv`, `.tab` | Tab | Tab-separated values |
 | `.psv` | Pipe (`\|`) | Pipe-separated values |
 | `.xlsx` | N/A | Excel workbook — read-only, with a sheet-tab switcher for multi-sheet files |
+| `.parquet` | N/A | Parquet file — read-only; large files load their first row groups |
 | `.log`, `.txt`, `.dat`, any | Custom or regex | Open via right-click → **"Open with CSV ClearView"**, then set the delimiter from the toolbar badge |
 
 ## Installation

@@ -7,6 +7,7 @@ import { maybePromptForReview } from './reviewPrompt';
 import { computeSqlPayloadLimit, estimateJsonBytes, formatMB } from './sqlLimits';
 import { validateSqlQuery } from './sqlValidate';
 import { diffText, applyChange } from './textDiff';
+import { readParquet } from './parquet';
 
 let _alasql: ((query: string, params?: any[]) => any) | null = null;
 function getAlasql(): (query: string, params?: any[]) => any {
@@ -18,6 +19,10 @@ function getAlasql(): (query: string, params?: any[]) => any {
 
 function isExcelFile(uri: vscode.Uri): boolean {
 	return uri.fsPath.toLowerCase().endsWith('.xlsx');
+}
+
+function isParquetFile(uri: vscode.Uri): boolean {
+	return uri.fsPath.toLowerCase().endsWith('.parquet');
 }
 
 /** CSV-escape a single field: quote it if it contains a comma, quote, or newline. */
@@ -230,6 +235,9 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		let viewMode: ViewMode = 'full';
 
 		const isExcel = isExcelFile(document.uri);
+		const isParquet = isParquetFile(document.uri);
+		// Binary formats are converted to CSV text on load and are always read-only.
+		const isBinary = isExcel || isParquet;
 
 		const config = vscode.workspace.getConfiguration('csvClearView');
 		const safeModeThresholdMB = config.get<number>('safeModeThreshold') || 20;
@@ -255,6 +263,21 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			return wb;
 		};
 
+		// Parquet converted to CSV text, cached like the workbook.
+		let parquetText: string | null = null;
+		const ensureParquetText = async (): Promise<string> => {
+			if (parquetText !== null) { return parquetText; }
+			const table = await readParquet(document.uri.fsPath, LARGE_FILE_THRESHOLD);
+			if (table.rows.length < table.totalRows) {
+				vscode.window.showWarningMessage(
+					`CSV ClearView: showing the first ${table.rows.length.toLocaleString()} of ${table.totalRows.toLocaleString()} rows (read-only). Raise csvClearView.safeModeThreshold to load more.`
+				);
+			}
+			const lines = [table.header, ...table.rows].map(fields => fields.map(csvEscapeField).join(','));
+			parquetText = lines.join('\r\n') + '\r\n';
+			return parquetText;
+		};
+
 		// Becomes true when the panel is closed — prevents postMessage on a dead webview
 		let disposed = false;
 
@@ -272,7 +295,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					`CSV ClearView: "${document.uri.fsPath.split(/[\\/]/).pop()}" is large (${(document.size / (1024 * 1024)).toFixed(2)} MB) — loading the full workbook may be slow.`
 				);
 			}
-		} else if (document.size > LARGE_FILE_THRESHOLD) {
+		} else if (!isParquet && document.size > LARGE_FILE_THRESHOLD) {
+			// Parquet skips the picker: readParquet reads only the row groups that fit.
 			const isHuge = document.size > CHUNKED_MODE_THRESHOLD;
 
 			const options: (vscode.QuickPickItem & { id: ViewMode })[] = [
@@ -353,6 +377,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					text = worksheet ? worksheetToCsv(worksheet) : '';
 					excelSheets = wb.worksheets.map(ws => ws.name);
 					excelActiveSheet = activeSheetName ?? undefined;
+				} else if (isParquet) {
+					text = await ensureParquetText();
 				} else if (viewMode === 'chunked') {
 					// Fast path: send the first ~512 KB immediately so the webview
 					// can show the header and first rows while the index builds in
@@ -466,13 +492,15 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						delimiterIsRegex: cfg.get('delimiterIsRegex') === true,
 						savedDelimiters: readSavedDelimiters(cfg),
 						firstRowIsHeader: hasHeaders,
-						readOnly: isExcel,
+						readOnly: isBinary,
 						sqlPayloadLimit: SQL_PAYLOAD_LIMIT
 					}
 				});
 			} catch (err) {
 				console.error('Error updating webview:', err);
-				vscode.window.showErrorMessage(isExcel ? 'Error loading Excel file contents.' : 'Error loading CSV file contents.');
+				vscode.window.showErrorMessage(isParquet
+					? `Error loading Parquet file: ${err instanceof Error ? err.message : String(err)}`
+					: isExcel ? 'Error loading Excel file contents.' : 'Error loading CSV file contents.');
 			}
 		};
 
@@ -499,6 +527,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 			// Invalidate row index / cached workbook / text so they are rebuilt on next access
 			rowIndex = null;
 			workbook = null;
+			parquetText = null;
 			document.text = null;
 			updateWebview();
 		});
@@ -515,8 +544,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		webviewPanel.webview.onDidReceiveMessage(async e => {
 			switch (e.type) {
 				case 'edit':
-					if (isExcel) {
-						console.warn('CSV ClearView: edit ignored — Excel files are read-only');
+					if (isBinary) {
+						console.warn('CSV ClearView: edit ignored — Excel and Parquet files are read-only');
 						return;
 					}
 					// Paged/Head/Tail hold only part of the file: saving would overwrite the rest.
@@ -703,7 +732,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				case 'switchToPagedView': {
 					// From the slow-load prompt: abandon the full in-memory load and
 					// stream the file a page at a time instead (works at any size).
-					if (isExcel || viewMode === 'chunked') { return; }
+					if (isBinary || viewMode === 'chunked') { return; }
 					viewMode = 'chunked';
 					await updateWebview();
 					return;
