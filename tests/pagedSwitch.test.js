@@ -35,7 +35,11 @@ console.log('\n📋 Slow-load prompt');
 assert(/id="switch-to-paged"/.test(host), 'prompt has a Paged View button');
 assert(/id="switch-to-text"/.test(host), 'prompt keeps the Plain Text button');
 assert(/id="continue-waiting"/.test(host), 'prompt keeps the Continue button');
-assert(/switchToPagedBtn\.classList\.toggle\('hidden',[^;]*readOnly/.test(csv), 'Paged View button is hidden for Excel workbooks');
+assert(/const pagedOk = !!\(message\.config && message\.config\.pagedViewAvailable\);/.test(csv) && /switchToPagedBtn\.classList\.toggle\('hidden', !pagedOk\)/.test(csv), 'Paged View button follows pagedViewAvailable');
+assert(/pagedViewAvailable: !isConverted/.test(host), 'host offers Paged View for CSV and Parquet, not Excel or JSONL');
+assert(/switchToTextBtn\.classList\.toggle\('hidden', !!sourceFormat\)/.test(csv), 'Plain Text is hidden for converted files');
+assert(/delimiterDisplay\.classList\.toggle\('hidden', !!sourceFormat\)/.test(csv), 'delimiter badge is hidden for converted files');
+assert(/Loading \$\{formatLabel\}\.\.\./.test(host), 'loader names the file format');
 // The webview CSP has no 'unsafe-inline' for style-src, so inline style=""
 // attributes are silently ignored — all styling must live in media/csv.css.
 assert(!/\sstyle="/.test(host), 'webview HTML has no inline style attributes (blocked by CSP)');
@@ -51,7 +55,7 @@ assert(!!handler && /postMessage\(\{ type: 'switchToPagedView' \}\)/.test(handle
 
 const hostCase = host.match(/case 'switchToPagedView': \{[\s\S]*?\n\t+\}/);
 assert(!!hostCase, 'host handles switchToPagedView');
-assert(!!hostCase && /isExcel/.test(hostCase[0]), 'host ignores the switch for Excel files');
+assert(!!hostCase && /isConverted \|\| viewMode === 'chunked'/.test(hostCase[0]), 'host ignores the switch for Excel and JSONL (Parquet has a Paged View)');
 assert(!!hostCase && /viewMode = 'chunked'/.test(hostCase[0]), 'host switches to chunked mode');
 assert(!!hostCase && /await updateWebview\(\)/.test(hostCase[0]), 'host resends the file');
 
@@ -59,7 +63,7 @@ console.log('\n📋 Cancelling a superseded load');
 
 assert(/async function parseCSV\(text, delimiter, isRegex, isCancelled\)/.test(csv), 'parseCSV takes an isCancelled callback');
 assert(/if \(isCancelled && isCancelled\(\)\) \{\s*return \{ data: \[\], errors: \[\], cancelled: true \};/.test(csv), 'parseCSV stops at a yield point when cancelled');
-assert(/const gen = loadGeneration;\s*const parsed = await parseCSV\([^)]*\(\) => gen !== loadGeneration\)/.test(csv), 'updateContent passes a generation check to parseCSV');
+assert(/const gen = loadGeneration;\s*(?:const extracted = .*\s*)?const parsed = await parseCSV\([^)]*\(\) => gen !== loadGeneration\)/.test(csv), 'updateContent passes a generation check to parseCSV');
 assert(/if \(parsed\.cancelled \|\| gen !== loadGeneration\) \{ return; \}/.test(csv), 'updateContent leaves state alone when superseded');
 assert(/case 'update':[\s\S]{0,400}?loadGeneration\+\+/.test(csv), "every 'update' message starts a new load generation");
 assert(/finally \{\s*if \(gen === loadGeneration\) \{\s*isUpdating = false;\s*hideLoader\(\);/.test(csv), 'a superseded load does not hide the new load\'s spinner');

@@ -11,7 +11,7 @@
 </tr>
 </table>
 
-**View, query, and profile CSV files without leaving VS Code — including the big ones.** CSV ClearView opens `.csv`, `.tsv`, `.psv`, and Excel `.xlsx` files in a fast, color-coded grid with real SQL, column statistics, and a duplicate finder built in. Files up to 500MB open fully in the grid, SQL works on files up to about 150–175MB depending on your machine's memory, and anything larger than 500MB opens in a paged view you can scroll end to end, at any size.
+**View, query, and profile CSV files without leaving VS Code — including the big ones.** CSV ClearView opens `.csv`, `.tsv`, `.psv`, Excel `.xlsx`, Parquet and JSONL files in a fast, color-coded grid with real SQL, column statistics, and a duplicate finder built in. Files up to 500MB open fully in the grid, SQL works on files up to about 150–175MB depending on your machine's memory, and anything larger than 500MB opens in a paged view you can scroll end to end, at any size.
 
 Built for data engineers, analysts, and developers who would rather not open Excel or start a Python notebook just to look at a file.
 
@@ -24,17 +24,18 @@ Built for data engineers, analysts, and developers who would rather not open Exc
 - **📈 Column profiling without a notebook** — Inferred types, null counts, distinct values, min/max, percentiles, and histograms are one click away. No Python, no pandas, no kernel.
 - **🔎 Duplicate row finder** — One click finds every duplicate row, groups matches together, and shows each row's original line number.
 - **📗 Excel viewer included** — Open `.xlsx` workbooks in the same grid, with a sheet-tab switcher for multi-sheet files.
+- **🪵 Parquet and JSONL viewer** — Open `.parquet` files (snappy, zstd, gzip, brotli, lz4) and `.jsonl` / `.ndjson` logs read-only in the same grid, with SQL and profiling. No Python needed.
 - **🔣 Any delimiter, even regex** — Comma, tab, pipe, and semicolon are auto-detected. Multi-character separators like `||`, or a regular expression for space-aligned log files, are one click away.
 - **♻️ Non-destructive by default** — Filters, queries, sorting, and duplicate views change what you see, never what's on disk.
 
 ## Quick Start
 
 1. **Install** CSV ClearView from the Extensions view (search for `CSV ClearView`).
-2. **Open any `.csv`, `.tsv`, `.tab`, `.psv`, or `.xlsx` file** — it opens in the grid automatically.
+2. **Open any `.csv`, `.tsv`, `.tab`, `.psv`, `.xlsx`, or `.parquet` file** — it opens in the grid automatically.
 3. **Query it** — type SQL in the query bar: `SELECT * FROM ? WHERE [Department] = 'Sales' ORDER BY [Salary] DESC`
 4. **Explore it** — click **Profile** for a summary of every column, or Shift+click a column header for stats and a histogram.
 
-Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose **Open with CSV ClearView**.
+Have a `.jsonl`, `.ndjson`, `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose **Open with CSV ClearView**.
 
 ## Screenshots
 
@@ -54,6 +55,10 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 
 *Open `.xlsx` files directly — no more converting to CSV first. Multi-sheet workbooks get a sheet-tab switcher right in the toolbar.*
 
+![Parquet file of orders open in VS Code as a color-coded grid with inferred column types, ISO timestamps and list values shown as JSON](screenshots/parquet-features.png)
+
+*Open `.parquet` files without Python. Column types are inferred, timestamps show as ISO dates, and nested lists and structs show as JSON, with SQL, filters and profiling ready to go.*
+
 ![Custom regex delimiter dialog splitting a space-aligned log file into columns](screenshots/regex-delimiter-log-parsing.png)
 
 *Not everything is comma-separated. Set a multi-character delimiter such as `||`, or a regular expression, and watch the column count update live before you apply. Here a space-aligned application log is split into clean `timestamp / level / service / message` columns with `[\s]{2,}`.*
@@ -65,6 +70,7 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 - **Sticky Header:** Header row stays fixed at the top while scrolling through thousands of rows
 - **Alternating Rows:** Zebra-striping for improved row readability
 - **Freeze Panes:** Right-click any column header and choose **Freeze pane here** for Excel-style frozen columns
+- **Resize Columns:** Drag the right edge of a column header to resize it; double-click the edge to fit the content again
 
 ### 🔍 Data Analysis & Profiling
 - **SQL Queries:** Run full SQL SELECT statements on your CSV data (powered by AlaSQL)
@@ -96,7 +102,7 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 
 ### 📊 Large File Support
 - **Virtual Scrolling:** Only visible rows are rendered, so large grids stay responsive
-- **You choose how to open it:** Files over 20MB (configurable) ask how to open them — **Open Full File**, **Paged View**, **Show Head** / **Show Tail** (the first or last ~256KB of rows, read-only), or **Plain Text**
+- **You choose how to open it:** Files over 20MB (configurable) ask how to open them — **Open Full File**, **Paged View**, **Show Head** / **Show Tail** (the first or last ~256KB of rows, read-only), or **Plain Text**. Parquet files are measured by their uncompressed size and offer the same choices except Plain Text; Show Head / Show Tail there means the first or last 1,000 rows
 - **Full grid up to 500MB:** Choose **Open Full File** and every row is loaded into the grid. Edits save on files up to about 100MB; past that, you're told the change can't be saved
 - **SQL up to about 150–175MB:** A query sends the whole dataset to VS Code's extension host, which needs roughly 2× the file size in one message plus several times that in memory. The limit is set from your machine's memory — about 160MB of CSV on an 8GB machine, about 175MB on 16GB or more. Past it, the query bar tells you instead of running out of memory; use **Filter**, or **Show Head** / **Show Tail** to query a sample. A query that *returns* too many rows (for example `SELECT *` with no `WHERE`) is stopped the same way
 - **Switch mid-load:** If a full load is taking a while, the prompt offers **Paged View** or **Plain Text** so you're never stuck waiting
@@ -109,13 +115,16 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 - **Clean a Column:** Right-click a column header → **Clean column…** to trim whitespace, change case (UPPERCASE, lowercase, Title Case), fill empty cells, delete rows where the column is empty, or split it into several columns on a separator
 - **Remove Duplicates:** After **Duplicates** finds repeated rows, **Remove duplicates** deletes them and keeps the first of each
 - **Find & Replace:** Search and replace across the rows in the current view (filters applied)
-- **Read-only views:** Editing is off for Excel files, regex delimiters, Show Head / Show Tail, Paged View, and SQL query results (click **Reset** to edit again)
+- **Comment Lines:** Lines starting with `#` (outside quoted fields) are kept out of the grid, SQL, stats and exports, and written back where they were when you save. Change the prefix, or turn this off, with `csvClearView.commentPrefix`
+- **Read-only views:** Editing is off for Excel, JSONL and Parquet files, regex delimiters, Show Head / Show Tail, Paged View, and SQL query results (click **Reset** to edit again)
 - **CSV Linting:** Automatic detection of rows with inconsistent column counts and unclosed quotes, marked in the scrollbar
 - **Raw File View:** Click **Raw** to flip between the table and the underlying file text — perfect for eyeballing a row with a stray delimiter, then flip back
 - **Open in Text Editor:** Parse errors include a one-click button that reopens the file in VS Code's text editor so you can fix the offending line directly
 
 ### 🔧 Format Flexibility
 - **Excel (.xlsx) Viewing:** Open `.xlsx` workbooks directly — each sheet renders through the same colored grid, SQL query, filter, profile, and export tools as CSV. Multi-sheet workbooks get a **sheet-tab switcher** in the toolbar. Currently read-only (no cell editing or save-back to Excel).
+- **JSONL / NDJSON Viewing:** Right-click a `.jsonl` or `.ndjson` file → **Open with CSV ClearView** (or **Reopen Editor With…**) to see it as a table: one row per line, one column per top-level key, nested values shown as JSON. Lines that aren't a JSON object go in a `_raw` column instead of being dropped. Read-only, up to 500MB
+- **Parquet (.parquet) Viewing:** Open Parquet files directly, read-only. 64-bit integers keep full precision, dates and timestamps show as ISO 8601, nested list/map/struct columns show as JSON, and binary values show as `<binary N bytes>`. Files that expand past the Safe Mode threshold (uncompressed size) offer the same choices as large CSVs: Open Full File, Paged View, or Show Head / Show Tail (first or last 1,000 rows).
 - **Auto-Delimiter Detection:** Automatically recognizes comma, tab, pipe, and semicolon delimiters
 - **Multi-Character Delimiters:** Files separated by `||`, `::`, `<SEP>` or any other string parse correctly — pick **Custom…** from the delimiter badge. Fully editable and saved back with the same separator
 - **Regex Delimiters:** Split on a pattern such as ` {2,}` or `[,;]` for column-aligned logs and mixed-separator exports, with a live column-count preview that warns you when a pattern splits unevenly. Read-only, since a pattern has no single separator to write back
@@ -143,6 +152,12 @@ Open the CSV in CSV ClearView and type a query in the SQL bar at the top of the 
 ### Can I view Excel `.xlsx` files in VS Code?
 Yes. `.xlsx` files open in the same grid as CSV files, with a sheet-tab switcher for multi-sheet workbooks. SQL, filters, profiling, and export all work. Excel files are read-only for now.
 
+### Can I view Parquet or JSONL files in VS Code?
+Yes. `.parquet` files open in the grid automatically. For `.jsonl` and `.ndjson`, right-click the file and choose **Open with CSV ClearView** (the text editor stays the default for them). Both are read-only, and SQL, filters, profiling and export all work. Nested values show as JSON in the cell. Large Parquet files offer Paged View, so you can browse millions of rows without loading them all.
+
+### My CSV has `#` comment lines at the top. Will they break the grid?
+No. Lines starting with `#` are kept out of the grid, SQL and exports, and written back where they were when you save. Change the prefix or turn this off with the `csvClearView.commentPrefix` setting.
+
 ### How do I find duplicate rows in a CSV file?
 Click **Duplicates** in the toolbar. Every duplicate row is highlighted, and **Show only duplicates** groups matching rows together with their original line numbers.
 
@@ -163,6 +178,7 @@ Customize CSV ClearView through VS Code settings:
 |---------|---------|-------------|
 | `csvClearView.stickyHeader` | `true` | Keep header row fixed at top while scrolling |
 | `csvClearView.firstRowIsHeader` | `true` | Treat the first row as a header; when `false`, generic `Column 1..N` names are used and the first row is shown as data |
+| `csvClearView.commentPrefix` | `#` | Lines starting with this are comments: hidden from the grid and kept when you save. Empty string turns it off. Not applied in Paged View |
 | `csvClearView.alternatingRows` | `true` | Enable zebra-stripe row coloring |
 | `csvClearView.safeModeThreshold` | `20` | File size (MB) above which you're asked how to open the file (full, paged, head, tail, or plain text) |
 | `csvClearView.showSlowLoadPrompt` | `true` | When the grid takes too long to render, offer to switch to Paged View or Plain Text |
@@ -282,6 +298,8 @@ SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
 | `.tsv`, `.tab` | Tab | Tab-separated values |
 | `.psv` | Pipe (`\|`) | Pipe-separated values |
 | `.xlsx` | N/A | Excel workbook — read-only, with a sheet-tab switcher for multi-sheet files |
+| `.jsonl`, `.ndjson` | N/A | JSON Lines — read-only table; opens in the text editor by default, use **Open with CSV ClearView** |
+| `.parquet` | N/A | Parquet file — read-only; large files offer Paged View and Show Head / Show Tail |
 | `.log`, `.txt`, `.dat`, any | Custom or regex | Open via right-click → **"Open with CSV ClearView"**, then set the delimiter from the toolbar badge |
 
 ## Installation
@@ -294,7 +312,14 @@ SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
 
 See the [CHANGELOG](CHANGELOG.md) for detailed release notes.
 
-### Latest Release (v1.6.0)
+### Latest Release (v2.0.0)
+- **Parquet files:** Open `.parquet` files read-only in the grid, with SQL, filters and profiling. Large files offer Paged View and Show Head / Show Tail
+- **JSONL / NDJSON files:** Right-click → **Open with CSV ClearView** to see JSON Lines as a table; nested values show as JSON
+- **Comment lines:** `#` lines no longer show up as broken rows. They are hidden from the grid and kept when you save (`csvClearView.commentPrefix`)
+- **Resize columns:** Drag a column header's edge to resize it; double-click it to fit the content
+- **Fixed:** A delimiter setting such as `;` no longer splits Excel sheets wrongly
+
+### Previous Release (v1.6.0)
 - **Undo, redo and save:** Edit cells and use Replace with VS Code's undo stack. Changes are saved with Ctrl+S (or auto-save), and unsaved edits are backed up
 - **Rows and columns:** Insert and delete rows; insert, delete, rename and move columns
 - **Clean columns:** Trim whitespace, change case, fill empty cells, delete rows with empty values or split a column

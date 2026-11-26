@@ -2,6 +2,19 @@
 
 All notable changes to the "CSV ClearView" extension will be documented in this file.
 
+## [2.0.0] - 2026-11-26
+
+### Added
+
+- **Comment lines:** Lines starting with `#` (outside quoted fields) are no longer read as data or flagged as broken rows. They are hidden from the grid, SQL, stats and exports, counted in the row badge, and written back in place when you save. A comment stays with the row below it through sorting and edits; deleting that row hands it to the next one. Change the prefix or turn this off with the new `csvClearView.commentPrefix` setting (default `#`). Not applied in Paged View, or to Excel and JSONL files.
+- **Resize columns:** Drag the right edge of a column header to resize it (100–800px). Double-click the edge to fit the content again. Widths survive sorting and filtering until the number of columns changes.
+- **JSONL / NDJSON viewing:** `.jsonl` and `.ndjson` files open as a read-only table via **Open with CSV ClearView** or **Reopen Editor With…**; the text editor stays the default for them. Each line is a row and each top-level key a column (in first-seen order); nested objects and arrays are shown as JSON. Lines that are not a JSON object go in a `_raw` column rather than being dropped. Files over 500MB are refused with a message instead of exhausting memory.
+- **Parquet viewing (read-only):** `.parquet` files open in the same grid as CSV, with SQL, filters, profiling and export. Snappy, zstd, gzip, brotli and lz4 compression are supported. 64-bit integers keep full precision, dates and timestamps show as ISO 8601, nested list/map/struct columns show as JSON, and binary values show as `<binary N bytes>`. Files that expand past the Safe Mode threshold (measured by uncompressed size, not file size) get the same picker as large CSVs: Open Full File, Paged View, or Show Head / Show Tail (first or last 1,000 rows). Paged View decodes only the row groups each page needs.
+
+### Fixed
+
+- **Excel files with a delimiter setting:** A non-default `csvClearView.delimiter` (for example `;`) was applied to the CSV converted from an `.xlsx` sheet, splitting its columns wrongly. Converted files (Excel, JSONL, Parquet) now always use a comma.
+
 ## [1.6.0] - 2026-11-23
 
 ### Added

@@ -1,0 +1,5 @@
+{"id":1,"name":"Ada","tags":["math","code"],"address":{"city":"London"}}
+{"id":2,"name":"Grace","active":true}
+{"id":3,"name":"Linus, Jr.","note":"quote \" inside"}
+not json at all
+{"id":4,"name":null}
