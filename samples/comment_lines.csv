@@ -1,0 +1,8 @@
+# Sensor export, generated 2026-11-26
+# units: temp in C
+sensor,temp,status
+A1,21.5,ok
+# A2 offline for maintenance
+A2,,offline
+A3,"19,8",ok
+# end of export

@@ -22,7 +22,7 @@ export function activate(context: vscode.ExtensionContext) {
 			await vscode.commands.executeCommand(
 				'vscode.openWith',
 				uri,
-				'csvClearView.edit'
+				/\.(jsonl|ndjson)$/i.test(uri.fsPath) ? CsvEditorProvider.jsonlViewType : 'csvClearView.edit'
 			);
 		})
 	);

@@ -65,6 +65,7 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 - **Sticky Header:** Header row stays fixed at the top while scrolling through thousands of rows
 - **Alternating Rows:** Zebra-striping for improved row readability
 - **Freeze Panes:** Right-click any column header and choose **Freeze pane here** for Excel-style frozen columns
+- **Resize Columns:** Drag the right edge of a column header to resize it; double-click the edge to fit the content again
 
 ### 🔍 Data Analysis & Profiling
 - **SQL Queries:** Run full SQL SELECT statements on your CSV data (powered by AlaSQL)
@@ -109,13 +110,15 @@ Have a `.log`, `.txt`, or `.dat` file? Right-click it in the Explorer and choose
 - **Clean a Column:** Right-click a column header → **Clean column…** to trim whitespace, change case (UPPERCASE, lowercase, Title Case), fill empty cells, delete rows where the column is empty, or split it into several columns on a separator
 - **Remove Duplicates:** After **Duplicates** finds repeated rows, **Remove duplicates** deletes them and keeps the first of each
 - **Find & Replace:** Search and replace across the rows in the current view (filters applied)
-- **Read-only views:** Editing is off for Excel files, regex delimiters, Show Head / Show Tail, Paged View, and SQL query results (click **Reset** to edit again)
+- **Comment Lines:** Lines starting with `#` (outside quoted fields) are kept out of the grid, SQL, stats and exports, and written back where they were when you save. Change the prefix, or turn this off, with `csvClearView.commentPrefix`
+- **Read-only views:** Editing is off for Excel and JSONL files, regex delimiters, Show Head / Show Tail, Paged View, and SQL query results (click **Reset** to edit again)
 - **CSV Linting:** Automatic detection of rows with inconsistent column counts and unclosed quotes, marked in the scrollbar
 - **Raw File View:** Click **Raw** to flip between the table and the underlying file text — perfect for eyeballing a row with a stray delimiter, then flip back
 - **Open in Text Editor:** Parse errors include a one-click button that reopens the file in VS Code's text editor so you can fix the offending line directly
 
 ### 🔧 Format Flexibility
 - **Excel (.xlsx) Viewing:** Open `.xlsx` workbooks directly — each sheet renders through the same colored grid, SQL query, filter, profile, and export tools as CSV. Multi-sheet workbooks get a **sheet-tab switcher** in the toolbar. Currently read-only (no cell editing or save-back to Excel).
+- **JSONL / NDJSON Viewing:** Right-click a `.jsonl` or `.ndjson` file → **Open with CSV ClearView** (or **Reopen Editor With…**) to see it as a table: one row per line, one column per top-level key, nested values shown as JSON. Lines that aren't a JSON object go in a `_raw` column instead of being dropped. Read-only, up to 500MB
 - **Auto-Delimiter Detection:** Automatically recognizes comma, tab, pipe, and semicolon delimiters
 - **Multi-Character Delimiters:** Files separated by `||`, `::`, `<SEP>` or any other string parse correctly — pick **Custom…** from the delimiter badge. Fully editable and saved back with the same separator
 - **Regex Delimiters:** Split on a pattern such as ` {2,}` or `[,;]` for column-aligned logs and mixed-separator exports, with a live column-count preview that warns you when a pattern splits unevenly. Read-only, since a pattern has no single separator to write back
@@ -163,6 +166,7 @@ Customize CSV ClearView through VS Code settings:
 |---------|---------|-------------|
 | `csvClearView.stickyHeader` | `true` | Keep header row fixed at top while scrolling |
 | `csvClearView.firstRowIsHeader` | `true` | Treat the first row as a header; when `false`, generic `Column 1..N` names are used and the first row is shown as data |
+| `csvClearView.commentPrefix` | `#` | Lines starting with this are comments: hidden from the grid and kept when you save. Empty string turns it off. Not applied in Paged View |
 | `csvClearView.alternatingRows` | `true` | Enable zebra-stripe row coloring |
 | `csvClearView.safeModeThreshold` | `20` | File size (MB) above which you're asked how to open the file (full, paged, head, tail, or plain text) |
 | `csvClearView.showSlowLoadPrompt` | `true` | When the grid takes too long to render, offer to switch to Paged View or Plain Text |
@@ -282,6 +286,7 @@ SELECT * FROM ? WHERE [Status] = 'Active' AND [Revenue] > 10000
 | `.tsv`, `.tab` | Tab | Tab-separated values |
 | `.psv` | Pipe (`\|`) | Pipe-separated values |
 | `.xlsx` | N/A | Excel workbook — read-only, with a sheet-tab switcher for multi-sheet files |
+| `.jsonl`, `.ndjson` | N/A | JSON Lines — read-only table; opens in the text editor by default, use **Open with CSV ClearView** |
 | `.log`, `.txt`, `.dat`, any | Custom or regex | Open via right-click → **"Open with CSV ClearView"**, then set the delimiter from the toolbar badge |
 
 ## Installation

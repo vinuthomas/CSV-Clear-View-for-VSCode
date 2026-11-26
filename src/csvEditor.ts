@@ -7,6 +7,7 @@ import { maybePromptForReview } from './reviewPrompt';
 import { computeSqlPayloadLimit, estimateJsonBytes, formatMB } from './sqlLimits';
 import { validateSqlQuery } from './sqlValidate';
 import { diffText, applyChange } from './textDiff';
+import { csvEscapeField, jsonlToCsv } from './toCsv';
 
 let _alasql: ((query: string, params?: any[]) => any) | null = null;
 function getAlasql(): (query: string, params?: any[]) => any {
@@ -20,12 +21,8 @@ function isExcelFile(uri: vscode.Uri): boolean {
 	return uri.fsPath.toLowerCase().endsWith('.xlsx');
 }
 
-/** CSV-escape a single field: quote it if it contains a comma, quote, or newline. */
-function csvEscapeField(value: string): string {
-	if (/[",\r\n]/.test(value)) {
-		return `"${value.replace(/"/g, '""')}"`;
-	}
-	return value;
+function isJsonlFile(uri: vscode.Uri): boolean {
+	return /\.(jsonl|ndjson)$/i.test(uri.fsPath);
 }
 
 /** A user-defined, named delimiter persisted in settings. */
@@ -175,16 +172,21 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 
 	public static register(context: vscode.ExtensionContext): vscode.Disposable {
 		const provider = new CsvEditorProvider(context);
-		const providerRegistration = vscode.window.registerCustomEditorProvider(CsvEditorProvider.viewType, provider, {
+		const options = {
 			webviewOptions: {
 				retainContextWhenHidden: true
 			},
 			supportsMultipleEditorsPerDocument: false
-		});
-		return providerRegistration;
+		};
+		// JSONL has its own view type so it can be an optional editor (text stays the default).
+		return vscode.Disposable.from(
+			vscode.window.registerCustomEditorProvider(CsvEditorProvider.viewType, provider, options),
+			vscode.window.registerCustomEditorProvider(CsvEditorProvider.jsonlViewType, provider, options)
+		);
 	}
 
 	private static readonly viewType = 'csvClearView.edit';
+	public static readonly jsonlViewType = 'csvClearView.jsonl';
 
 	/** Stored so it can be disposed when the provider is released. */
 	private readonly _onDidChangeCustomDocumentEmitter = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<CsvDocument>>();
@@ -230,6 +232,9 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		let viewMode: ViewMode = 'full';
 
 		const isExcel = isExcelFile(document.uri);
+		const isJsonl = isJsonlFile(document.uri);
+		// Converted to CSV in memory: read-only, comma-delimited, no streaming views.
+		const isConverted = isExcel || isJsonl;
 
 		const config = vscode.workspace.getConfiguration('csvClearView');
 		const safeModeThresholdMB = config.get<number>('safeModeThreshold') || 20;
@@ -266,10 +271,10 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		// format, so we always fully parse the workbook, just warning first
 		// if it's large enough that parsing may be slow.
 		// ----------------------------------------------------------------
-		if (isExcel) {
+		if (isConverted) {
 			if (document.size > LARGE_FILE_THRESHOLD) {
 				vscode.window.showWarningMessage(
-					`CSV ClearView: "${document.uri.fsPath.split(/[\\/]/).pop()}" is large (${(document.size / (1024 * 1024)).toFixed(2)} MB) — loading the full workbook may be slow.`
+					`CSV ClearView: "${document.uri.fsPath.split(/[\\/]/).pop()}" is large (${(document.size / (1024 * 1024)).toFixed(2)} MB) — loading the full ${isExcel ? 'workbook' : 'file'} may be slow.`
 				);
 			}
 		} else if (document.size > LARGE_FILE_THRESHOLD) {
@@ -353,6 +358,13 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 					text = worksheet ? worksheetToCsv(worksheet) : '';
 					excelSheets = wb.worksheets.map(ws => ws.name);
 					excelActiveSheet = activeSheetName ?? undefined;
+				} else if (isJsonl) {
+					// The whole file and its CSV copy are held in memory at once.
+					if (document.size > CHUNKED_MODE_THRESHOLD) {
+						vscode.window.showErrorMessage(`CSV ClearView: JSONL files over ${CHUNKED_MODE_THRESHOLD / (1024 * 1024)} MB are too large to open as a table. Use Reopen Editor With… → Text Editor.`);
+						return;
+					}
+					text = jsonlToCsv(Buffer.from(await vscode.workspace.fs.readFile(document.uri)).toString('utf8'));
 				} else if (viewMode === 'chunked') {
 					// Fast path: send the first ~512 KB immediately so the webview
 					// can show the header and first rows while the index builds in
@@ -462,19 +474,20 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 						forceTextColumnColoring: cfg.get('forceTextColumnColoring'),
 						safeModeThreshold: safeModeThresholdMB,
 						showSlowLoadPrompt: cfg.get('showSlowLoadPrompt'),
-						delimiter: cfg.get('delimiter') || 'auto',
-						delimiterIsRegex: cfg.get('delimiterIsRegex') === true,
+						// Converted text is always comma-delimited with a header row.
+						delimiter: isConverted ? ',' : (cfg.get('delimiter') || 'auto'),
+						delimiterIsRegex: !isConverted && cfg.get('delimiterIsRegex') === true,
 						savedDelimiters: readSavedDelimiters(cfg),
 						firstRowIsHeader: hasHeaders,
 						// Converted formats have no comment lines: a leading # there is cell data.
-						commentPrefix: isExcel ? '' : (cfg.get<string>('commentPrefix') ?? '#'),
-						readOnly: isExcel,
+						commentPrefix: isConverted ? '' : (cfg.get<string>('commentPrefix') ?? '#'),
+						readOnly: isConverted,
 						sqlPayloadLimit: SQL_PAYLOAD_LIMIT
 					}
 				});
 			} catch (err) {
 				console.error('Error updating webview:', err);
-				vscode.window.showErrorMessage(isExcel ? 'Error loading Excel file contents.' : 'Error loading CSV file contents.');
+				vscode.window.showErrorMessage(`Error loading ${isExcel ? 'Excel' : isJsonl ? 'JSONL' : 'CSV'} file contents.`);
 			}
 		};
 
@@ -517,8 +530,8 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 		webviewPanel.webview.onDidReceiveMessage(async e => {
 			switch (e.type) {
 				case 'edit':
-					if (isExcel) {
-						console.warn('CSV ClearView: edit ignored — Excel files are read-only');
+					if (isConverted) {
+						console.warn('CSV ClearView: edit ignored — converted files (Excel, JSONL) are read-only');
 						return;
 					}
 					// Paged/Head/Tail hold only part of the file: saving would overwrite the rest.
@@ -705,7 +718,7 @@ export class CsvEditorProvider implements vscode.CustomEditorProvider<CsvDocumen
 				case 'switchToPagedView': {
 					// From the slow-load prompt: abandon the full in-memory load and
 					// stream the file a page at a time instead (works at any size).
-					if (isExcel || viewMode === 'chunked') { return; }
+					if (isConverted || viewMode === 'chunked') { return; }
 					viewMode = 'chunked';
 					await updateWebview();
 					return;

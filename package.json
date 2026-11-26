@@ -32,6 +32,8 @@
     "large csv",
     "excel viewer",
     "xlsx viewer",
+    "jsonl",
+    "ndjson",
     "data viewer",
     "table viewer",
     "sql",
@@ -146,6 +148,19 @@
           }
         ],
         "priority": "default"
+      },
+      {
+        "viewType": "csvClearView.jsonl",
+        "displayName": "CSV ClearView (JSONL table)",
+        "selector": [
+          {
+            "filenamePattern": "*.jsonl"
+          },
+          {
+            "filenamePattern": "*.ndjson"
+          }
+        ],
+        "priority": "option"
       }
     ],
     "configuration": {
@@ -243,7 +258,7 @@
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
     "test-compile": "tsc -p ./",
-    "test": "node tests/security.test.js && node tests/excel.test.js && node tests/delimiter.test.js && node tests/reviewPrompt.test.js && node tests/sqlLimits.test.js && node tests/pagedSwitch.test.js && node tests/editGuards.test.js && node tests/colStats.test.js && node tests/textDiff.test.js && node tests/structuralEdit.test.js && node tests/commentLines.test.js && node tests/columnResize.test.js",
+    "test": "node tests/security.test.js && node tests/excel.test.js && node tests/delimiter.test.js && node tests/reviewPrompt.test.js && node tests/sqlLimits.test.js && node tests/pagedSwitch.test.js && node tests/editGuards.test.js && node tests/colStats.test.js && node tests/textDiff.test.js && node tests/structuralEdit.test.js && node tests/commentLines.test.js && node tests/columnResize.test.js && node tests/jsonl.test.js",
     "benchmark": "node --expose-gc benchmark/run.js"
   },
   "devDependencies": {
